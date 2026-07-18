@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "300204283924",
+    "project_id": "nearmeu-e82c7",
+    "storage_bucket": "nearmeu-e82c7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:300204283924:android:45d9cc90346ffeadaa2f01",
+        "android_client_info": {
+          "package_name": "com.nearmeu.nearmeu"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "300204283924-vc28se16dufmnu6ttsbd5lcpojjdrn9g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nearmeu.nearmeu",
+            "certificate_hash": "939948bc6f537d7802fd1c7a91f247d57ac88818"
+          }
+        },
+        {
+          "client_id": "300204283924-5pevlrffhuvug6cfcqdgi209a2o2q50v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDiis1lpoLiRszjWub6SyG_L6F4lp4D5wo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "300204283924-5pevlrffhuvug6cfcqdgi209a2o2q50v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
