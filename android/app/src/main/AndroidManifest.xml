@@ -2,9 +2,9 @@
     package="com.nearmeu.nearmeu">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="NearMeU"
         android:name="${applicationName}"
@@ -30,8 +30,12 @@
         </activity>
 
         <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+    android:name="com.google.firebase.messaging.default_notification_channel_id"
+    android:value="nearmeu_notifications" />
+
+<meta-data
+    android:name="flutterEmbedding"
+    android:value="2" />
     </application>
 
     <queries>

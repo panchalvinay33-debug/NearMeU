@@ -61,16 +61,24 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _markChatOpened() async {
-    if (currentUser == null) return;
-    if (_isBlocked) return;
+  if (currentUser == null) return;
 
-    await _userService.updateLastSeen(currentUser!.uid);
+  print("==============");
+  print("Current UID : ${currentUser!.uid}");
+  print("Other UID   : ${widget.otherUserId}");
+  print(
+    "Chat ID     : ${_chatService.getChatId(currentUser!.uid, widget.otherUserId)}",
+  );
 
-    await _chatService.markMessagesAsSeen(
-      currentUserId: currentUser!.uid,
-      otherUserId: widget.otherUserId,
-    );
-  }
+  if (_isBlocked) return;
+
+  await _userService.updateLastSeen(currentUser!.uid);
+
+  await _chatService.markMessagesAsSeen(
+    currentUserId: currentUser!.uid,
+    otherUserId: widget.otherUserId,
+  );
+}
 
   @override
   void dispose() {
@@ -830,13 +838,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
                         final messages = snapshot.data ?? [];
 
-                        if (!_isBlocked) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            _markChatOpened();
-                            _scrollToBottom();
-                          });
-                        }
-
+                       WidgetsBinding.instance.addPostFrameCallback((_) {
+  _scrollToBottom();
+});
                         if (messages.isEmpty) {
                           return const Center(
                             child: Text(

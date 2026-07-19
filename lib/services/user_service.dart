@@ -552,12 +552,17 @@ class UserService {
     }
 
     await _firestore
-        .collection('users')
-        .doc(userId)
-        .update({
-      'isSuspended': suspended,
-      'isOnline':
-          suspended ? false : FieldValue.delete(),
-    });
-  }
+    .collection('users')
+    .doc(userId)
+    .update({
+  'isSuspended': suspended,
+  'isOnline':
+      suspended ? false : FieldValue.delete(),
+});
+}
+
+Future<void> deleteCurrentUserData(String uid) async {
+  await _firestore.collection('users').doc(uid).delete();
+}
+
 }

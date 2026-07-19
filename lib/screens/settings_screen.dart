@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../services/user_service.dart';
+import '../services/chat_service.dart';
+import '../services/auth_service.dart';
 
 import 'login_screen.dart';
 import 'nearby_screen.dart';
@@ -27,6 +29,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
+final ChatService _chatService = ChatService();
+final AuthService _authService = AuthService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? userData;
@@ -129,7 +133,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
       (route) => false,
     );
   }
+Future<void> _deleteAccount() async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Delete Account"),
+      content: const Text(
+        "This will permanently delete your account, chats and profile. This action cannot be undone.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancel"),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text(
+            "Delete",
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      ],
+    ),
+  );
 
+  if (confirm != true) return;
+
+  try {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) return;
+
+    await _chatService.deleteCurrentUserChats(uid);
+    await _userService.deleteCurrentUserData(uid);
+    await _authService.deleteFirebaseAuthAccount();
+
+    if (!mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Delete failed: $e"),
+      ),
+    );
+  }
+}
   void _showComingSoon(String title) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -438,7 +495,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 20),
 
-                _buildLogoutTile(),
+_settingTile(
+  icon: Icons.delete_forever,
+  iconColor: Colors.red,
+  titleColor: Colors.red,
+  title: "Delete Account",
+  subtitle: "Permanently delete your account",
+  onTap: _deleteAccount,
+),
+
+const SizedBox(height: 20),
+
+_buildLogoutTile(),
               ],
             ),
       bottomNavigationBar: BottomNavigationBar(

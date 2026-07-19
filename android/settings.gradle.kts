@@ -20,7 +20,7 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
 
     // AGP upgrade
-    id("com.android.application") version "8.9.1" apply false
+    id("com.android.application") version "8.11.1" apply false
 
     // Kotlin upgrade
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false

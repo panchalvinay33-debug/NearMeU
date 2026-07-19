@@ -35,7 +35,9 @@ class AuthService {
     await _auth.signOut();
   }
 
-  Future<void> deleteAccount() async {
+  /// Deletes only the Firebase Authentication account.
+  /// Firestore/chat cleanup will be performed before calling this method.
+  Future<void> deleteFirebaseAuthAccount() async {
     final user = _auth.currentUser;
 
     if (user == null) {
@@ -46,28 +48,35 @@ class AuthService {
     }
 
     try {
-      await _googleSignIn.signOut();
-
       await user.delete();
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'requires-recent-login') {
-        final GoogleSignInAccount? googleUser =
-            await _googleSignIn.signIn();
-
-        if (googleUser == null) rethrow;
-
-        final googleAuth = await googleUser.authentication;
-
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        await user.reauthenticateWithCredential(credential);
-        await user.delete();
-      } else {
+      if (e.code != 'requires-recent-login') {
         rethrow;
       }
+
+      final GoogleSignInAccount? googleUser =
+          await _googleSignIn.signIn();
+
+      if (googleUser == null) rethrow;
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+      await user.delete();
     }
+  }
+Future<void> deleteAccount() async {
+  await deleteFirebaseAuthAccount();
+}
+
+  Future<void> logout() async {
+    await _googleSignIn.signOut();
+    await _auth.signOut();
   }
 }

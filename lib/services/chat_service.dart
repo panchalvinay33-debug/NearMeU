@@ -74,6 +74,7 @@ class ChatService {
     if (!message.canUnsend(currentUserId)) return;
 
     final chatId = getChatId(currentUserId, otherUserId);
+
     final messageRef = _firestore
         .collection('chats')
         .doc(chatId)
@@ -123,7 +124,7 @@ class ChatService {
 
     await messageRef.set({
       'deletedFor': FieldValue.arrayUnion([currentUserId]),
-    }, SetOptions(merge: true));
+   }, SetOptions(merge: true));
   }
 
   Future<void> markMessagesAsSeen({
@@ -167,11 +168,13 @@ class ChatService {
         .orderBy('timestamp', descending: false)
         .snapshots()
         .map((snapshot) {
-      final allMessages = snapshot.docs.map((doc) {
-        return MessageModel.fromMap(doc.id, doc.data());
-      }).toList();
+      final allMessages = snapshot.docs
+          .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
+          .toList();
 
-      return allMessages.where((m) => !m.deletedFor.contains(user1)).toList();
+      return allMessages
+          .where((m) => !m.deletedFor.contains(user1))
+          .toList();
     });
   }
 
@@ -183,13 +186,16 @@ class ChatService {
         .snapshots()
         .asyncMap((snapshot) async {
       final List<ChatPreviewModel> chats = [];
+
       final currentUser = await _userService.getUser(currentUserId);
 
       if (currentUser == null) return chats;
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        final participants = List<String>.from(data['participants'] ?? []);
+
+        final participants =
+            List<String>.from(data['participants'] ?? []);
 
         final otherUserId = participants.firstWhere(
           (id) => id != currentUserId,
@@ -203,7 +209,8 @@ class ChatService {
 
         if (!userDoc.exists || userDoc.data() == null) continue;
 
-        final otherUser = AppUser.fromMap(userDoc.data()!, userDoc.id);
+        final otherUser =
+            AppUser.fromMap(userDoc.data()!, userDoc.id);
 
         if (_userService.areUsersBlockedEitherWay(
           currentUser: currentUser,
@@ -229,4 +236,27 @@ class ChatService {
       return chats;
     });
   }
+
+  /// Deletes every chat (and all messages) that the user participates in.
+  Future<void> deleteCurrentUserChats(String uid) async {
+    final chats = await _firestore
+        .collection('chats')
+        .where('participants', arrayContains: uid)
+        .get();
+
+    for (final chat in chats.docs) {
+      final messages =
+          await chat.reference.collection('messages').get();
+
+      final batch = _firestore.batch();
+
+      for (final message in messages.docs) {
+        batch.delete(message.reference);
+      }
+
+      batch.delete(chat.reference);
+
+      await batch.commit();
+    }
+  }  
 }
