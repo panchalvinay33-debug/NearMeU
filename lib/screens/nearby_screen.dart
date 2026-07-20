@@ -1,14 +1,23 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
 import '../services/user_service.dart';
+
+import '../theme/app_colors.dart';
+
+import '../widgets/empty_nearby_widget.dart';
+import '../widgets/nearby_header.dart';
+import '../widgets/nearby_section_title.dart';
+import '../widgets/nearby_user_card.dart';
+
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'settings_screen.dart';
 import 'user_profile_screen.dart';
 
 class NearbyScreen extends StatefulWidget {
-  NearbyScreen({super.key});
+  const NearbyScreen({super.key});
 
   @override
   State<NearbyScreen> createState() => _NearbyScreenState();
@@ -18,7 +27,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
   final UserService _userService = UserService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
+  AppUser? currentMe;
+
   List<AppUser> users = [];
+
   bool isLoading = true;
   bool isRefreshing = false;
 
@@ -31,14 +43,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
   Future<void> _loadNearbyUsers({bool showLoader = true}) async {
     if (currentUser == null) {
       if (!mounted) return;
+
       setState(() {
         isLoading = false;
       });
+
       return;
     }
 
     if (showLoader) {
       if (!mounted) return;
+
       setState(() {
         isLoading = true;
       });
@@ -47,7 +62,21 @@ class _NearbyScreenState extends State<NearbyScreen> {
     try {
       await _userService.updateUserLocation(currentUser!.uid);
 
-      final result = await _userService.getNearbyUsers(currentUser!.uid).first;
+      final result =
+          await _userService.getNearbyUsers(currentUser!.uid).first;
+
+      currentMe = await _userService.getUser(currentUser!.uid);
+
+      result.sort((a, b) {
+        if (a.isOnline != b.isOnline) {
+          return a.isOnline ? -1 : 1;
+        }
+
+        final aSeen = a.lastSeen ?? DateTime(2000);
+        final bSeen = b.lastSeen ?? DateTime(2000);
+
+        return bSeen.compareTo(aSeen);
+      });
 
       if (!mounted) return;
 
@@ -57,10 +86,22 @@ class _NearbyScreenState extends State<NearbyScreen> {
         isRefreshing = false;
       });
     } catch (_) {
-      if (!mounted) return;
-
       try {
-        final result = await _userService.getNearbyUsers(currentUser!.uid).first;
+        final result =
+            await _userService.getNearbyUsers(currentUser!.uid).first;
+
+        currentMe = await _userService.getUser(currentUser!.uid);
+
+        result.sort((a, b) {
+          if (a.isOnline != b.isOnline) {
+            return a.isOnline ? -1 : 1;
+          }
+
+          final aSeen = a.lastSeen ?? DateTime(2000);
+          final bSeen = b.lastSeen ?? DateTime(2000);
+
+          return bSeen.compareTo(aSeen);
+        });
 
         if (!mounted) return;
 
@@ -79,13 +120,15 @@ class _NearbyScreenState extends State<NearbyScreen> {
         });
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Location update not available right now. Showing available users.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Location update not available right now. Showing available users.',
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -112,159 +155,31 @@ class _NearbyScreenState extends State<NearbyScreen> {
       parts.add(user.state!.trim());
     }
 
-    if (parts.isEmpty) return 'Location unavailable';
+    if (parts.isEmpty) {
+      return 'Location unavailable';
+    }
+
     return parts.join(', ');
   }
 
   Future<String> _distanceText(AppUser user) async {
-    if (currentUser == null) return 'Distance unavailable';
-
-    final me = await _userService.getUser(currentUser!.uid);
-    if (me == null) return 'Distance unavailable';
-
-    final distance = await _userService.getDistanceBetweenUsers(me, user);
-
-    if (distance == null) return 'Distance unavailable';
-
-    if (distance < 1) {
-      final meters = (distance * 1000).round();
-      return '$meters m away';
+    if (currentMe == null) {
+      return '';
     }
 
-    return '${distance.toStringAsFixed(1)} km away';
+    final distance =
+        await _userService.getDistanceBetweenUsers(currentMe!, user);
+
+    if (distance == null) {
+      return '';
+    }
+
+    if (distance < 1) {
+      return '${(distance * 1000).round()} m';
+    }
+
+    return '${distance.toStringAsFixed(1)} km';
   }
-
-  Widget _buildAvatar(AppUser user) {
-    final firstLetter =
-        user.nickname.trim().isNotEmpty ? user.nickname[0].toUpperCase() : '?';
-
-    return CircleAvatar(
-      radius: 34,
-      backgroundColor: Colors.purpleAccent,
-      child: Text(
-        firstLetter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserCard(AppUser user) {
-    final displayName =
-        user.nickname.trim().isEmpty ? 'Unknown User' : user.nickname.trim();
-
-    final ageText = user.age != null && user.age! > 0 ? ', ${user.age}' : '';
-    final genderText =
-        user.gender.trim().isEmpty ? 'Not set' : user.gender.trim();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xff171717),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => UserProfileScreen(user: user),
-            ),
-          );
-
-          if (result == true) {
-            await _refreshUsers();
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildAvatar(user),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$displayName$ageText',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      genderText,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _locationText(user),
-                      style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    FutureBuilder<String>(
-                      future: _distanceText(user),
-                      builder: (context, snapshot) {
-                        return Text(
-                          snapshot.data ?? 'Checking distance...',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 13,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ChatScreen(
-                        otherUserId: user.uid,
-                        otherUserName: displayName,
-                      ),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.purpleAccent.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.chat_bubble_outline,
-                    color: Colors.purpleAccent,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBody() {
     if (currentUser == null) {
       return const Center(
@@ -278,7 +193,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
     if (isLoading) {
       return const Center(
         child: CircularProgressIndicator(
-          color: Colors.purpleAccent,
+          color: AppColors.primary,
         ),
       );
     }
@@ -286,39 +201,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
     if (users.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refreshUsers,
-        color: Colors.purpleAccent,
+        color: AppColors.primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(24),
           children: const [
-            SizedBox(height: 120),
-            Icon(
-              Icons.location_searching,
-              color: Colors.white38,
-              size: 62,
-            ),
-            SizedBox(height: 16),
-            Center(
-              child: Text(
-                'No nearby users found yet',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Pull down to refresh and try again.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 14,
-                ),
-              ),
-            ),
+            SizedBox(height: 100),
+            EmptyNearbyWidget(),
           ],
         ),
       );
@@ -326,44 +214,74 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
     return RefreshIndicator(
       onRefresh: _refreshUsers,
-      color: Colors.purpleAccent,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-        itemCount: users.length,
-        itemBuilder: (context, index) {
-          return _buildUserCard(users[index]);
-        },
+      color: AppColors.primary,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+  NearbyHeader(
+    nearbyCount: users.length,
+    isRefreshing: isRefreshing,
+    onRefresh: _refreshUsers,
+  ),
+
+  const SizedBox(height: 24),
+
+  const NearbySectionTitle(
+    title: "People Near You",
+    icon: Icons.people_alt_rounded,
+  ),
+
+  const SizedBox(height: 16),
+
+          ...users.map(
+            (user) => Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FutureBuilder<String>(
+                future: _distanceText(user),
+                builder: (context, snapshot) {
+                  return NearbyUserCard(
+                    user: user,
+                    distanceText: snapshot.data ?? "",
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xff0B0B0B),
+      backgroundColor: AppColors.background,
+
       appBar: AppBar(
-        backgroundColor: const Color(0xff0B0B0B),
+        backgroundColor: AppColors.background,
         elevation: 0,
+        centerTitle: false,
         title: const Text(
-          'Nearby',
+          "Nearby",
           style: TextStyle(
-            color: Colors.white,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
             onPressed: isRefreshing ? null : _refreshUsers,
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
+
       body: _buildBody(),
+
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        selectedItemColor: Colors.purpleAccent,
-        unselectedItemColor: Colors.grey,
         currentIndex: 0,
+        backgroundColor: const Color(0xFF1A1A1A),
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: Colors.grey,
         onTap: (index) {
           if (index == 1) {
             Navigator.pushReplacement(
@@ -384,15 +302,15 @@ class _NearbyScreenState extends State<NearbyScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
-            label: 'Nearby',
+            label: "Nearby",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),
-            label: 'Chats',
+            label: "Chats",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: 'Settings',
+            label: "Settings",
           ),
         ],
       ),
