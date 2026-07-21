@@ -1,10 +1,13 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../models/app_user.dart';
 import '../security/suspension_service.dart';
+import 'validation_service.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -87,7 +90,7 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).update({
-      'nickname': nickname.trim(),
+      'nickname': ValidationService.nickname(nickname),
     });
   }
 
@@ -98,7 +101,7 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).update({
-      'age': age,
+      'age': ValidationService.age(age),
     });
   }
 
@@ -109,7 +112,7 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).update({
-      'gender': gender.trim(),
+      'gender': ValidationService.profileChoice(gender, 'gender'),
     });
   }
 
@@ -120,7 +123,7 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).update({
-      'lookingFor': lookingFor.trim(),
+      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
     });
   }
 
@@ -134,10 +137,10 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).set({
-      'nickname': nickname.trim(),
-      'age': age,
-      'gender': gender.trim(),
-      'lookingFor': lookingFor.trim(),
+      'nickname': ValidationService.nickname(nickname),
+      'age': ValidationService.age(age),
+      'gender': ValidationService.profileChoice(gender, 'gender'),
+      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
     }, SetOptions(merge: true));
   }
 
@@ -152,8 +155,8 @@ class UserService {
     await _suspensionService.ensureUserAllowed(uid);
 
     await _firestore.collection('users').doc(uid).set({
-      'latitude': latitude,
-      'longitude': longitude,
+      'latitude': ValidationService.latitude(latitude),
+      'longitude': ValidationService.longitude(longitude),
       'city': city,
       'state': state,
       'country': country,
@@ -163,7 +166,7 @@ class UserService {
   Future<void> updateUserLocation(String uid) async {
     await _suspensionService.ensureUserAllowed(uid);
 
-    bool serviceEnabled =
+    final serviceEnabled =
         await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) return;
@@ -183,7 +186,8 @@ class UserService {
 
     final position =
         await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+      desiredAccuracy: LocationAccuracy.medium,
+      timeLimit: const Duration(seconds: 10),
     );
 
     String? city;
@@ -212,7 +216,10 @@ class UserService {
         state = p.administrativeArea;
         country = p.country;
       }
-    } catch (_) {}
+    } catch (error) {
+      // Reverse geocoding is best-effort; keep valid coordinates when it fails.
+      developer.log('Reverse geocoding failed', error: error);
+    }
 
     await updateLocation(
       uid: uid,
@@ -394,8 +401,10 @@ class UserService {
 
     yield* _firestore
         .collection('users')
-        .snapshots()
-        .asyncMap((snapshot) async {
+        .where('isSuspended', isEqualTo: false)
+        .limit(100)
+        .snapshots(includeMetadataChanges: false)
+        .map((snapshot) {
       final List<AppUser> users = [];
 
       for (final doc in snapshot.docs) {
@@ -546,109 +555,91 @@ class UserService {
     required String userId,
     required bool suspended,
   }) async {
-    final currentUid =
-        FirebaseAuth.instance.currentUser?.uid;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
 
     if (currentUid == null) {
-      throw Exception(
-        'Admin not logged in',
-      );
+      throw Exception('Admin not logged in');
     }
 
-    final admin =
-        await getUser(currentUid);
+    final admin = await getUser(currentUid);
 
-    if (admin == null ||
-        !admin.isAdmin) {
-      throw Exception(
-        'Admin permission required',
-      );
+    if (admin == null || !admin.isAdmin) {
+      throw Exception('Admin permission required');
     }
 
     if (userId == currentUid) {
-      throw Exception(
-        'Admin cannot suspend own account',
-      );
+      throw Exception('Admin cannot suspend own account');
     }
 
-    await _firestore
-    .collection('users')
-    .doc(userId)
-    .update({
-  'isSuspended': suspended,
-  'isOnline':
-      suspended ? false : FieldValue.delete(),
-});
-}
-
-Future<void> deleteCurrentUserData(String uid) async {
-  await _firestore.collection('users').doc(uid).delete();
-}
-// ==================================================
-// REPORT SYSTEM
-// ==================================================
-
-CollectionReference<Map<String, dynamic>> get _reports =>
-    _firestore.collection('reports');
-
-Future<bool> hasAlreadyReported({
-  required String reporterId,
-  required String reportedUserId,
-}) async {
-  final snapshot = await _reports
-      .where('reporterId', isEqualTo: reporterId)
-      .where('reportedUserId', isEqualTo: reportedUserId)
-      .where('status', isEqualTo: 'pending')
-      .limit(1)
-      .get();
-
-  return snapshot.docs.isNotEmpty;
-}
-
-Future<void> reportUser({
-  required String reporterId,
-  required String reportedUserId,
-  required String reason,
-  String description = '',
-}) async {
-
-  if (reporterId == reportedUserId) {
-    throw Exception("You can't report yourself.");
+    await _firestore.collection('users').doc(userId).update({
+      'isSuspended': suspended,
+      'isOnline': suspended ? false : FieldValue.delete(),
+    });
   }
 
-  final already = await hasAlreadyReported(
-    reporterId: reporterId,
-    reportedUserId: reportedUserId,
-  );
-
-  if (already) {
-    throw Exception("User already reported.");
+  Future<void> deleteCurrentUserData(String uid) async {
+    await _firestore.collection('users').doc(uid).delete();
   }
 
-  final reporter = await getUser(reporterId);
-  final reported = await getUser(reportedUserId);
+  // ==================================================
+  // REPORT SYSTEM
+  // ==================================================
 
-  await _reports.add({
-    'reporterId': reporterId,
-    'reportedUserId': reportedUserId,
+  CollectionReference<Map<String, dynamic>> get _reports =>
+      _firestore.collection('reports');
 
-    'reporterName': reporter?.nickname ?? '',
-'reporterPhoto': reporter?.photoUrl ?? '',
+  Future<bool> hasAlreadyReported({
+    required String reporterId,
+    required String reportedUserId,
+  }) async {
+    final snapshot = await _reports
+        .where('reporterId', isEqualTo: reporterId)
+        .where('reportedUserId', isEqualTo: reportedUserId)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
 
-'reportedUserName': reported?.nickname ?? '',
-'reportedUserPhoto': reported?.photoUrl ?? '',
+    return snapshot.docs.isNotEmpty;
+  }
 
-'reason': reason,
-    'description': description.trim(),
+  Future<void> reportUser({
+    required String reporterId,
+    required String reportedUserId,
+    required String reason,
+    String description = '',
+  }) async {
+    await _suspensionService.ensureUserAllowed(reporterId);
 
-    'status': 'pending',
+    if (reporterId == reportedUserId) {
+      throw Exception("You can't report yourself.");
+    }
 
-    'createdAt':
-        FieldValue.serverTimestamp(),
+    final already = await hasAlreadyReported(
+      reporterId: reporterId,
+      reportedUserId: reportedUserId,
+    );
 
-    'reviewedAt': null,
-    'reviewedBy': null,
-    'action': null,
-  });
-}
+    if (already) {
+      throw Exception("User already reported.");
+    }
+
+    final reporter = await getUser(reporterId);
+    final reported = await getUser(reportedUserId);
+
+    await _reports.add({
+      'reporterId': reporterId,
+      'reportedUserId': reportedUserId,
+      'reporterName': reporter?.nickname ?? '',
+      'reporterPhoto': reporter?.photoUrl ?? '',
+      'reportedUserName': reported?.nickname ?? '',
+      'reportedUserPhoto': reported?.photoUrl ?? '',
+      'reason': ValidationService.reportReason(reason),
+      'description': ValidationService.reportDescription(description),
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'reviewedAt': null,
+      'reviewedBy': null,
+      'action': null,
+    });
+  }
 }

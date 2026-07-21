@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -31,6 +33,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
   bool isLoading = true;
   bool isRefreshing = false;
+  bool _loadInProgress = false;
+  final Map<String, String> _distanceTextByUserId = <String, String>{};
 
   @override
   void initState() {
@@ -39,6 +43,9 @@ class _NearbyScreenState extends State<NearbyScreen> {
   }
 
   Future<void> _loadNearbyUsers({bool showLoader = true}) async {
+    if (_loadInProgress) return;
+    _loadInProgress = true;
+
     if (currentUser == null) {
       if (!mounted) return;
 
@@ -46,6 +53,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
         isLoading = false;
       });
 
+      _loadInProgress = false;
       return;
     }
 
@@ -65,6 +73,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
       currentMe = await _userService.getUser(currentUser!.uid);
 
+      await _cacheDistances(result);
+
       result.sort((a, b) {
         if (a.isOnline != b.isOnline) {
           return a.isOnline ? -1 : 1;
@@ -76,19 +86,29 @@ class _NearbyScreenState extends State<NearbyScreen> {
         return bSeen.compareTo(aSeen);
       });
 
-      if (!mounted) return;
+      if (!mounted) {
+        _loadInProgress = false;
+        return;
+      }
 
       setState(() {
         users = result;
         isLoading = false;
         isRefreshing = false;
       });
-    } catch (_) {
+      _loadInProgress = false;
+    } catch (error) {
+      developer.log(
+        'Location refresh failed; loading cached nearby users',
+        error: error,
+      );
       try {
         final result =
             await _userService.getNearbyUsers(currentUser!.uid).first;
 
         currentMe = await _userService.getUser(currentUser!.uid);
+
+        await _cacheDistances(result);
 
         result.sort((a, b) {
           if (a.isOnline != b.isOnline) {
@@ -101,21 +121,30 @@ class _NearbyScreenState extends State<NearbyScreen> {
           return bSeen.compareTo(aSeen);
         });
 
-        if (!mounted) return;
+        if (!mounted) {
+          _loadInProgress = false;
+          return;
+        }
 
         setState(() {
           users = result;
           isLoading = false;
           isRefreshing = false;
         });
-      } catch (_) {
-        if (!mounted) return;
+        _loadInProgress = false;
+      } catch (error) {
+        developer.log('Nearby fallback load failed', error: error);
+        if (!mounted) {
+          _loadInProgress = false;
+          return;
+        }
 
         setState(() {
           users = [];
           isLoading = false;
           isRefreshing = false;
         });
+        _loadInProgress = false;
       }
 
       if (mounted) {
@@ -138,6 +167,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
     });
 
     await _loadNearbyUsers(showLoader: false);
+  }
+
+  Future<void> _cacheDistances(List<AppUser> nearbyUsers) async {
+    _distanceTextByUserId.clear();
+    for (final user in nearbyUsers) {
+      _distanceTextByUserId[user.uid] = await _distanceText(user);
+    }
   }
 
   Future<String> _distanceText(AppUser user) async {
@@ -215,14 +251,9 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ...users.map(
             (user) => Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: FutureBuilder<String>(
-                future: _distanceText(user),
-                builder: (context, snapshot) {
-                  return NearbyUserCard(
-                    user: user,
-                    distanceText: snapshot.data ?? "",
-                  );
-                },
+              child: NearbyUserCard(
+                user: user,
+                distanceText: _distanceTextByUserId[user.uid] ?? "",
               ),
             ),
           ),

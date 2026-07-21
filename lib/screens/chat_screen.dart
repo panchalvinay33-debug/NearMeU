@@ -45,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _showEmojiPicker = false;
 
   bool _isBlocked = false;
+  bool _isSending = false;
 
   bool _checkingBlock = true;
 
@@ -117,7 +118,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (currentUser == null) return;
 
-    if (_isBlocked) return;
+    if (_isBlocked || _isSending) return;
+
+    setState(() {
+      _isSending = true;
+    });
 
     try {
       await _chatService.sendMessage(
@@ -136,19 +141,23 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       _scrollToBottom();
-    } catch (_) {
+    } catch (error) {
       await _checkBlockStatus();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context)
           .showSnackBar(
-        const SnackBar(
-          content: Text(
-            "You cannot send messages in this chat.",
-          ),
+        SnackBar(
+          content: Text(error.toString()),
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 
@@ -662,7 +671,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _showEmojiPicker,
           onEmojiTap:
               _toggleEmojiPicker,
-          onSend: _sendMessage,
+          onSend: _isSending ? null : _sendMessage,
           onTextFieldTap: () {
             if (_showEmojiPicker) {
               setState(() {

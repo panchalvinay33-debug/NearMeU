@@ -5,7 +5,7 @@ class ChatComposer extends StatelessWidget {
   final FocusNode focusNode;
   final bool showEmojiPicker;
   final VoidCallback onEmojiTap;
-  final VoidCallback onSend;
+  final VoidCallback? onSend;
   final VoidCallback onTextFieldTap;
   final Widget? replyPreview;
 
@@ -98,11 +98,10 @@ class ChatComposer extends StatelessWidget {
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xff9C27B0),
-                        Color(0xff673AB7),
-                      ],
+                    gradient: LinearGradient(
+                      colors: onSend == null
+                          ? const [Color(0xff4A4A4A), Color(0xff333333)]
+                          : const [Color(0xff9C27B0), Color(0xff673AB7)],
                     ),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
