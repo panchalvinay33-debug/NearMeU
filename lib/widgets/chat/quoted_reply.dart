@@ -23,7 +23,7 @@ class QuotedReply extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.20),
+        color: Colors.black.withValues(alpha: .20),
         borderRadius: BorderRadius.circular(12),
         border: Border(
           left: BorderSide(

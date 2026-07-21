@@ -25,7 +25,7 @@ class UserAvatar extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: radius,
-          backgroundColor: AppColors.primary.withOpacity(.15),
+          backgroundColor: AppColors.primary.withValues(alpha: .15),
           backgroundImage:
               hasPhoto ? NetworkImage(user.photoUrl!) : null,
           child: hasPhoto

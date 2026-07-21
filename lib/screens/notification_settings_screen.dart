@@ -160,7 +160,8 @@ class _NotificationSettingsScreenState
             Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: Colors.purpleAccent,
+              activeThumbColor: Colors.purpleAccent,
+              activeTrackColor: Colors.purpleAccent.withValues(alpha: .35),
             ),
         ],
       ),

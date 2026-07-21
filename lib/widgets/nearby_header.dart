@@ -28,7 +28,7 @@ class NearbyHeader extends StatelessWidget {
             height: 58,
             width: 58,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Icon(
@@ -73,7 +73,7 @@ class NearbyHeader extends StatelessWidget {
               height: 50,
               width: 50,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(18),
               ),
               child: isRefreshing

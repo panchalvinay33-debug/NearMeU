@@ -54,7 +54,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   Future<void> _openChat(ChatPreviewModel chat) async {
     if (_isNavigating) return;
-    _isNavigating = true;
+    setState(() => _isNavigating = true);
+
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -64,7 +65,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ),
       ),
     );
-    _isNavigating = false;
+
+    if (!mounted) return;
+    setState(() => _isNavigating = false);
   }
 
   Color _avatarColor(String seed) {
@@ -203,9 +206,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
           }
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Nearby'),
-          BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: 'Chats'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on),
+            label: 'Nearby',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat_bubble_outline),
+            label: 'Chats',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
       ),
     );
@@ -218,36 +230,99 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Chats', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white)),
-      const SizedBox(height: 4),
-      const Text('Recent conversations', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
-      const SizedBox(height: 18),
-      TextField(
-        controller: searchController,
-        style: const TextStyle(color: Colors.white),
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: 'Search conversations',
-          hintStyle: const TextStyle(color: AppColors.textHint),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: searchController,
-            builder: (_, value, __) => value.text.isEmpty
-                ? const SizedBox.shrink()
-                : IconButton(
-                    tooltip: 'Clear search',
-                    onPressed: searchController.clear,
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                  ),
-          ),
-          filled: true,
-          fillColor: AppColors.surface,
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.cardBorder)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF201433), Color(0xFF111827)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
       ),
-    ]);
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.mark_unread_chat_alt_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Chats',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Stay close to every nearby connection.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: searchController,
+            style: const TextStyle(color: Colors.white),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search conversations',
+              hintStyle: const TextStyle(color: AppColors.textHint),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppColors.textHint,
+              ),
+              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: searchController,
+                builder: (_, value, __) => value.text.isEmpty
+                    ? const SizedBox.shrink()
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: searchController.clear,
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                        ),
+                      ),
+              ),
+              filled: true,
+              fillColor: Colors.black.withValues(alpha: .28),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: AppColors.cardBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

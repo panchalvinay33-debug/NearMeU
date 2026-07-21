@@ -29,7 +29,7 @@ class ReplyPreview extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: Colors.purpleAccent.withOpacity(.45),
+          color: Colors.purpleAccent.withValues(alpha: .45),
         ),
       ),
       child: Row(
