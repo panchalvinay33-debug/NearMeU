@@ -84,23 +84,7 @@ class ChatService {
         final receiverUnread = existingUnread[receiverId] is int
             ? existingUnread[receiverId] as int
             : 0;
-        final chatData = {
-          'participants': participants,
-          'lastMessage': safeText,
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'latestMessageAt': FieldValue.serverTimestamp(),
-          'lastMessageSenderId': senderId,
-          'latestSenderId': senderId,
-          'lastMessageType': 'text',
-          'lastMessageIsUnsent': false,
-          'unreadCounts.$senderId': 0,
-          'unreadCounts.$receiverId': receiverUnread + 1,
-          'readStates.$senderId.lastReadAt': FieldValue.serverTimestamp(),
-          'readStates.$senderId.lastReadMessageId': messageRef.id,
-          'readStates.$senderId.unreadCount': 0,
-          'readStates.$receiverId.unreadCount': receiverUnread + 1,
-          if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
-        };
+        final nextReceiverUnread = receiverUnread + 1;
 
         if (chatSnapshot.exists) {
           final existingParticipants = List<String>.from(
@@ -112,9 +96,53 @@ class ChatService {
               existingParticipants.last != participants.last) {
             throw const ChatSecurityException('Invalid chat room.');
           }
+
+          transaction.update(chatRef, <Object, Object?>{
+            'lastMessage': safeText,
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'latestMessageAt': FieldValue.serverTimestamp(),
+            'lastMessageSenderId': senderId,
+            'latestSenderId': senderId,
+            'lastMessageType': 'text',
+            'lastMessageIsUnsent': false,
+            FieldPath(<String>['unreadCounts', senderId]): 0,
+            FieldPath(<String>['unreadCounts', receiverId]): nextReceiverUnread,
+            FieldPath(<String>['readStates', senderId, 'lastReadAt']):
+                FieldValue.serverTimestamp(),
+            FieldPath(<String>['readStates', senderId, 'lastReadMessageId']):
+                messageRef.id,
+            FieldPath(<String>['readStates', senderId, 'unreadCount']): 0,
+            FieldPath(<String>['readStates', receiverId, 'unreadCount']):
+                nextReceiverUnread,
+          });
+        } else {
+          transaction.set(chatRef, <String, dynamic>{
+            'participants': participants,
+            'lastMessage': safeText,
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'latestMessageAt': FieldValue.serverTimestamp(),
+            'lastMessageSenderId': senderId,
+            'latestSenderId': senderId,
+            'lastMessageType': 'text',
+            'lastMessageIsUnsent': false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'unreadCounts': <String, dynamic>{
+              senderId: 0,
+              receiverId: nextReceiverUnread,
+            },
+            'readStates': <String, dynamic>{
+              senderId: <String, dynamic>{
+                'lastReadAt': FieldValue.serverTimestamp(),
+                'lastReadMessageId': messageRef.id,
+                'unreadCount': 0,
+              },
+              receiverId: <String, dynamic>{
+                'unreadCount': nextReceiverUnread,
+              },
+            },
+          });
         }
 
-        transaction.set(chatRef, chatData, SetOptions(merge: true));
         transaction.set(messageRef, messageData);
       });
       _chatSecurity.recordMessageSent(senderId);
@@ -165,7 +193,7 @@ class ChatService {
         'lastMessage': 'This message was unsent',
         'lastMessageTime': FieldValue.serverTimestamp(),
         'lastMessageSenderId': currentUserId,
-      }, SetOptions(merge: true));
+       }, SetOptions(merge: true));
     }
   }
 
@@ -186,7 +214,7 @@ class ChatService {
 
     await messageRef.set({
       'deletedFor': FieldValue.arrayUnion([currentUserId]),
-   }, SetOptions(merge: true));
+    }, SetOptions(merge: true));
   }
 
   Future<void> markChatAsRead({
@@ -195,13 +223,15 @@ class ChatService {
     String? lastReadMessageId,
   }) async {
     final chatId = getChatId(currentUserId, otherUserId);
-    await _firestore.collection('chats').doc(chatId).set({
-      'unreadCounts.$currentUserId': 0,
-      'readStates.$currentUserId.unreadCount': 0,
-      'readStates.$currentUserId.lastReadAt': FieldValue.serverTimestamp(),
+    await _firestore.collection('chats').doc(chatId).update(<Object, Object?>{
+      FieldPath(<String>['unreadCounts', currentUserId]): 0,
+      FieldPath(<String>['readStates', currentUserId, 'unreadCount']): 0,
+      FieldPath(<String>['readStates', currentUserId, 'lastReadAt']):
+          FieldValue.serverTimestamp(),
       if (lastReadMessageId != null)
-        'readStates.$currentUserId.lastReadMessageId': lastReadMessageId,
-    }, SetOptions(merge: true));
+        FieldPath(<String>['readStates', currentUserId, 'lastReadMessageId']):
+            lastReadMessageId,
+    });
   }
 
   Future<void> markMessagesAsSeen({
