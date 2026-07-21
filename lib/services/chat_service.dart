@@ -93,12 +93,12 @@ class ChatService {
           'latestSenderId': senderId,
           'lastMessageType': 'text',
           'lastMessageIsUnsent': false,
-          'unreadCounts.$senderId': 0,
-          'unreadCounts.$receiverId': receiverUnread + 1,
-          'readStates.$senderId.lastReadAt': FieldValue.serverTimestamp(),
-          'readStates.$senderId.lastReadMessageId': messageRef.id,
-          'readStates.$senderId.unreadCount': 0,
-          'readStates.$receiverId.unreadCount': receiverUnread + 1,
+          FieldPath(['unreadCounts', senderId]): 0,
+          FieldPath(['unreadCounts', receiverId]): receiverUnread + 1,
+          FieldPath(['readStates', senderId, 'lastReadAt']): FieldValue.serverTimestamp(),
+          FieldPath(['readStates', senderId, 'lastReadMessageId']): messageRef.id,
+          FieldPath(['readStates', senderId, 'unreadCount']): 0,
+          FieldPath(['readStates', receiverId, 'unreadCount']): receiverUnread + 1,
           if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
         };
 
@@ -196,11 +196,11 @@ class ChatService {
   }) async {
     final chatId = getChatId(currentUserId, otherUserId);
     await _firestore.collection('chats').doc(chatId).set({
-      'unreadCounts.$currentUserId': 0,
-      'readStates.$currentUserId.unreadCount': 0,
-      'readStates.$currentUserId.lastReadAt': FieldValue.serverTimestamp(),
+      FieldPath(['unreadCounts', currentUserId]): 0,
+      FieldPath(['readStates', currentUserId, 'unreadCount']): 0,
+      FieldPath(['readStates', currentUserId, 'lastReadAt']): FieldValue.serverTimestamp(),
       if (lastReadMessageId != null)
-        'readStates.$currentUserId.lastReadMessageId': lastReadMessageId,
+        FieldPath(['readStates', currentUserId, 'lastReadMessageId']): lastReadMessageId,
     }, SetOptions(merge: true));
   }
 
