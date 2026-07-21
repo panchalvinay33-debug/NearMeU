@@ -69,3 +69,6 @@ android/build/
 
 # Local config
 local.properties
+functions/node_modules/
+functions/.firebase/
+functions/lib/

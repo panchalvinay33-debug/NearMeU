@@ -564,5 +564,71 @@ class UserService {
 Future<void> deleteCurrentUserData(String uid) async {
   await _firestore.collection('users').doc(uid).delete();
 }
+// ==================================================
+// REPORT SYSTEM
+// ==================================================
 
+CollectionReference<Map<String, dynamic>> get _reports =>
+    _firestore.collection('reports');
+
+Future<bool> hasAlreadyReported({
+  required String reporterId,
+  required String reportedUserId,
+}) async {
+  final snapshot = await _reports
+      .where('reporterId', isEqualTo: reporterId)
+      .where('reportedUserId', isEqualTo: reportedUserId)
+      .where('status', isEqualTo: 'pending')
+      .limit(1)
+      .get();
+
+  return snapshot.docs.isNotEmpty;
+}
+
+Future<void> reportUser({
+  required String reporterId,
+  required String reportedUserId,
+  required String reason,
+  String description = '',
+}) async {
+
+  if (reporterId == reportedUserId) {
+    throw Exception("You can't report yourself.");
+  }
+
+  final already = await hasAlreadyReported(
+    reporterId: reporterId,
+    reportedUserId: reportedUserId,
+  );
+
+  if (already) {
+    throw Exception("User already reported.");
+  }
+
+  final reporter = await getUser(reporterId);
+  final reported = await getUser(reportedUserId);
+
+  await _reports.add({
+    'reporterId': reporterId,
+    'reportedUserId': reportedUserId,
+
+    'reporterName': reporter?.nickname ?? '',
+'reporterPhoto': reporter?.photoUrl ?? '',
+
+'reportedUserName': reported?.nickname ?? '',
+'reportedUserPhoto': reported?.photoUrl ?? '',
+
+'reason': reason,
+    'description': description.trim(),
+
+    'status': 'pending',
+
+    'createdAt':
+        FieldValue.serverTimestamp(),
+
+    'reviewedAt': null,
+    'reviewedBy': null,
+    'action': null,
+  });
+}
 }

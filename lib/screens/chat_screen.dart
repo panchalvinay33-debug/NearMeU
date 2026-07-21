@@ -681,6 +681,131 @@ class _ChatScreenState extends State<ChatScreen> {
       ],
     );
   }
+Future<void> _showReportDialog() async {
+  if (currentUser == null) return;
+
+  String selectedReason = "Spam";
+  final descriptionController = TextEditingController();
+
+  final reasons = [
+    "Spam",
+    "Fake Profile",
+    "Harassment",
+    "Hate Speech",
+    "Scam/Fraud",
+    "Inappropriate Content",
+    "Other",
+  ];
+
+  await showDialog(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xff171717),
+            title: const Text(
+              "Report User",
+              style: TextStyle(color: Colors.white),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+
+                  DropdownButton<String>(
+                    value: selectedReason,
+                    dropdownColor: const Color(0xff171717),
+                    isExpanded: true,
+                    style: const TextStyle(color: Colors.white),
+                    items: reasons.map((e) {
+                      return DropdownMenuItem(
+                        value: e,
+                        child: Text(e),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        selectedReason = v;
+                      });
+                    },
+                  ),
+
+                  if (selectedReason == "Other")
+                    const SizedBox(height: 16),
+
+                  if (selectedReason == "Other")
+                    TextField(
+                      controller: descriptionController,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: "Describe the problem",
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text("Cancel"),
+              ),
+
+              ElevatedButton(
+                onPressed: () async {
+
+                  Navigator.pop(context);
+
+                  try {
+
+                    await _userService.reportUser(
+
+                      reporterId: currentUser!.uid,
+
+                      reportedUserId: widget.otherUserId,
+
+                      reason: selectedReason,
+
+                      description:
+                          descriptionController.text.trim(),
+                    );
+
+                    if (!mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "User reported successfully.",
+                        ),
+                      ),
+                    );
+                  } catch (e) {
+
+                    if (!mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          e.toString(),
+                        ),
+                      ),
+                    );
+                  }
+                },
+                child: const Text("Report"),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 Future<void> _showChatMenu() async {
   await showModalBottomSheet(
     context: context,
@@ -691,7 +816,25 @@ Future<void> _showChatMenu() async {
       return SafeArea(
         child: Wrap(
           children: [
-            ListTile(
+           ListTile(
+  leading: const Icon(
+    Icons.flag_rounded,
+    color: Colors.red,
+  ),
+  title: const Text(
+    "Report User",
+    style: TextStyle(
+      color: Colors.white,
+    ),
+  ),
+  onTap: () {
+
+    Navigator.pop(context);
+
+    _showReportDialog();
+  },
+),
+ ListTile(
               leading: const Icon(Icons.person, color: Colors.white),
               title: const Text(
                 "View Profile",
