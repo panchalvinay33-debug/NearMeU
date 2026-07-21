@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
+import '../services/validation_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -105,8 +106,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    if (age < 18 || age > 99) {
-      _showSnack('Age must be between 18 and 99');
+    try {
+      ValidationService.age(age);
+    } on ValidationException catch (e) {
+      _showSnack(e.message);
       return;
     }
 

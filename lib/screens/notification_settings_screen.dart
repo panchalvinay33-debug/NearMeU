@@ -57,10 +57,18 @@ class _NotificationSettingsScreenState
       messageNotificationsEnabled = value;
     });
 
-    await _userService.updateMessageNotifications(
-      uid: currentUser!.uid,
-      enabled: value,
-    );
+    try {
+      await _userService.updateMessageNotifications(
+        uid: currentUser!.uid,
+        enabled: value,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update notification setting. Please try again.')),
+      );
+      messageNotificationsEnabled = !value;
+    }
 
     if (!mounted) return;
 
@@ -77,10 +85,18 @@ class _NotificationSettingsScreenState
       nearbyAlertsEnabled = value;
     });
 
-    await _userService.updateNearbyAlerts(
-      uid: currentUser!.uid,
-      enabled: value,
-    );
+    try {
+      await _userService.updateNearbyAlerts(
+        uid: currentUser!.uid,
+        enabled: value,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not update nearby alerts. Please try again.')),
+      );
+      nearbyAlertsEnabled = !value;
+    }
 
     if (!mounted) return;
 
@@ -175,7 +191,7 @@ class _NotificationSettingsScreenState
         borderRadius: BorderRadius.circular(18),
       ),
       child: const Text(
-        'These settings save your notification preferences in NearMeU. Push notification delivery can be connected later without changing your app design.',
+        'These settings save your notification preferences in NearMeU. Android may ask for notification permission before alerts are delivered. You can change permission any time in system settings.',
         style: TextStyle(
           color: Colors.white60,
           fontSize: 13,

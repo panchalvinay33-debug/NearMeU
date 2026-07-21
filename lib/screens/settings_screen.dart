@@ -35,6 +35,7 @@ final AuthService _authService = AuthService();
 
   AppUser? userData;
   bool isLoading = true;
+  bool isDeletingAccount = false;
 
   @override
   void initState() {
@@ -135,6 +136,7 @@ final AuthService _authService = AuthService();
   }
 
   Future<void> _deleteAccount() async {
+    if (isDeletingAccount) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -160,6 +162,10 @@ final AuthService _authService = AuthService();
 
     if (confirm != true) return;
 
+    setState(() {
+      isDeletingAccount = true;
+    });
+
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
 
@@ -182,10 +188,13 @@ final AuthService _authService = AuthService();
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Delete failed: $e"),
+        const SnackBar(
+          content: Text('Could not delete account. Please sign in again and retry.'),
         ),
       );
+      setState(() {
+        isDeletingAccount = false;
+      });
     }
   }
 
@@ -493,7 +502,7 @@ _settingTile(
   titleColor: Colors.red,
   title: "Delete Account",
   subtitle: "Permanently delete your account",
-  onTap: _deleteAccount,
+  onTap: isDeletingAccount ? () {} : _deleteAccount,
 ),
 
 const SizedBox(height: 20),

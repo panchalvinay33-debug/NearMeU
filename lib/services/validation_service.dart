@@ -1,3 +1,5 @@
+import '../constants/app_constants.dart';
+
 class ValidationException implements Exception {
   const ValidationException(this.message);
 
@@ -10,8 +12,8 @@ class ValidationException implements Exception {
 class ValidationService {
   static const int maxNicknameLength = 30;
   static const int maxReportDescriptionLength = 500;
-  static const int minAge = 13;
-  static const int maxAge = 120;
+  static const int minAge = AppConstants.minimumUserAge;
+  static const int maxAge = AppConstants.maximumUserAge;
 
   static String nickname(String value) {
     final normalized = value.trim();
@@ -26,14 +28,16 @@ class ValidationService {
 
   static int age(int value) {
     if (value < minAge || value > maxAge) {
-      throw const ValidationException('Enter a valid age.');
+      throw const ValidationException('NearMeU is for adults 18+ only. Enter an age from 18 to 99.');
     }
     return value;
   }
 
   static String profileChoice(String value, String fieldName) {
     final normalized = value.trim();
-    const allowed = <String>{'Male', 'Female', 'Both'};
+    final allowed = fieldName == 'gender'
+        ? <String>{'Male', 'Female', 'Other'}
+        : <String>{'Male', 'Female', 'Both'};
     if (!allowed.contains(normalized)) {
       throw ValidationException('Select a valid $fieldName.');
     }

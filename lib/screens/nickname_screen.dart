@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
+import '../services/validation_service.dart';
 import 'nearby_screen.dart';
 
 class NicknameScreen extends StatefulWidget {
@@ -60,11 +61,11 @@ class _NicknameScreenState extends State<NicknameScreen> {
       return;
     }
 
-    if (age < 18 || age > 99) {
+    try {
+      ValidationService.age(age);
+    } on ValidationException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Age must be between 18 and 99"),
-        ),
+        SnackBar(content: Text(e.message)),
       );
       return;
     }

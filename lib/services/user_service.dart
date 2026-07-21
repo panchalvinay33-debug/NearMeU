@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../constants/app_constants.dart';
 import '../models/app_user.dart';
 import '../security/suspension_service.dart';
 import 'validation_service.dart';
@@ -14,10 +15,12 @@ class UserService {
   final SuspensionService _suspensionService = SuspensionService();
 
   Future<void> createUser(AppUser user) async {
+    ValidationService.age(user.age ?? AppConstants.minimumUserAge);
     await _firestore.collection('users').doc(user.uid).set(user.toMap());
   }
 
   Future<void> saveUser(AppUser user) async {
+    ValidationService.age(user.age ?? AppConstants.minimumUserAge);
     await _firestore.collection('users').doc(user.uid).set(
           user.toMap(),
           SetOptions(merge: true),
@@ -60,7 +63,7 @@ class UserService {
         user.gender.trim().isNotEmpty &&
         user.lookingFor.trim().isNotEmpty &&
         user.age != null &&
-        user.age! > 0;
+        user.age! >= AppConstants.minimumUserAge;
   }
 
   String normalizeGender(String value) {
@@ -402,7 +405,8 @@ class UserService {
     yield* _firestore
         .collection('users')
         .where('isSuspended', isEqualTo: false)
-        .limit(100)
+        .where('age', isGreaterThanOrEqualTo: AppConstants.minimumUserAge)
+        .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final List<AppUser> users = [];
@@ -419,7 +423,7 @@ class UserService {
         );
 
         // Suspended users do not appear in Nearby.
-        if (user.isSuspended) {
+        if (user.isSuspended || !user.isAdult) {
           continue;
         }
 
