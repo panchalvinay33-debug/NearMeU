@@ -43,12 +43,26 @@ service cloud.firestore {
     }
 
     function validUserData(data, uid) {
-      return data.uid == uid
-        && (!('nickname' in data) || (data.nickname is string && data.nickname.size() <= 30))
-        && (!('age' in data) || data.age == null || (data.age is int && data.age >= 13 && data.age <= 120))
-        && (!('gender' in data) || data.gender in ['Male', 'Female', 'Both', ''])
+      return data.keys().hasOnly([
+          'uid', 'email', 'nickname', 'gender', 'lookingFor', 'createdAt',
+          'latitude', 'longitude', 'city', 'state', 'country', 'photoUrl', 'age',
+          'blockedUsers', 'lastSeen', 'isOnline', 'messageNotificationsEnabled',
+          'nearbyAlertsEnabled', 'isAdmin', 'isSuspended'
+        ])
+        && data.uid == uid
+        && (!('email' in data) || data.email is string)
+        && (!('nickname' in data) || (data.nickname is string && data.nickname.size() > 0 && data.nickname.size() <= 30))
+        && ('age' in data) && data.age is int && data.age >= 18 && data.age <= 99
+        && (!('gender' in data) || data.gender in ['Male', 'Female', 'Other', 'Both', ''])
         && (!('lookingFor' in data) || data.lookingFor in ['Male', 'Female', 'Both', ''])
-        && (!('blockedUsers' in data) || data.blockedUsers is list)
+        && (!('blockedUsers' in data) || (data.blockedUsers is list && data.blockedUsers.size() <= 500))
+        && (!('city' in data) || data.city == null || (data.city is string && data.city.size() <= 80))
+        && (!('state' in data) || data.state == null || (data.state is string && data.state.size() <= 80))
+        && (!('country' in data) || data.country == null || (data.country is string && data.country.size() <= 80))
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048))
+        && (!('isOnline' in data) || data.isOnline is bool)
+        && (!('messageNotificationsEnabled' in data) || data.messageNotificationsEnabled is bool)
+        && (!('nearbyAlertsEnabled' in data) || data.nearbyAlertsEnabled is bool)
         && validLatLng(data);
     }
 
@@ -117,18 +131,20 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || activeUser() || isAdmin());
-      allow list: if activeUser() || isAdmin();
+      allow list: if (activeUser() && userDoc(request.auth.uid).data.age >= 18) || isAdmin();
       allow create: if signedIn()
         && request.auth.uid == userId
         && validUserData(request.resource.data, userId)
         && request.resource.data.isAdmin != true
-        && request.resource.data.isSuspended != true;
+        && request.resource.data.isSuspended != true
+        && request.resource.data.age >= 18;
       allow update: if isAdmin()
         || (activeUser()
           && request.auth.uid == userId
           && validUserData(request.resource.data, userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['isAdmin', 'isSuspended', 'createdAt', 'email', 'uid']));
+            .hasAny(['isAdmin', 'isSuspended', 'createdAt', 'email', 'uid'])
+          && request.resource.data.age >= 18);
       allow delete: if isAdmin() || (activeUser() && request.auth.uid == userId);
     }
 
@@ -154,8 +170,8 @@ service cloud.firestore {
       allow create: if activeUser()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reportedUserId != request.auth.uid
-        && request.resource.data.reason is string
-        && request.resource.data.reason.size() > 0
+        && request.resource.data.keys().hasOnly(['reporterId', 'reportedUserId', 'reporterName', 'reporterPhoto', 'reportedUserName', 'reportedUserPhoto', 'reason', 'description', 'status', 'createdAt', 'reviewedAt', 'reviewedBy', 'action'])
+        && request.resource.data.reason in ['Spam', 'Fake Profile', 'Harassment', 'Hate Speech', 'Scam/Fraud', 'Inappropriate Content', 'Other']
         && request.resource.data.description is string
         && request.resource.data.description.size() <= 500
         && request.resource.data.status == 'pending'

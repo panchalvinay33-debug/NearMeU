@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../constants/app_constants.dart';
+
 class AppUser {
   final String uid;
   final String email;
@@ -41,7 +43,7 @@ class AppUser {
     this.state,
     this.country,
     this.photoUrl,
-    this.age,
+    this.age = AppConstants.minimumUserAge,
     this.blockedUsers = const [],
     this.lastSeen,
     this.isOnline = false,
@@ -70,7 +72,7 @@ class AppUser {
       state: data['state'],
       country: data['country'],
       photoUrl: data['photoUrl'],
-      age: (data['age'] as num?)?.toInt(),
+      age: (data['age'] as num?)?.toInt() ?? AppConstants.minimumUserAge,
       blockedUsers:
           List<String>.from(data['blockedUsers'] ?? []),
       lastSeen: data['lastSeen'] is Timestamp
@@ -167,4 +169,6 @@ class AppUser {
   }
   bool get hasLocation =>
       latitude != null && longitude != null;
+
+  bool get isAdult => age != null && age! >= AppConstants.minimumUserAge;
 }
