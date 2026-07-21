@@ -64,6 +64,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ),
       ),
     );
+    if (!mounted) return;
     _isNavigating = false;
   }
 
@@ -218,36 +219,89 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Chats', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white)),
-      const SizedBox(height: 4),
-      const Text('Recent conversations', style: TextStyle(color: AppColors.textSecondary, fontSize: 15)),
-      const SizedBox(height: 18),
-      TextField(
-        controller: searchController,
-        style: const TextStyle(color: Colors.white),
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: 'Search conversations',
-          hintStyle: const TextStyle(color: AppColors.textHint),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: searchController,
-            builder: (_, value, __) => value.text.isEmpty
-                ? const SizedBox.shrink()
-                : IconButton(
-                    tooltip: 'Clear search',
-                    onPressed: searchController.clear,
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.28),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
                   ),
-          ),
-          filled: true,
-          fillColor: AppColors.surface,
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.cardBorder)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
+                ],
+              ),
+              child: const Icon(Icons.forum_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Chats',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Recent conversations',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ),
-    ]);
+        const SizedBox(height: 18),
+        TextField(
+          controller: searchController,
+          style: const TextStyle(color: Colors.white),
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Search conversations',
+            hintStyle: const TextStyle(color: AppColors.textHint),
+            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: searchController,
+              builder: (_, value, __) => value.text.isEmpty
+                  ? const SizedBox.shrink()
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      onPressed: searchController.clear,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white70,
+                      ),
+                    ),
+            ),
+            filled: true,
+            fillColor: AppColors.surfaceLight.withValues(alpha: 0.72),
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(22),
+              borderSide: const BorderSide(color: AppColors.cardBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(22),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

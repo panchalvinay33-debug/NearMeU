@@ -160,7 +160,18 @@ class _NotificationSettingsScreenState
             Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: Colors.purpleAccent,
+              thumbColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.purpleAccent;
+                }
+                return Colors.white70;
+              }),
+              trackColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.purpleAccent.withValues(alpha: 0.35);
+                }
+                return Colors.white24;
+              }),
             ),
         ],
       ),

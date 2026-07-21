@@ -138,7 +138,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
         padding: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
           color: selected
-              ? Colors.purpleAccent.withOpacity(.15)
+              ? Colors.purpleAccent.withValues(alpha: .15)
               : const Color(0xff171717),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(

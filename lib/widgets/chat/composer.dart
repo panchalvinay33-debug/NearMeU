@@ -106,7 +106,7 @@ class ChatComposer extends StatelessWidget {
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.purple.withOpacity(.35),
+                        color: Colors.purple.withValues(alpha: .35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
