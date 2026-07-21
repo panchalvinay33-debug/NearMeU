@@ -11,10 +11,8 @@ import '../widgets/nearby_header.dart';
 import '../widgets/nearby_section_title.dart';
 import '../widgets/nearby_user_card.dart';
 
-import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'settings_screen.dart';
-import 'user_profile_screen.dart';
 
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
@@ -142,26 +140,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
     await _loadNearbyUsers(showLoader: false);
   }
 
-  String _locationText(AppUser user) {
-    final parts = <String>[];
-
-    if (user.city != null && user.city!.trim().isNotEmpty) {
-      parts.add(user.city!.trim());
-    }
-
-    if (user.state != null &&
-        user.state!.trim().isNotEmpty &&
-        user.state!.trim() != user.city?.trim()) {
-      parts.add(user.state!.trim());
-    }
-
-    if (parts.isEmpty) {
-      return 'Location unavailable';
-    }
-
-    return parts.join(', ');
-  }
-
   Future<String> _distanceText(AppUser user) async {
     if (currentMe == null) {
       return '';
@@ -180,6 +158,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
     return '${distance.toStringAsFixed(1)} km';
   }
+
   Widget _buildBody() {
     if (currentUser == null) {
       return const Center(

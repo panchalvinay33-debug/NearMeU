@@ -133,68 +133,60 @@ final AuthService _authService = AuthService();
       (route) => false,
     );
   }
-Future<void> _deleteAccount() async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Delete Account"),
-      content: const Text(
-        "This will permanently delete your account, chats and profile. This action cannot be undone.",
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text("Cancel"),
+
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete Account"),
+        content: const Text(
+          "This will permanently delete your account, chats and profile. This action cannot be undone.",
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text(
-            "Delete",
-            style: TextStyle(color: Colors.red),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              "Delete",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+
+      if (uid == null) return;
+
+      await _chatService.deleteCurrentUserChats(uid);
+      await _userService.deleteCurrentUserData(uid);
+      await _authService.deleteFirebaseAuthAccount();
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
         ),
-      ],
-    ),
-  );
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-  if (confirm != true) return;
-
-  try {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
-    if (uid == null) return;
-
-    await _chatService.deleteCurrentUserChats(uid);
-    await _userService.deleteCurrentUserData(uid);
-    await _authService.deleteFirebaseAuthAccount();
-
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
-      (route) => false,
-    );
-  } catch (e) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Delete failed: $e"),
-      ),
-    );
-  }
-}
-  void _showComingSoon(String title) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "$title coming soon",
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Delete failed: $e"),
         ),
-      ),
-    );
+      );
+    }
   }
 
   Widget _buildProfileCard() {
