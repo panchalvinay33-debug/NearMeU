@@ -3,16 +3,20 @@ import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
 import 'user_service.dart';
+import '../security/chat_security.dart';
 import '../security/suspension_service.dart';
 
 class ChatService {
+  ChatService({ChatSecurity? chatSecurity})
+      : _chatSecurity = chatSecurity ?? ChatSecurity();
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ChatSecurity _chatSecurity;
   final UserService _userService = UserService();
   final SuspensionService _suspensionService = SuspensionService();
 
   String getChatId(String user1, String user2) {
-    final ids = [user1, user2]..sort();
-    return ids.join('_');
+    return _chatSecurity.chatIdFor(user1, user2);
   }
 
   Future<void> sendMessage({
@@ -21,6 +25,12 @@ class ChatService {
     required String text,
     MessageModel? replyTo,
   }) async {
+    final safeText = _chatSecurity.validateOutgoingMessage(
+      senderId: senderId,
+      receiverId: receiverId,
+      text: text,
+    );
+
     await _suspensionService.ensureUserAllowed(senderId);
 
     final isBlocked = await _userService.isBlockedEitherWay(
@@ -33,11 +43,12 @@ class ChatService {
     }
 
     final chatId = getChatId(senderId, receiverId);
+    final participants = <String>[senderId, receiverId]..sort();
 
     final messageData = {
       'senderId': senderId,
       'receiverId': receiverId,
-      'text': text,
+      'text': safeText,
       'timestamp': FieldValue.serverTimestamp(),
       'isUnsent': false,
       'unsentAt': null,
@@ -51,23 +62,23 @@ class ChatService {
       'deletedFor': <String>[],
     };
 
-    final chatData = {
-      'participants': [senderId, receiverId],
-      'lastMessage': text,
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    };
+    final chatRef = _firestore.collection('chats').doc(chatId);
+    final messageRef = chatRef.collection('messages').doc();
 
-    await _firestore.collection('chats').doc(chatId).set(
-          chatData,
-          SetOptions(merge: true),
-        );
+    await _firestore.runTransaction((transaction) async {
+      final chatSnapshot = await transaction.get(chatRef);
+      final chatData = {
+        'participants': participants,
+        'lastMessage': safeText,
+        'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': senderId,
+        if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+      };
 
-    await _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .add(messageData);
+      transaction.set(chatRef, chatData, SetOptions(merge: true));
+      transaction.set(messageRef, messageData);
+    });
+    _chatSecurity.recordMessageSent(senderId);
   }
 
   Future<void> unsendMessage({
