@@ -84,22 +84,48 @@ class ChatService {
         final receiverUnread = existingUnread[receiverId] is int
             ? existingUnread[receiverId] as int
             : 0;
-        final chatData = {
+        final serverTimestamp = FieldValue.serverTimestamp();
+        final Map<String, dynamic> newChatData = {
           'participants': participants,
           'lastMessage': safeText,
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'latestMessageAt': FieldValue.serverTimestamp(),
+          'lastMessageTime': serverTimestamp,
+          'latestMessageAt': serverTimestamp,
           'lastMessageSenderId': senderId,
           'latestSenderId': senderId,
           'lastMessageType': 'text',
           'lastMessageIsUnsent': false,
-          'unreadCounts.$senderId': 0,
-          'unreadCounts.$receiverId': receiverUnread + 1,
-          'readStates.$senderId.lastReadAt': FieldValue.serverTimestamp(),
-          'readStates.$senderId.lastReadMessageId': messageRef.id,
-          'readStates.$senderId.unreadCount': 0,
-          'readStates.$receiverId.unreadCount': receiverUnread + 1,
-          if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': serverTimestamp,
+          'unreadCounts': <String, dynamic>{
+            senderId: 0,
+            receiverId: 1,
+          },
+          'readStates': <String, dynamic>{
+            senderId: <String, dynamic>{
+              'unreadCount': 0,
+              'lastReadAt': serverTimestamp,
+              'lastReadMessageId': messageRef.id,
+            },
+            receiverId: <String, dynamic>{
+              'unreadCount': 1,
+            },
+          },
+        };
+
+        final Map<Object, Object?> existingChatUpdate = {
+          'participants': participants,
+          'lastMessage': safeText,
+          'lastMessageTime': serverTimestamp,
+          'latestMessageAt': serverTimestamp,
+          'lastMessageSenderId': senderId,
+          'latestSenderId': senderId,
+          'lastMessageType': 'text',
+          'lastMessageIsUnsent': false,
+          FieldPath(['unreadCounts', senderId]): 0,
+          FieldPath(['unreadCounts', receiverId]): receiverUnread + 1,
+          FieldPath(['readStates', senderId, 'lastReadAt']): serverTimestamp,
+          FieldPath(['readStates', senderId, 'lastReadMessageId']): messageRef.id,
+          FieldPath(['readStates', senderId, 'unreadCount']): 0,
+          FieldPath(['readStates', receiverId, 'unreadCount']): receiverUnread + 1,
         };
 
         if (chatSnapshot.exists) {
@@ -114,7 +140,11 @@ class ChatService {
           }
         }
 
-        transaction.set(chatRef, chatData, SetOptions(merge: true));
+        if (chatSnapshot.exists) {
+          transaction.update(chatRef, existingChatUpdate);
+        } else {
+          transaction.set(chatRef, newChatData);
+        }
         transaction.set(messageRef, messageData);
       });
       _chatSecurity.recordMessageSent(senderId);
@@ -195,13 +225,21 @@ class ChatService {
     String? lastReadMessageId,
   }) async {
     final chatId = getChatId(currentUserId, otherUserId);
-    await _firestore.collection('chats').doc(chatId).set({
-      'unreadCounts.$currentUserId': 0,
-      'readStates.$currentUserId.unreadCount': 0,
-      'readStates.$currentUserId.lastReadAt': FieldValue.serverTimestamp(),
+    final updateData = <Object, Object?>{
+      FieldPath(['unreadCounts', currentUserId]): 0,
+      FieldPath(['readStates', currentUserId, 'unreadCount']): 0,
+      FieldPath(['readStates', currentUserId, 'lastReadAt']):
+          FieldValue.serverTimestamp(),
       if (lastReadMessageId != null)
-        'readStates.$currentUserId.lastReadMessageId': lastReadMessageId,
-    }, SetOptions(merge: true));
+        FieldPath(['readStates', currentUserId, 'lastReadMessageId']):
+            lastReadMessageId,
+    };
+
+    try {
+      await _firestore.collection('chats').doc(chatId).update(updateData);
+    } on FirebaseException catch (error) {
+      if (error.code != 'not-found') rethrow;
+    }
   }
 
   Future<void> markMessagesAsSeen({

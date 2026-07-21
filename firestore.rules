@@ -85,7 +85,8 @@ service cloud.firestore {
         && request.resource.data.lastMessage.size() <= 1000
         && request.resource.data.lastMessageSenderId == request.auth.uid
         && request.resource.data.lastMessageTime == request.time
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && validChatCreateState();
     }
 
     function validChatUpdate(chatId) {
@@ -99,7 +100,76 @@ service cloud.firestore {
         && request.resource.data.lastMessage.size() > 0
         && request.resource.data.lastMessage.size() <= 1000
         && request.resource.data.lastMessageSenderId == request.auth.uid
-        && request.resource.data.lastMessageTime == request.time;
+        && request.resource.data.lastMessageTime == request.time
+        && validMessageDeliveryState();
+    }
+
+    function otherParticipant() {
+      return resource.data.participants[0] == request.auth.uid
+        ? resource.data.participants[1]
+        : resource.data.participants[0];
+    }
+
+    function validReadStateKeys(state) {
+      return state is map
+        && state.keys().hasOnly(['unreadCount', 'lastReadAt', 'lastReadMessageId']);
+    }
+
+    function validChatStateMaps(data) {
+      return data.unreadCounts is map
+        && data.readStates is map
+        && data.unreadCounts.keys().hasOnly(data.participants)
+        && data.unreadCounts.keys().hasAll(data.participants)
+        && data.readStates.keys().hasOnly(data.participants)
+        && data.readStates.keys().hasAll(data.participants)
+        && data.unreadCounts[data.participants[0]] is int
+        && data.unreadCounts[data.participants[1]] is int
+        && validReadStateKeys(data.readStates[data.participants[0]])
+        && validReadStateKeys(data.readStates[data.participants[1]])
+        && data.readStates[data.participants[0]].unreadCount is int
+        && data.readStates[data.participants[1]].unreadCount is int;
+    }
+
+    function validChatCreateState() {
+      let receiverId = request.resource.data.participants[0] == request.auth.uid
+        ? request.resource.data.participants[1]
+        : request.resource.data.participants[0];
+      return validChatStateMaps(request.resource.data)
+        && request.resource.data.unreadCounts[request.auth.uid] == 0
+        && request.resource.data.unreadCounts[receiverId] == 1
+        && request.resource.data.readStates[request.auth.uid].unreadCount == 0
+        && request.resource.data.readStates[request.auth.uid].lastReadAt == request.time
+        && request.resource.data.readStates[request.auth.uid].lastReadMessageId is string
+        && request.resource.data.readStates[receiverId].keys().hasOnly(['unreadCount'])
+        && request.resource.data.readStates[receiverId].unreadCount == 1;
+    }
+
+    function validMessageDeliveryState() {
+      let receiverId = otherParticipant();
+      return validChatStateMaps(request.resource.data)
+        && request.resource.data.unreadCounts[request.auth.uid] == 0
+        && request.resource.data.unreadCounts[receiverId] == resource.data.unreadCounts[receiverId] + 1
+        && request.resource.data.readStates[request.auth.uid].unreadCount == 0
+        && request.resource.data.readStates[request.auth.uid].lastReadAt == request.time
+        && request.resource.data.readStates[request.auth.uid].lastReadMessageId is string
+        && request.resource.data.readStates[receiverId].unreadCount == resource.data.readStates[receiverId].unreadCount + 1
+        && request.resource.data.readStates[receiverId].lastReadAt == resource.data.readStates[receiverId].lastReadAt
+        && request.resource.data.readStates[receiverId].lastReadMessageId == resource.data.readStates[receiverId].lastReadMessageId;
+    }
+
+    function validMarkAsReadState() {
+      let otherId = otherParticipant();
+      return validChatStateMaps(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStates', 'unreadCounts'])
+        && request.resource.data.unreadCounts[request.auth.uid] == 0
+        && request.resource.data.unreadCounts[otherId] == resource.data.unreadCounts[otherId]
+        && request.resource.data.readStates[otherId] == resource.data.readStates[otherId]
+        && request.resource.data.readStates[request.auth.uid].diff(resource.data.readStates[request.auth.uid]).affectedKeys()
+          .hasOnly(['unreadCount', 'lastReadAt', 'lastReadMessageId'])
+        && request.resource.data.readStates[request.auth.uid].unreadCount == 0
+        && request.resource.data.readStates[request.auth.uid].lastReadAt == request.time
+        && (!('lastReadMessageId' in request.resource.data.readStates[request.auth.uid])
+          || request.resource.data.readStates[request.auth.uid].lastReadMessageId is string);
     }
 
     function validAnnouncement(data) {
@@ -170,8 +240,8 @@ service cloud.firestore {
       allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
       allow update: if (activeUser() && isParticipant() && validChatUpdate(chatId))
         || (activeUser() && isParticipant()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStates', 'unreadCounts'])
-          && request.resource.data.participants == resource.data.participants)
+          && request.resource.data.participants == resource.data.participants
+          && validMarkAsReadState())
         || isAdmin();
       allow delete: if (activeUser() && isParticipant()) || isAdmin();
 
