@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
 import '../services/validation_service.dart';
@@ -17,6 +18,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   String? selectedGender;
   String? selectedLookingFor;
@@ -77,13 +79,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final nickname = _nicknameController.text.trim();
-    final ageText = _ageController.text.trim();
+    if (!_formKey.currentState!.validate()) return;
 
-    if (nickname.isEmpty) {
-      _showSnack('Please enter nickname');
-      return;
-    }
+    final nickname = ValidationService.nickname(_nicknameController.text);
 
     if (selectedGender == null || selectedGender!.isEmpty) {
       _showSnack('Please select gender');
@@ -95,23 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    if (ageText.isEmpty) {
-      _showSnack('Please enter age');
-      return;
-    }
-
-    final int? age = int.tryParse(ageText);
-    if (age == null) {
-      _showSnack('Please enter valid age');
-      return;
-    }
-
-    try {
-      ValidationService.age(age);
-    } on ValidationException catch (e) {
-      _showSnack(e.message);
-      return;
-    }
+    final age = ValidationService.ageText(_ageController.text);
 
     if (currentUser == null) return;
 
@@ -138,7 +120,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       Navigator.pop(context, true);
     } catch (e) {
-      _showSnack('Failed to update profile: $e');
+      _showSnack('Could not update your profile. Please try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -183,7 +165,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           color: Colors.purpleAccent,
         ),
       )
-          : SingleChildScrollView(
+          : Form(
+              key: _formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
@@ -195,8 +181,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               child: Column(
                 children: [
-                  TextField(
+                  TextFormField(
                     controller: _nicknameController,
+                    textInputAction: TextInputAction.next,
+                    validator: (value) {
+                      try {
+                        ValidationService.nickname(value ?? '');
+                        return null;
+                      } on ValidationException catch (e) {
+                        return e.message;
+                      }
+                    },
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Nickname',
@@ -212,9 +207,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  TextField(
+                  TextFormField(
                     controller: _ageController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      try {
+                        ValidationService.ageText(value ?? '');
+                        return null;
+                      } on ValidationException catch (e) {
+                        return e.message;
+                      }
+                    },
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
                       labelText: 'Age',
@@ -329,6 +333,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ],
         ),
       ),
+            ),
     );
   }
 }

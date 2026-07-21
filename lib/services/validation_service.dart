@@ -26,11 +26,22 @@ class ValidationService {
     return normalized;
   }
 
+  static const String adultAgeMessage =
+      'NearMeU is for adults 18+ only. Enter an age from 18 to 99.';
+
   static int age(int value) {
     if (value < minAge || value > maxAge) {
-      throw const ValidationException('NearMeU is for adults 18+ only. Enter an age from 18 to 99.');
+      throw const ValidationException(adultAgeMessage);
     }
     return value;
+  }
+
+  static int ageText(String value) {
+    final normalized = value.trim();
+    if (!RegExp(r'^[0-9]+$').hasMatch(normalized)) {
+      throw const ValidationException(adultAgeMessage);
+    }
+    return age(int.parse(normalized));
   }
 
   static String profileChoice(String value, String fieldName) {
