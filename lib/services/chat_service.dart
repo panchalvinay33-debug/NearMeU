@@ -76,12 +76,28 @@ class ChatService {
     try {
       await _firestore.runTransaction((transaction) async {
         final chatSnapshot = await transaction.get(chatRef);
-        final chatData = {
+        final chatData = <String, Object?>{
           'participants': participants,
           'lastMessage': safeText,
           'lastMessageTime': FieldValue.serverTimestamp(),
           'lastMessageSenderId': senderId,
-          if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+          if (!chatSnapshot.exists) ...{
+            'createdAt': FieldValue.serverTimestamp(),
+            'unreadCounts': <String, int>{
+              senderId: 0,
+              receiverId: 1,
+            },
+            'readStates': <String, Map<String, Object?>>{
+              senderId: <String, Object?>{
+                'unreadCount': 0,
+                'lastReadAt': FieldValue.serverTimestamp(),
+              },
+              receiverId: <String, Object?>{
+                'unreadCount': 1,
+                'lastReadAt': null,
+              },
+            },
+          },
         };
 
         if (chatSnapshot.exists) {
@@ -96,7 +112,19 @@ class ChatService {
           }
         }
 
-        transaction.set(chatRef, chatData, SetOptions(merge: true));
+        if (chatSnapshot.exists) {
+          transaction.update(chatRef, {
+            'lastMessage': safeText,
+            'lastMessageTime': FieldValue.serverTimestamp(),
+            'lastMessageSenderId': senderId,
+            FieldPath(<String>['unreadCounts', receiverId]):
+                FieldValue.increment(1),
+            FieldPath(<String>['readStates', receiverId, 'unreadCount']):
+                FieldValue.increment(1),
+          });
+        } else {
+          transaction.set(chatRef, chatData);
+        }
         transaction.set(messageRef, messageData);
       });
       _chatSecurity.recordMessageSent(senderId);
@@ -168,7 +196,7 @@ class ChatService {
 
     await messageRef.set({
       'deletedFor': FieldValue.arrayUnion([currentUserId]),
-   }, SetOptions(merge: true));
+    }, SetOptions(merge: true));
   }
 
   Future<void> markMessagesAsSeen({
@@ -187,7 +215,17 @@ class ChatService {
         .where('isSeen', isEqualTo: false)
         .get();
 
-    if (snapshot.docs.isEmpty) return;
+    final chatRef = _firestore.collection('chats').doc(chatId);
+
+    if (snapshot.docs.isEmpty) {
+      await chatRef.update({
+        FieldPath(<String>['unreadCounts', currentUserId]): 0,
+        FieldPath(<String>['readStates', currentUserId, 'unreadCount']): 0,
+        FieldPath(<String>['readStates', currentUserId, 'lastReadAt']):
+            FieldValue.serverTimestamp(),
+      });
+      return;
+    }
 
     final batch = _firestore.batch();
 
@@ -197,6 +235,13 @@ class ChatService {
         'seenAt': FieldValue.serverTimestamp(),
       });
     }
+
+    batch.update(chatRef, {
+      FieldPath(<String>['unreadCounts', currentUserId]): 0,
+      FieldPath(<String>['readStates', currentUserId, 'unreadCount']): 0,
+      FieldPath(<String>['readStates', currentUserId, 'lastReadAt']):
+          FieldValue.serverTimestamp(),
+    });
 
     await batch.commit();
   }
