@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -15,10 +16,12 @@ class SupportAnnouncementsScreen extends StatefulWidget {
 
 class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen> {
   final AnnouncementService _service = AnnouncementService();
+  late Stream<List<SupportAnnouncement>> _announcementsStream;
 
   @override
   void initState() {
     super.initState();
+    _announcementsStream = _service.watchActiveAnnouncements();
     WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
   }
 
@@ -33,6 +36,22 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
         const SnackBar(content: Text('Announcements will be marked read when connection returns.')),
       );
     }
+  }
+
+  void _retryAnnouncements() {
+    setState(() {
+      _announcementsStream = _service.watchActiveAnnouncements();
+    });
+  }
+
+  void _logAnnouncementError(Object error) {
+    if (error is FirebaseException) {
+      debugPrint(
+        'Support announcements stream failed: ${error.code} ${error.message ?? ''}',
+      );
+      return;
+    }
+    debugPrint('Support announcements stream failed: $error');
   }
 
   Color _priorityColor(String priority) => switch (priority) {
@@ -51,10 +70,11 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
         actions: [IconButton(onPressed: _markRead, icon: const Icon(Icons.done_all_rounded))],
       ),
       body: StreamBuilder<List<SupportAnnouncement>>(
-        stream: _service.watchActiveAnnouncements(),
+        stream: _announcementsStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: ElevatedButton(onPressed: _markRead, child: const Text('Retry')));
+            _logAnnouncementError(snapshot.error!);
+            return _AnnouncementErrorState(onRetry: _retryAnnouncements);
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -100,6 +120,49 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _AnnouncementErrorState extends StatelessWidget {
+  const _AnnouncementErrorState({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.support_agent_rounded,
+              color: AppColors.primaryLight,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'We couldn’t load support announcements.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please check your connection and try again. NearMeU support updates will appear here when available.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, height: 1.35),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
