@@ -13,6 +13,7 @@ class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ChatSecurity _chatSecurity;
   final UserService _userService = UserService();
+  final Set<String> _pendingMessageKeys = <String>{};
   final SuspensionService _suspensionService = SuspensionService();
 
   String getChatId(String user1, String user2) {
@@ -44,6 +45,11 @@ class ChatService {
 
     final chatId = getChatId(senderId, receiverId);
     final participants = <String>[senderId, receiverId]..sort();
+    final pendingKey = '$senderId|$receiverId|$safeText';
+
+    if (!_pendingMessageKeys.add(pendingKey)) {
+      throw const ChatSecurityException('Message is already sending.');
+    }
 
     final messageData = {
       'senderId': senderId,
@@ -65,20 +71,36 @@ class ChatService {
     final chatRef = _firestore.collection('chats').doc(chatId);
     final messageRef = chatRef.collection('messages').doc();
 
-    await _firestore.runTransaction((transaction) async {
-      final chatSnapshot = await transaction.get(chatRef);
-      final chatData = {
-        'participants': participants,
-        'lastMessage': safeText,
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageSenderId': senderId,
-        if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
-      };
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final chatSnapshot = await transaction.get(chatRef);
+        final chatData = {
+          'participants': participants,
+          'lastMessage': safeText,
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastMessageSenderId': senderId,
+          if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+        };
 
-      transaction.set(chatRef, chatData, SetOptions(merge: true));
-      transaction.set(messageRef, messageData);
-    });
-    _chatSecurity.recordMessageSent(senderId);
+        if (chatSnapshot.exists) {
+          final existingParticipants = List<String>.from(
+            chatSnapshot.data()?['participants'] ?? <String>[],
+          );
+          existingParticipants.sort();
+          if (existingParticipants.length != participants.length ||
+              existingParticipants.first != participants.first ||
+              existingParticipants.last != participants.last) {
+            throw const ChatSecurityException('Invalid chat room.');
+          }
+        }
+
+        transaction.set(chatRef, chatData, SetOptions(merge: true));
+        transaction.set(messageRef, messageData);
+      });
+      _chatSecurity.recordMessageSent(senderId);
+    } finally {
+      _pendingMessageKeys.remove(pendingKey);
+    }
   }
 
   Future<void> unsendMessage({
@@ -189,7 +211,8 @@ class ChatService {
         .doc(chatId)
         .collection('messages')
         .orderBy('timestamp', descending: false)
-        .snapshots()
+        .limit(200)
+        .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final allMessages = snapshot.docs
           .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
@@ -208,7 +231,7 @@ class ChatService {
         .collection('chats')
         .where('participants', arrayContains: currentUserId)
         .orderBy('lastMessageTime', descending: true)
-        .snapshots()
+        .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
       final List<ChatPreviewModel> chats = [];
 
