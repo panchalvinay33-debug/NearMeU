@@ -163,7 +163,44 @@ describe('firestore rules', () => {
     await assertFails(authed('alice').doc('chats/alice_bob').update({ unreadCounts: { alice: 0, bob: 0, mallory: 99 } }));
   });
 
-  it('allows Admin B to expire Admin A announcement without changing creator', async () => {
+  it('allows active user to list active all-user announcements', async () => {
+    await seed(
+      'supportAnnouncements/active',
+      announcement('adminA', { createdAt: new Date(2), expiresAt: new Date(0) }),
+    );
+    await seed(
+      'supportAnnouncements/inactive',
+      announcement('adminA', { isActive: false, createdAt: new Date(1) }),
+    );
+    const snap = await assertSucceeds(
+      authed('alice')
+        .collection('supportAnnouncements')
+        .where('isActive', '==', true)
+        .where('targetAudience', '==', 'allActiveUsers')
+        .orderBy('createdAt', 'desc')
+        .get(),
+    );
+    assert.deepStrictEqual(snap.docs.map((doc) => doc.id), ['active']);
+  });
+
+  it('rejects suspended user support announcement reads', async () => {
+    await seedUser('suspended', { isSuspended: true });
+    await seed(
+      'supportAnnouncements/active',
+      announcement('adminA', { createdAt: new Date(0) }),
+    );
+    await assertFails(authed('suspended').doc('supportAnnouncements/active').get());
+    await assertFails(
+      authed('suspended')
+        .collection('supportAnnouncements')
+        .where('isActive', '==', true)
+        .where('targetAudience', '==', 'allActiveUsers')
+        .orderBy('createdAt', 'desc')
+        .get(),
+    );
+  });
+
+  it('allows admin to create and expire announcements', async () => {
     const ref = authed('adminA').collection('supportAnnouncements').doc('ann1');
     await assertSucceeds(ref.set(announcement('adminA')));
     await assertSucceeds(authed('adminB').doc('supportAnnouncements/ann1').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
