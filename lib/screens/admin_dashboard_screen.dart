@@ -85,7 +85,7 @@ class _AdminDashboardScreenState
 
           CircleAvatar(
             backgroundColor:
-                color.withOpacity(.15),
+                color.withValues(alpha: .15),
             child: Icon(
               icon,
               color: color,
@@ -151,7 +151,7 @@ class _AdminDashboardScreenState
             CircleAvatar(
               radius: 26,
               backgroundColor:
-                  color.withOpacity(.15),
+                  color.withValues(alpha: .15),
               child: Icon(
                 icon,
                 color: color,

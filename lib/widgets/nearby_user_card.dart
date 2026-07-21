@@ -50,11 +50,11 @@ class NearbyUserCard extends StatelessWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: Colors.white.withOpacity(.05),
+          color: Colors.white.withValues(alpha: .05),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.18),
+            color: Colors.black.withValues(alpha: .18),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
