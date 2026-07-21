@@ -76,11 +76,29 @@ class ChatService {
     try {
       await _firestore.runTransaction((transaction) async {
         final chatSnapshot = await transaction.get(chatRef);
+        final existingUnread = chatSnapshot.exists
+            ? Map<String, dynamic>.from(
+                chatSnapshot.data()?['unreadCounts'] ?? <String, dynamic>{},
+              )
+            : <String, dynamic>{};
+        final receiverUnread = existingUnread[receiverId] is int
+            ? existingUnread[receiverId] as int
+            : 0;
         final chatData = {
           'participants': participants,
           'lastMessage': safeText,
           'lastMessageTime': FieldValue.serverTimestamp(),
+          'latestMessageAt': FieldValue.serverTimestamp(),
           'lastMessageSenderId': senderId,
+          'latestSenderId': senderId,
+          'lastMessageType': 'text',
+          'lastMessageIsUnsent': false,
+          'unreadCounts.$senderId': 0,
+          'unreadCounts.$receiverId': receiverUnread + 1,
+          'readStates.$senderId.lastReadAt': FieldValue.serverTimestamp(),
+          'readStates.$senderId.lastReadMessageId': messageRef.id,
+          'readStates.$senderId.unreadCount': 0,
+          'readStates.$receiverId.unreadCount': receiverUnread + 1,
           if (!chatSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
         };
 
@@ -171,6 +189,21 @@ class ChatService {
    }, SetOptions(merge: true));
   }
 
+  Future<void> markChatAsRead({
+    required String currentUserId,
+    required String otherUserId,
+    String? lastReadMessageId,
+  }) async {
+    final chatId = getChatId(currentUserId, otherUserId);
+    await _firestore.collection('chats').doc(chatId).set({
+      'unreadCounts.$currentUserId': 0,
+      'readStates.$currentUserId.unreadCount': 0,
+      'readStates.$currentUserId.lastReadAt': FieldValue.serverTimestamp(),
+      if (lastReadMessageId != null)
+        'readStates.$currentUserId.lastReadMessageId': lastReadMessageId,
+    }, SetOptions(merge: true));
+  }
+
   Future<void> markMessagesAsSeen({
     required String currentUserId,
     required String otherUserId,
@@ -186,6 +219,8 @@ class ChatService {
         .where('receiverId', isEqualTo: currentUserId)
         .where('isSeen', isEqualTo: false)
         .get();
+
+    await markChatAsRead(currentUserId: currentUserId, otherUserId: otherUserId);
 
     if (snapshot.docs.isEmpty) return;
 
@@ -271,7 +306,20 @@ class ChatService {
           continue;
         }
 
-        var unreadCount = 0;
+        final unreadCounts = Map<String, dynamic>.from(
+          data['unreadCounts'] ?? <String, dynamic>{},
+        );
+        final readStates = Map<String, dynamic>.from(
+          data['readStates'] ?? <String, dynamic>{},
+        );
+        final currentReadState = readStates[currentUserId] is Map
+            ? Map<String, dynamic>.from(readStates[currentUserId] as Map)
+            : <String, dynamic>{};
+        var unreadCount = unreadCounts[currentUserId] is int
+            ? unreadCounts[currentUserId] as int
+            : (currentReadState['unreadCount'] is int
+                ? currentReadState['unreadCount'] as int
+                : 0);
         bool? lastMessageSeen;
         String messageType = (data['lastMessageType'] as String?) ?? 'text';
         bool isUnsent = data['lastMessageIsUnsent'] == true ||
@@ -290,13 +338,15 @@ class ChatService {
             lastMessageSeen = messageData['isSeen'] as bool?;
           }
 
-          final unreadSnapshot = await doc.reference
-              .collection('messages')
-              .where('receiverId', isEqualTo: currentUserId)
-              .where('isSeen', isEqualTo: false)
-              .limit(100)
-              .get();
-          unreadCount = unreadSnapshot.size;
+          if (unreadCount == 0 && !data.containsKey('unreadCounts')) {
+            final unreadSnapshot = await doc.reference
+                .collection('messages')
+                .where('receiverId', isEqualTo: currentUserId)
+                .where('isSeen', isEqualTo: false)
+                .limit(100)
+                .get();
+            unreadCount = unreadSnapshot.size;
+          }
         } catch (error) {
           developer.log('Unable to hydrate chat preview metadata', error: error);
         }
@@ -330,6 +380,12 @@ class ChatService {
       });
       return chats;
     });
+  }
+
+  Stream<int> watchPrivateUnreadCount(String currentUserId) {
+    return getChatsForUser(currentUserId).map(
+      (chats) => chats.fold<int>(0, (total, chat) => total + chat.unreadCount),
+    );
   }
 
   /// Deletes every chat (and all messages) that the user participates in.

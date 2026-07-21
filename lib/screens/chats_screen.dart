@@ -2,11 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/chat_preview_model.dart';
+import '../services/announcement_service.dart';
+import '../services/in_app_notification_service.dart';
 import '../services/chat_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_formatters.dart';
 import 'chat_screen.dart';
 import 'nearby_screen.dart';
+import 'notifications_screen.dart';
+import 'support_announcements_screen.dart';
 import 'settings_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -18,6 +22,8 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   final ChatService _chatService = ChatService();
+  final AnnouncementService _announcementService = AnnouncementService();
+  final InAppNotificationService _notificationService = InAppNotificationService();
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   bool _isRefreshing = false;
@@ -121,7 +127,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     sliver: SliverList.list(
                       children: [
-                        _Header(searchController: _searchController),
+                        _Header(searchController: _searchController, notificationService: _notificationService, currentUserId: currentUser.uid, onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                         const SizedBox(height: 18),
                         _SummaryCard(
                           count: chats.length,
@@ -134,7 +140,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ],
                     ),
                   ),
-                  if (chats.isEmpty)
+                  if (visibleChats.isEmpty && _query.isNotEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: _EmptyState(
@@ -149,7 +155,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ),
                       ),
                     )
-                  else if (visibleChats.isEmpty)
+                  else if (false)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: _EmptyState(
@@ -168,10 +174,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         24 + MediaQuery.paddingOf(context).bottom,
                       ),
                       sliver: SliverList.separated(
-                        itemCount: visibleChats.length,
+                        itemCount: visibleChats.length + 1,
                         separatorBuilder: (_, __) => const SizedBox(height: 14),
                         itemBuilder: (context, index) {
-                          final chat = visibleChats[index];
+                          if (index == 0) {
+                            return StreamBuilder<int>(
+                              stream: _announcementService.watchUnreadCount(currentUser.uid),
+                              builder: (context, unreadSnapshot) => _SupportCard(
+                                unreadCount: unreadSnapshot.data ?? 0,
+                                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportAnnouncementsScreen())),
+                              ),
+                            );
+                          }
+                          final chat = visibleChats[index - 1];
                           return _ChatCard(
                             chat: chat,
                             currentUserId: currentUser.uid,
@@ -205,13 +220,22 @@ class _ChatsScreenState extends State<ChatsScreen> {
             );
           }
         },
-        items: const [
+        items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
             label: 'Nearby',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
+            icon: StreamBuilder<int>(
+              stream: _chatService.watchPrivateUnreadCount(currentUser.uid),
+              builder: (context, privateSnapshot) => StreamBuilder<int>(
+                stream: _announcementService.watchUnreadCount(currentUser.uid),
+                builder: (context, announcementSnapshot) {
+                  final count = (privateSnapshot.data ?? 0) + (announcementSnapshot.data ?? 0);
+                  return _NavBadge(count: count, child: const Icon(Icons.chat_bubble_outline));
+                },
+              ),
+            ),
             label: 'Chats',
           ),
           BottomNavigationBarItem(
@@ -225,8 +249,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.searchController});
+  const _Header({required this.searchController, required this.notificationService, required this.currentUserId, required this.onNotifications});
   final TextEditingController searchController;
+  final InAppNotificationService notificationService;
+  final String currentUserId;
+  final VoidCallback onNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +306,17 @@ class _Header extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+              StreamBuilder<int>(
+                stream: notificationService.watchUnreadCount(currentUserId),
+                builder: (context, snapshot) => _NavBadge(
+                  count: snapshot.data ?? 0,
+                  child: IconButton(
+                    tooltip: 'Notifications',
+                    onPressed: onNotifications,
+                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+                  ),
                 ),
               ),
             ],
@@ -474,4 +512,70 @@ class _ErrorState extends StatelessWidget {
           ]),
         ),
       );
+}
+
+class _SupportCard extends StatelessWidget {
+  const _SupportCard({required this.unreadCount, required this.onTap});
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = unreadCount > 0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Color(0xFF2D174A), Color(0xFF171717)]),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.primary.withValues(alpha: .65)),
+          ),
+          child: Row(children: [
+            const CircleAvatar(radius: 31, backgroundColor: AppColors.primary, child: Icon(Icons.support_agent_rounded, color: Colors.white)),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Expanded(child: Text('NearMeU Support', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))),
+                const Icon(Icons.verified_rounded, color: AppColors.primaryLight, size: 18),
+                const SizedBox(width: 4),
+                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(99)), child: const Text('Official', style: TextStyle(color: Colors.white70, fontSize: 11))),
+              ]),
+              const SizedBox(height: 7),
+              Row(children: [
+                const Expanded(child: Text('Official announcements and safety updates.', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary))),
+                if (unread) _UnreadPill(count: unreadCount),
+              ]),
+            ])),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadPill extends StatelessWidget {
+  const _UnreadPill({required this.count});
+  final int count;
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: const BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.all(Radius.circular(999))),
+        child: Text(count > 99 ? '99+' : '$count', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+      );
+}
+
+class _NavBadge extends StatelessWidget {
+  const _NavBadge({required this.count, required this.child});
+  final int count;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Stack(clipBehavior: Clip.none, children: [
+        child,
+        if (count > 0)
+          Positioned(right: -10, top: -8, child: _UnreadPill(count: count)),
+      ]);
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/user_service.dart';
+import 'admin_announcement_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_users_screen.dart';
 
@@ -398,6 +399,14 @@ class _AdminDashboardScreenState
 
                           _loadStats();
                         },
+                      ),
+
+                      _buildMenuCard(
+                        title: "Send NearMeU Announcement",
+                        subtitle: "Broadcast official updates to active users",
+                        icon: Icons.campaign_rounded,
+                        color: Colors.purpleAccent,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAnnouncementScreen())),
                       ),
 
                       _buildMenuCard(
