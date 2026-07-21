@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
@@ -144,6 +146,7 @@ class ChatService {
       await _firestore.collection('chats').doc(chatId).set({
         'lastMessage': 'This message was unsent',
         'lastMessageTime': FieldValue.serverTimestamp(),
+        'lastMessageSenderId': currentUserId,
       }, SetOptions(merge: true));
     }
   }
@@ -255,32 +258,76 @@ class ChatService {
         final userDoc =
             await _firestore.collection('users').doc(otherUserId).get();
 
-        if (!userDoc.exists || userDoc.data() == null) continue;
+        AppUser? otherUser;
+        if (userDoc.exists && userDoc.data() != null) {
+          otherUser = AppUser.fromMap(userDoc.data()!, userDoc.id);
+        }
 
-        final otherUser =
-            AppUser.fromMap(userDoc.data()!, userDoc.id);
-
-        if (_userService.areUsersBlockedEitherWay(
-          currentUser: currentUser,
-          otherUser: otherUser,
-        )) {
+        if (otherUser != null &&
+            _userService.areUsersBlockedEitherWay(
+              currentUser: currentUser,
+              otherUser: otherUser,
+            )) {
           continue;
+        }
+
+        var unreadCount = 0;
+        bool? lastMessageSeen;
+        String messageType = (data['lastMessageType'] as String?) ?? 'text';
+        bool isUnsent = data['lastMessageIsUnsent'] == true ||
+            data['lastMessage'] == 'This message was unsent';
+
+        try {
+          final latestMessage = await doc.reference
+              .collection('messages')
+              .orderBy('timestamp', descending: true)
+              .limit(1)
+              .get();
+          if (latestMessage.docs.isNotEmpty) {
+            final messageData = latestMessage.docs.first.data();
+            messageType = (messageData['type'] as String?) ?? messageType;
+            isUnsent = messageData['isUnsent'] == true || isUnsent;
+            lastMessageSeen = messageData['isSeen'] as bool?;
+          }
+
+          final unreadSnapshot = await doc.reference
+              .collection('messages')
+              .where('receiverId', isEqualTo: currentUserId)
+              .where('isSeen', isEqualTo: false)
+              .limit(100)
+              .get();
+          unreadCount = unreadSnapshot.size;
+        } catch (error) {
+          developer.log('Unable to hydrate chat preview metadata', error: error);
         }
 
         chats.add(
           ChatPreviewModel(
             chatId: doc.id,
             otherUserId: otherUserId,
-            otherUserName: otherUser.nickname.isNotEmpty
-                ? otherUser.nickname
-                : 'Unknown',
-            lastMessage: data['lastMessage'] ?? '',
-            lastMessageTime:
-                (data['lastMessageTime'] as Timestamp?)?.toDate(),
+            otherUserName: otherUser?.nickname.isNotEmpty == true
+                ? otherUser!.nickname
+                : 'Unavailable user',
+            lastMessage: (data['lastMessage'] as String?) ?? '',
+            lastMessageTime: data['lastMessageTime'] is Timestamp
+                ? (data['lastMessageTime'] as Timestamp).toDate()
+                : null,
+            messageType: messageType,
+            isUnsent: isUnsent,
+            lastMessageSenderId: data['lastMessageSenderId'] as String?,
+            lastMessageSeen: lastMessageSeen,
+            unreadCount: unreadCount,
+            isOtherUserOnline: otherUser?.isOnline,
           ),
         );
       }
 
+      chats.sort((a, b) {
+        final aTime = a.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final byTime = bTime.compareTo(aTime);
+        return byTime != 0 ? byTime : a.chatId.compareTo(b.chatId);
+      });
       return chats;
     });
   }

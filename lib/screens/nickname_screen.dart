@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
 import '../services/validation_service.dart';
@@ -27,48 +28,15 @@ class _NicknameScreenState extends State<NicknameScreen> {
   final TextEditingController ageController = TextEditingController();
   final UserService _userService = UserService();
 
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   bool isLoading = false;
 
   Future<void> _saveUser() async {
-    final nickname = nicknameController.text.trim();
-    final ageText = ageController.text.trim();
+    if (!_formKey.currentState!.validate()) return;
 
-    if (nickname.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter a nickname"),
-        ),
-      );
-      return;
-    }
-
-    if (ageText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter age"),
-        ),
-      );
-      return;
-    }
-
-    final int? age = int.tryParse(ageText);
-    if (age == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please enter valid age"),
-        ),
-      );
-      return;
-    }
-
-    try {
-      ValidationService.age(age);
-    } on ValidationException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-      return;
-    }
+    final nickname = ValidationService.nickname(nicknameController.text);
+    final age = ValidationService.ageText(ageController.text);
 
     setState(() {
       isLoading = true;
@@ -97,10 +65,9 @@ class _NicknameScreenState extends State<NicknameScreen> {
             (route) => false,
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error saving profile: $e"),
-        ),
+        const SnackBar(content: Text('Could not save your profile. Please try again.')),
       );
     }
 
@@ -134,9 +101,12 @@ class _NicknameScreenState extends State<NicknameScreen> {
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      body: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.all(20),
           children: [
             const SizedBox(height: 40),
 
@@ -159,8 +129,17 @@ class _NicknameScreenState extends State<NicknameScreen> {
 
             const SizedBox(height: 30),
 
-            TextField(
+            TextFormField(
               controller: nicknameController,
+              textInputAction: TextInputAction.next,
+              validator: (value) {
+                try {
+                  ValidationService.nickname(value ?? '');
+                  return null;
+                } on ValidationException catch (e) {
+                  return e.message;
+                }
+              },
               style: const TextStyle(
                 color: Colors.white,
               ),
@@ -180,9 +159,19 @@ class _NicknameScreenState extends State<NicknameScreen> {
 
             const SizedBox(height: 16),
 
-            TextField(
+            TextFormField(
               controller: ageController,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              validator: (value) {
+                try {
+                  ValidationService.ageText(value ?? '');
+                  return null;
+                } on ValidationException catch (e) {
+                  return e.message;
+                }
+              },
               style: const TextStyle(
                 color: Colors.white,
               ),
@@ -200,7 +189,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
               ),
             ),
 
-            const Spacer(),
+            const SizedBox(height: 40),
 
             SizedBox(
               width: double.infinity,
