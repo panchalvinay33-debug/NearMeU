@@ -75,6 +75,48 @@ service cloud.firestore {
         && participants[0] < participants[1];
     }
 
+    function otherParticipant(participants) {
+      return participants[0] == request.auth.uid ? participants[1] : participants[0];
+    }
+
+    function validUnreadMaps(data, senderId, receiverId, receiverUnread) {
+      return data.unreadCounts is map
+        && data.unreadCounts.keys().hasOnly([senderId, receiverId])
+        && data.unreadCounts[senderId] is int
+        && data.unreadCounts[senderId] == 0
+        && data.unreadCounts[receiverId] is int
+        && data.unreadCounts[receiverId] == receiverUnread
+        && receiverUnread >= 0
+        && data.readStates is map
+        && data.readStates.keys().hasOnly([senderId, receiverId])
+        && data.readStates[senderId] is map
+        && data.readStates[senderId].keys().hasOnly(['lastReadAt', 'lastReadMessageId', 'unreadCount'])
+        && data.readStates[senderId].lastReadAt == request.time
+        && data.readStates[senderId].lastReadMessageId is string
+        && data.readStates[senderId].unreadCount == 0
+        && data.readStates[receiverId] is map
+        && data.readStates[receiverId].unreadCount is int
+        && data.readStates[receiverId].unreadCount == receiverUnread;
+    }
+
+    function validReceiverReadStatePreserved(senderId, receiverId, receiverUnread) {
+      let oldReadStates = resource.data.get('readStates', {});
+      let oldReceiverState = oldReadStates.get(receiverId, {});
+      let newReceiverState = request.resource.data.readStates[receiverId];
+      return newReceiverState.diff(oldReceiverState).affectedKeys().hasOnly(['unreadCount'])
+        && newReceiverState.unreadCount == receiverUnread;
+    }
+
+    function validMessageDeliveryState(chatId, existing) {
+      let senderId = request.auth.uid;
+      let receiverId = otherParticipant(request.resource.data.participants);
+      let oldUnreadCounts = existing ? resource.data.get('unreadCounts', {}) : {};
+      let receiverUnread = oldUnreadCounts.get(receiverId, 0) + 1;
+      return validUnreadMaps(request.resource.data, senderId, receiverId, receiverUnread)
+        && ((existing && validReceiverReadStatePreserved(senderId, receiverId, receiverUnread))
+          || (!existing && request.resource.data.readStates[receiverId].keys().hasOnly(['unreadCount'])));
+    }
+
     function validChatCreate(chatId) {
       return validChatParticipants(request.resource.data.participants)
         && chatId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1]
@@ -84,8 +126,11 @@ service cloud.firestore {
         && request.resource.data.lastMessage.size() > 0
         && request.resource.data.lastMessage.size() <= 1000
         && request.resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.latestSenderId == request.auth.uid
         && request.resource.data.lastMessageTime == request.time
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.latestMessageAt == request.time
+        && request.resource.data.createdAt == request.time
+        && validMessageDeliveryState(chatId, false);
     }
 
     function validChatUpdate(chatId) {
@@ -99,7 +144,32 @@ service cloud.firestore {
         && request.resource.data.lastMessage.size() > 0
         && request.resource.data.lastMessage.size() <= 1000
         && request.resource.data.lastMessageSenderId == request.auth.uid
-        && request.resource.data.lastMessageTime == request.time;
+        && request.resource.data.latestSenderId == request.auth.uid
+        && request.resource.data.lastMessageTime == request.time
+        && request.resource.data.latestMessageAt == request.time
+        && validMessageDeliveryState(chatId, true);
+    }
+
+    function validReadStateUpdate() {
+      let readerId = request.auth.uid;
+      let otherId = otherParticipant(resource.data.participants);
+      let oldUnreadCounts = resource.data.get('unreadCounts', {});
+      let oldReadStates = resource.data.get('readStates', {});
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStates', 'unreadCounts'])
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.unreadCounts is map
+        && request.resource.data.unreadCounts.keys().hasOnly(resource.data.participants)
+        && request.resource.data.unreadCounts[readerId] == 0
+        && request.resource.data.unreadCounts[otherId] == oldUnreadCounts.get(otherId, 0)
+        && request.resource.data.unreadCounts[otherId] is int
+        && request.resource.data.unreadCounts[otherId] >= 0
+        && request.resource.data.readStates is map
+        && request.resource.data.readStates.keys().hasOnly(resource.data.participants)
+        && request.resource.data.readStates[otherId] == oldReadStates.get(otherId, {})
+        && request.resource.data.readStates[readerId] is map
+        && request.resource.data.readStates[readerId].keys().hasOnly(['lastReadAt', 'lastReadMessageId', 'unreadCount'])
+        && request.resource.data.readStates[readerId].unreadCount == 0
+        && request.resource.data.readStates[readerId].lastReadAt == request.time;
     }
 
     function validAnnouncement(data) {
@@ -109,8 +179,23 @@ service cloud.firestore {
         && data.priority in ['normal', 'important', 'urgent']
         && data.type == 'official_announcement'
         && data.targetAudience == 'allActiveUsers'
-        && data.isActive is bool
-        && data.createdByAdminId == request.auth.uid;
+        && data.isActive is bool;
+    }
+
+    function validAnnouncementCreate() {
+      return validAnnouncement(request.resource.data)
+        && request.resource.data.createdByAdminId == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validAnnouncementUpdate() {
+      return validAnnouncement(request.resource.data)
+        && request.resource.data.createdByAdminId == resource.data.createdByAdminId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive', 'expiresAt'])
+        && resource.data.isActive == true
+        && request.resource.data.isActive == false
+        && request.resource.data.expiresAt == request.time;
     }
 
     function validNotificationReadUpdate() {
@@ -121,11 +206,10 @@ service cloud.firestore {
 
     function canSendMessage(chatId) {
       return !exists(/databases/$(database)/documents/chats/$(chatId))
-        || get(/databases/$(database)/documents/chats/$(chatId)).data.lastMessageSenderId != request.auth.uid
-        || get(/databases/$(database)/documents/chats/$(chatId)).data.lastMessageTime <= request.time - duration.value(1, 's');
+        || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
     }
 
-    function validMessageCreate(chatId) {
+    function validMessageCreate(chatId, messageId) {
       let chat = getAfter(/databases/$(database)/documents/chats/$(chatId)).data;
       return request.resource.data.keys().hasOnly([
           'senderId', 'receiverId', 'text', 'timestamp', 'isUnsent', 'unsentAt',
@@ -143,6 +227,10 @@ service cloud.firestore {
         && request.resource.data.isUnsent == false
         && request.resource.data.type == 'text'
         && request.resource.data.deletedFor == []
+        && chat.lastMessageSenderId == request.auth.uid
+        && chat.lastMessage == request.resource.data.text
+        && chat.lastMessageTime == request.time
+        && chat.readStates[request.auth.uid].lastReadMessageId == messageId
         && canSendMessage(chatId);
     }
 
@@ -169,9 +257,7 @@ service cloud.firestore {
       allow read: if (activeUser() && isParticipant()) || isAdmin();
       allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
       allow update: if (activeUser() && isParticipant() && validChatUpdate(chatId))
-        || (activeUser() && isParticipant()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readStates', 'unreadCounts'])
-          && request.resource.data.participants == resource.data.participants)
+        || (activeUser() && isParticipant() && validReadStateUpdate())
         || isAdmin();
       allow delete: if (activeUser() && isParticipant()) || isAdmin();
 
@@ -179,7 +265,7 @@ service cloud.firestore {
         allow read: if (activeUser()
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
           || isAdmin();
-        allow create: if activeUser() && validMessageCreate(chatId);
+        allow create: if activeUser() && validMessageCreate(chatId, messageId);
         allow update, delete: if (activeUser()
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
           || isAdmin();
@@ -192,11 +278,8 @@ service cloud.firestore {
         && resource.data.targetAudience == 'allActiveUsers'
         && (!('expiresAt' in resource.data) || resource.data.expiresAt == null || resource.data.expiresAt > request.time)
         || isAdmin();
-      allow create: if isAdmin()
-        && validAnnouncement(request.resource.data)
-        && request.resource.data.createdAt == request.time;
-      allow update: if isAdmin()
-        && validAnnouncement(request.resource.data);
+      allow create: if isAdmin() && validAnnouncementCreate();
+      allow update: if isAdmin() && validAnnouncementUpdate();
       allow delete: if isAdmin();
     }
 
