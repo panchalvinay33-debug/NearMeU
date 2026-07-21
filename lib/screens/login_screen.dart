@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import '../security/suspension_service.dart';
 import 'gender_screen.dart';
 import 'nearby_screen.dart';
 
@@ -42,6 +43,22 @@ class _LoginScreenState extends State<LoginScreen> {
       final AppUser? savedUser = await _userService.getUser(firebaseUser.uid);
 
       if (!mounted) return;
+
+      if (savedUser != null && savedUser.isSuspended) {
+        await SuspensionService().signOutSuspendedUser();
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Your account has been suspended. Please contact support.',
+            ),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+        return;
+      }
 
       if (savedUser != null && _userService.isProfileComplete(savedUser)) {
         Navigator.pushReplacement(

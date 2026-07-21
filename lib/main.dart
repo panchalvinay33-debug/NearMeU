@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'screens/auth_gate_screen.dart';
+import 'security/suspension_guard.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -30,7 +31,7 @@ class NearMeUApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AuthGateScreen(),
+      home: const SuspensionGuard(child: AuthGateScreen()),
     );
   }
 }

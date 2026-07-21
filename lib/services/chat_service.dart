@@ -3,10 +3,12 @@ import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
 import 'user_service.dart';
+import '../security/suspension_service.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService();
+  final SuspensionService _suspensionService = SuspensionService();
 
   String getChatId(String user1, String user2) {
     final ids = [user1, user2]..sort();
@@ -19,6 +21,8 @@ class ChatService {
     required String text,
     MessageModel? replyTo,
   }) async {
+    await _suspensionService.ensureUserAllowed(senderId);
+
     final isBlocked = await _userService.isBlockedEitherWay(
       currentUserId: senderId,
       otherUserId: receiverId,
@@ -71,6 +75,8 @@ class ChatService {
     required String otherUserId,
     required MessageModel message,
   }) async {
+    await _suspensionService.ensureUserAllowed(currentUserId);
+
     if (!message.canUnsend(currentUserId)) return;
 
     final chatId = getChatId(currentUserId, otherUserId);
@@ -114,6 +120,8 @@ class ChatService {
     required String otherUserId,
     required MessageModel message,
   }) async {
+    await _suspensionService.ensureUserAllowed(currentUserId);
+
     final chatId = getChatId(currentUserId, otherUserId);
 
     final messageRef = _firestore
@@ -131,6 +139,8 @@ class ChatService {
     required String currentUserId,
     required String otherUserId,
   }) async {
+    await _suspensionService.ensureUserAllowed(currentUserId);
+
     final chatId = getChatId(currentUserId, otherUserId);
 
     final snapshot = await _firestore
@@ -158,10 +168,12 @@ class ChatService {
   Stream<List<MessageModel>> getMessages({
     required String user1,
     required String user2,
-  }) {
+  }) async* {
+    await _suspensionService.ensureUserAllowed(user1);
+
     final chatId = getChatId(user1, user2);
 
-    return _firestore
+    yield* _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
@@ -178,8 +190,10 @@ class ChatService {
     });
   }
 
-  Stream<List<ChatPreviewModel>> getChatsForUser(String currentUserId) {
-    return _firestore
+  Stream<List<ChatPreviewModel>> getChatsForUser(String currentUserId) async* {
+    await _suspensionService.ensureUserAllowed(currentUserId);
+
+    yield* _firestore
         .collection('chats')
         .where('participants', arrayContains: currentUserId)
         .orderBy('lastMessageTime', descending: true)

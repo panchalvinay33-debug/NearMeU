@@ -4,9 +4,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
 import '../models/app_user.dart';
+import '../security/suspension_service.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final SuspensionService _suspensionService = SuspensionService();
 
   Future<void> createUser(AppUser user) async {
     await _firestore.collection('users').doc(user.uid).set(user.toMap());
@@ -82,6 +84,8 @@ class UserService {
     String uid,
     String nickname,
   ) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).update({
       'nickname': nickname.trim(),
     });
@@ -91,6 +95,8 @@ class UserService {
     String uid,
     int age,
   ) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).update({
       'age': age,
     });
@@ -100,6 +106,8 @@ class UserService {
     String uid,
     String gender,
   ) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).update({
       'gender': gender.trim(),
     });
@@ -109,6 +117,8 @@ class UserService {
     String uid,
     String lookingFor,
   ) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).update({
       'lookingFor': lookingFor.trim(),
     });
@@ -121,6 +131,8 @@ class UserService {
     required String gender,
     required String lookingFor,
   }) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).set({
       'nickname': nickname.trim(),
       'age': age,
@@ -137,6 +149,8 @@ class UserService {
     String? state,
     String? country,
   }) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).set({
       'latitude': latitude,
       'longitude': longitude,
@@ -147,6 +161,8 @@ class UserService {
   }
 
   Future<void> updateUserLocation(String uid) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     bool serviceEnabled =
         await Geolocator.isLocationServiceEnabled();
 
@@ -209,6 +225,8 @@ class UserService {
   }
 
   Future<void> updateLastSeen(String uid) async {
+    await _suspensionService.ensureUserAllowed(uid);
+
     await _firestore.collection('users').doc(uid).set({
       'lastSeen': FieldValue.serverTimestamp(),
       'isOnline': false,
@@ -364,6 +382,8 @@ class UserService {
   Stream<List<AppUser>> getNearbyUsers(
     String currentUserId,
   ) async* {
+    await _suspensionService.ensureUserAllowed(currentUserId);
+
     final currentUser =
         await getUser(currentUserId);
 
