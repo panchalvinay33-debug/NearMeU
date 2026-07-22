@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties and keep the real file private.
+# Generate an upload keystore outside the repository, then use its path below.
+
+storePassword=replace-with-a-strong-store-password
+keyPassword=replace-with-a-strong-key-password
+keyAlias=upload
+storeFile=../keystore/upload-keystore.jks
