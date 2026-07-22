@@ -18,7 +18,7 @@ class LookingForScreen extends StatefulWidget {
 }
 
 class _LookingForScreenState extends State<LookingForScreen> {
-  String selectedLookingFor = "";
+  String selectedLookingFor = '';
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +29,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          "Looking For",
+          'Looking For',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -42,7 +42,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
           children: [
             const SizedBox(height: 20),
             const Text(
-              "Who do you want to connect with?",
+              'Who do you want to connect with?',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey,
@@ -50,31 +50,29 @@ class _LookingForScreenState extends State<LookingForScreen> {
               ),
             ),
             const SizedBox(height: 35),
-
             Expanded(
               child: Column(
                 children: [
                   lookingCard(
                     icon: Icons.male_rounded,
-                    title: "Men",
-                    value: "Men",
+                    title: 'Men',
+                    value: 'Male',
                   ),
                   const SizedBox(height: 18),
                   lookingCard(
                     icon: Icons.female_rounded,
-                    title: "Women",
-                    value: "Women",
+                    title: 'Women',
+                    value: 'Female',
                   ),
                   const SizedBox(height: 18),
                   lookingCard(
                     icon: Icons.people_alt_rounded,
-                    title: "Both",
-                    value: "Both",
+                    title: 'Both',
+                    value: 'Both',
                   ),
                 ],
               ),
             ),
-
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -82,18 +80,18 @@ class _LookingForScreenState extends State<LookingForScreen> {
                 onPressed: selectedLookingFor.isEmpty
                     ? null
                     : () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => NicknameScreen(
-                        uid: widget.uid,
-                        email: widget.email,
-                        gender: widget.gender,
-                        lookingFor: selectedLookingFor,
-                      ),
-                    ),
-                  );
-                },
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NicknameScreen(
+                              uid: widget.uid,
+                              email: widget.email,
+                              gender: widget.gender,
+                              lookingFor: selectedLookingFor,
+                            ),
+                          ),
+                        );
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purpleAccent,
                   foregroundColor: Colors.white,
@@ -102,7 +100,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
                   ),
                 ),
                 child: const Text(
-                  "Continue",
+                  'Continue',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -110,7 +108,6 @@ class _LookingForScreenState extends State<LookingForScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -123,7 +120,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
     required String title,
     required String value,
   }) {
-    final bool selected = selectedLookingFor == value;
+    final selected = selectedLookingFor == value;
 
     return InkWell(
       borderRadius: BorderRadius.circular(20),
@@ -142,9 +139,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
               : const Color(0xff171717),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? Colors.purpleAccent
-                : Colors.grey.shade800,
+            color: selected ? Colors.purpleAccent : Colors.grey.shade800,
             width: 2,
           ),
         ),
