@@ -16,26 +16,22 @@ function sanitizePlatform(value) {
     : "unknown";
 }
 
-function buildChatNotification({ chatId, senderId, senderName }) {
-  const safeName = typeof senderName === "string" && senderName.trim()
-    ? senderName.trim().slice(0, 30)
-    : "Someone nearby";
-
+function buildChatNotification({ chatId }) {
   return {
     notification: {
-      title: safeName,
+      title: "NearMeU",
       body: "You received a new private message.",
     },
     data: {
       type: "private_chat",
       chatId: String(chatId),
-      senderId: String(senderId),
     },
     android: {
       priority: "high",
       notification: {
         channelId: "nearmeu_notifications",
         sound: "default",
+        visibility: "private",
       },
     },
   };
