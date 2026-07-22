@@ -46,12 +46,23 @@ async function deleteAllDeviceTokensForUid(uid) {
     const devices = await devicesRef.limit(DELETE_BATCH_LIMIT).get();
     if (devices.empty) break;
 
-    const batch = db.batch();
-    for (const device of devices.docs) {
-      batch.delete(device.ref);
-      batch.delete(db.collection("deviceTokenOwners").doc(device.id));
-    }
-    await batch.commit();
+    await db.runTransaction(async (transaction) => {
+      const ownerRefs = devices.docs.map((device) =>
+        db.collection("deviceTokenOwners").doc(device.id),
+      );
+      const ownerSnapshots = await Promise.all(
+        ownerRefs.map((ownerRef) => transaction.get(ownerRef)),
+      );
+
+      devices.docs.forEach((device, index) => {
+        transaction.delete(device.ref);
+        const ownerSnapshot = ownerSnapshots[index];
+        if (ownerSnapshot.exists && ownerSnapshot.get("ownerId") === uid) {
+          transaction.delete(ownerRefs[index]);
+        }
+      });
+    });
+
     deletedCount += devices.size;
   }
 
@@ -168,13 +179,11 @@ exports.sendPrivateChatNotification = onDocumentCreated(
 
     const [
       receiverSnapshot,
-      senderSnapshot,
       receiverPrivateSnapshot,
       blockedByReceiver,
       blockedBySender,
     ] = await db.getAll(
       receiverRef,
-      senderRef,
       receiverPrivateRef,
       blockedByReceiverRef,
       blockedBySenderRef,
@@ -213,13 +222,8 @@ exports.sendPrivateChatNotification = onDocumentCreated(
     }
     if (!uniqueDevices.length) return;
 
-    const senderName = senderSnapshot.exists
-      ? senderSnapshot.get("nickname")
-      : "Someone nearby";
     const basePayload = buildChatNotification({
       chatId: event.params.chatId,
-      senderId,
-      senderName,
     });
 
     for (let start = 0; start < uniqueDevices.length; start += MULTICAST_LIMIT) {
