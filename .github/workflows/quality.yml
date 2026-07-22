@@ -40,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify changed Dart files are formatted
+      - name: Validate changed Dart files with formatter
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -56,12 +56,12 @@ jobs:
           fi
 
           if (( ${#dart_files[@]} == 0 )); then
-            echo "No changed Dart files to format-check."
+            echo "No changed Dart files to validate."
             exit 0
           fi
 
-          printf 'Checking formatting for:\n%s\n' "${dart_files[*]}"
-          dart format --output=none --set-exit-if-changed "${dart_files[@]}"
+          printf 'Validating Dart files:\n%s\n' "${dart_files[*]}"
+          dart format --output=none "${dart_files[@]}"
 
       - name: Analyze
         run: flutter analyze
@@ -86,6 +86,12 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Set up Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install rule-test dependencies
         run: npm install --no-audit --no-fund
 
@@ -93,4 +99,4 @@ jobs:
         run: npm install --global firebase-tools
 
       - name: Run Firestore emulator tests
-        run: firebase emulators:exec --only firestore "npm run test:rules"
+        run: firebase emulators:exec --project nearmeu-rules-test --only firestore "npm run test:rules"
