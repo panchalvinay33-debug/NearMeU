@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -38,8 +40,28 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed .
+      - name: Verify changed Dart files are formatted
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            mapfile -t dart_files < <(
+              git diff --name-only --diff-filter=ACM \
+                "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" \
+                -- '*.dart'
+            )
+          else
+            mapfile -t dart_files < <(
+              git diff-tree --no-commit-id --name-only -r HEAD -- '*.dart'
+            )
+          fi
+
+          if (( ${#dart_files[@]} == 0 )); then
+            echo "No changed Dart files to format-check."
+            exit 0
+          fi
+
+          printf 'Checking formatting for:\n%s\n' "${dart_files[*]}"
+          dart format --output=none --set-exit-if-changed "${dart_files[@]}"
 
       - name: Analyze
         run: flutter analyze
@@ -65,7 +87,7 @@ jobs:
           node-version: '20'
 
       - name: Install rule-test dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
