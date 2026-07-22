@@ -234,6 +234,45 @@ service cloud.firestore {
         && canSendMessage(chatId);
     }
 
+    function validMessageUnsend() {
+      return request.auth.uid == resource.data.senderId
+        && resource.data.isUnsent == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'text', 'isUnsent', 'unsentAt', 'replyToMessageId', 'replyToText',
+          'replyToSenderId', 'type', 'mediaUrl'
+        ])
+        && request.resource.data.text == ''
+        && request.resource.data.isUnsent == true
+        && request.resource.data.unsentAt == request.time
+        && request.resource.data.replyToMessageId == null
+        && request.resource.data.replyToText == null
+        && request.resource.data.replyToSenderId == null
+        && request.resource.data.type == 'text'
+        && request.resource.data.mediaUrl == null;
+    }
+
+    function validMessageSeenUpdate() {
+      return request.auth.uid == resource.data.receiverId
+        && resource.data.isSeen == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isSeen', 'seenAt'])
+        && request.resource.data.isSeen == true
+        && request.resource.data.seenAt == request.time;
+    }
+
+    function validMessageDeleteForMe() {
+      let oldDeletedFor = resource.data.get('deletedFor', []);
+      let newDeletedFor = request.resource.data.deletedFor;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedFor'])
+        && oldDeletedFor is list
+        && newDeletedFor is list
+        && newDeletedFor.size() <= 2
+        && newDeletedFor.hasAll(oldDeletedFor)
+        && request.auth.uid in newDeletedFor
+        && ((request.auth.uid in oldDeletedFor && newDeletedFor == oldDeletedFor)
+          || (!(request.auth.uid in oldDeletedFor)
+            && newDeletedFor.size() == oldDeletedFor.size() + 1));
+    }
+
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || activeUser() || isAdmin());
       allow list: if (activeUser() && userDoc(request.auth.uid).data.age >= 18) || isAdmin();
@@ -266,7 +305,13 @@ service cloud.firestore {
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
           || isAdmin();
         allow create: if activeUser() && validMessageCreate(chatId, messageId);
-        allow update, delete: if (activeUser()
+        allow update: if (activeUser()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          && (validMessageUnsend()
+            || validMessageSeenUpdate()
+            || validMessageDeleteForMe()))
+          || isAdmin();
+        allow delete: if (activeUser()
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
           || isAdmin();
       }
