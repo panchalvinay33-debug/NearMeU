@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'notification_service.dart';
 import 'presence_coordinator.dart';
 
 class AuthService {
@@ -34,6 +35,7 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    await NotificationService.instance.unregisterCurrentDevice();
     await PresenceCoordinator.instance.markCurrentUserOffline();
     await _googleSignIn.signOut();
     await _auth.signOut();
@@ -52,6 +54,7 @@ class AuthService {
     }
 
     try {
+      await NotificationService.instance.unregisterCurrentDevice();
       await PresenceCoordinator.instance.markCurrentUserOffline();
       await user.delete();
     } on FirebaseAuthException catch (e) {
@@ -72,6 +75,7 @@ class AuthService {
       );
 
       await user.reauthenticateWithCredential(credential);
+      await NotificationService.instance.unregisterCurrentDevice();
       await PresenceCoordinator.instance.markCurrentUserOffline();
       await user.delete();
     }
@@ -82,6 +86,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    await NotificationService.instance.unregisterCurrentDevice();
     await PresenceCoordinator.instance.markCurrentUserOffline();
     await _googleSignIn.signOut();
     await _auth.signOut();
