@@ -10,8 +10,6 @@ class AnnouncementService {
 
   final FirebaseFirestore _firestore;
 
-  static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
-
   CollectionReference<Map<String, dynamic>> get _announcements =>
       _firestore.collection('supportAnnouncements');
 
@@ -21,9 +19,6 @@ class AnnouncementService {
           .doc(uid)
           .collection('privateState')
           .doc('supportAnnouncements');
-
-  DateTime effectiveCreatedAt(SupportAnnouncement item) =>
-      item.createdAt ?? _legacyDate;
 
   Stream<List<SupportAnnouncement>> watchActiveAnnouncements({int limit = 50}) {
     return _announcements
@@ -36,11 +31,12 @@ class AnnouncementService {
       final now = DateTime.now();
       final items = snapshot.docs
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
-          .toList();
-      items.sort(
-        (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
-      );
+          .where(
+            (item) =>
+                item.expiresAt == null || item.expiresAt!.isAfter(now),
+          )
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return items;
     });
   }
@@ -53,20 +49,7 @@ class AnnouncementService {
   }
 
   bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
-    final createdAt = item.createdAt;
-    if (createdAt == null) return false;
-    return lastReadAt == null || createdAt.isAfter(lastReadAt);
-  }
-
-  void _debugLogFirebaseException(Object error) {
-    if (!kDebugMode) return;
-    if (error is FirebaseException) {
-      debugPrint(
-        'AnnouncementService FirebaseException: code=${error.code}, message=${error.message}',
-      );
-    } else {
-      debugPrint('AnnouncementService error: $error');
-    }
+    return lastReadAt == null || item.createdAt.isAfter(lastReadAt);
   }
 
   Stream<int> watchUnreadCount(String uid) {
@@ -84,14 +67,17 @@ class AnnouncementService {
       final now = DateTime.now();
       return snapshot.docs
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .where(
+            (item) =>
+                item.expiresAt == null || item.expiresAt!.isAfter(now),
+          )
           .where((item) => isUnread(item, lastReadAt))
           .length;
     });
   }
 
   Future<void> markAllRead(String uid) async {
-    await _readStateRef(uid).set({
+    await _readStateRef(uid).set(<String, Object>{
       'lastReadAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -111,10 +97,11 @@ class AnnouncementService {
     if (safeMessage.isEmpty || safeMessage.length > 1000) {
       throw ArgumentError('Enter a message between 1 and 1000 characters.');
     }
-    if (!['normal', 'important', 'urgent'].contains(priority)) {
+    if (!const <String>{'normal', 'important', 'urgent'}.contains(priority)) {
       throw ArgumentError('Select a valid priority.');
     }
-    await _announcements.add({
+
+    await _announcements.add(<String, Object?>{
       'title': safeTitle,
       'message': safeMessage,
       'priority': priority,
@@ -128,11 +115,23 @@ class AnnouncementService {
   }
 
   Future<void> expireAnnouncement(String announcementId) async {
-    await _announcements.doc(announcementId).set({
+    await _announcements.doc(announcementId).set(<String, Object>{
       'isActive': false,
       'expiresAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
   String formatBadge(int count) => BadgeFormatters.unread(count);
+
+  void _debugLogFirebaseException(Object error) {
+    if (!kDebugMode) return;
+    if (error is FirebaseException) {
+      debugPrint(
+        'AnnouncementService FirebaseException: '
+        'code=${error.code}, message=${error.message}',
+      );
+      return;
+    }
+    debugPrint('AnnouncementService error: $error');
+  }
 }
