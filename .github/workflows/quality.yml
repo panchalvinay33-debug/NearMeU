@@ -99,4 +99,23 @@ jobs:
         run: npm install --global firebase-tools
 
       - name: Run Firestore emulator tests
-        run: firebase emulators:exec --project demo-nearmeu-rules-test --only firestore "npm run test:rules"
+        shell: bash
+        run: |
+          set +e
+          firebase emulators:exec \
+            --debug \
+            --project demo-nearmeu-rules-test \
+            --only firestore \
+            "npm run test:rules" > firestore-test.log 2>&1
+          status=$?
+          cat firestore-test.log
+          exit "$status"
+
+      - name: Upload Firestore diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rules-test-log
+          path: firestore-test.log
+          if-no-files-found: error
+          retention-days: 7
