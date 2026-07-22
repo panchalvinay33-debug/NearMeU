@@ -5,7 +5,19 @@ const {
   assertSucceeds,
   assertFails,
 } = require('@firebase/rules-unit-testing');
-const { FieldValue } = require('firebase/firestore');
+const {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} = require('firebase/firestore');
 
 const PROJECT_ID = 'demo-nearmeu-rules-test';
 let env;
@@ -16,12 +28,17 @@ function authed(uid) {
 
 async function seed(path, data) {
   await env.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.firestore().doc(path).set(data);
+    await setDoc(doc(ctx.firestore(), path), data);
   });
 }
 
 async function seedUser(uid, extra = {}) {
-  await seed(`users/${uid}`, { uid, age: 25, isSuspended: false, ...extra });
+  await seed(`users/${uid}`, {
+    uid,
+    age: 25,
+    isSuspended: false,
+    ...extra,
+  });
 }
 
 function chatId(a, b) {
@@ -31,18 +48,21 @@ function chatId(a, b) {
 async function sendMessage(senderId, receiverId, text) {
   const db = authed(senderId);
   const id = chatId(senderId, receiverId);
-  const chatRef = db.doc(`chats/${id}`);
-  const messageRef = chatRef.collection('messages').doc();
-  await db.runTransaction(async (transaction) => {
+  const chatRef = doc(db, `chats/${id}`);
+  const messageRef = doc(collection(chatRef, 'messages'));
+
+  await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(chatRef);
     const unreadCounts = snap.exists() ? (snap.data().unreadCounts || {}) : {};
-    const receiverUnread = Number.isInteger(unreadCounts[receiverId]) ? unreadCounts[receiverId] : 0;
+    const receiverUnread = Number.isInteger(unreadCounts[receiverId])
+      ? unreadCounts[receiverId]
+      : 0;
     const nextUnread = receiverUnread + 1;
     const message = {
       senderId,
       receiverId,
       text,
-      timestamp: FieldValue.serverTimestamp(),
+      timestamp: serverTimestamp(),
       isUnsent: false,
       unsentAt: null,
       replyToMessageId: null,
@@ -54,18 +74,19 @@ async function sendMessage(senderId, receiverId, text) {
       seenAt: null,
       deletedFor: [],
     };
+
     if (snap.exists()) {
       transaction.update(chatRef, {
         lastMessage: text,
-        lastMessageTime: FieldValue.serverTimestamp(),
-        latestMessageAt: FieldValue.serverTimestamp(),
+        lastMessageTime: serverTimestamp(),
+        latestMessageAt: serverTimestamp(),
         lastMessageSenderId: senderId,
         latestSenderId: senderId,
         lastMessageType: 'text',
         lastMessageIsUnsent: false,
         [`unreadCounts.${senderId}`]: 0,
         [`unreadCounts.${receiverId}`]: nextUnread,
-        [`readStates.${senderId}.lastReadAt`]: FieldValue.serverTimestamp(),
+        [`readStates.${senderId}.lastReadAt`]: serverTimestamp(),
         [`readStates.${senderId}.lastReadMessageId`]: messageRef.id,
         [`readStates.${senderId}.unreadCount`]: 0,
         [`readStates.${receiverId}.unreadCount`]: nextUnread,
@@ -74,17 +95,17 @@ async function sendMessage(senderId, receiverId, text) {
       transaction.set(chatRef, {
         participants: [senderId, receiverId].sort(),
         lastMessage: text,
-        lastMessageTime: FieldValue.serverTimestamp(),
-        latestMessageAt: FieldValue.serverTimestamp(),
+        lastMessageTime: serverTimestamp(),
+        latestMessageAt: serverTimestamp(),
         lastMessageSenderId: senderId,
         latestSenderId: senderId,
         lastMessageType: 'text',
         lastMessageIsUnsent: false,
-        createdAt: FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
         unreadCounts: { [senderId]: 0, [receiverId]: nextUnread },
         readStates: {
           [senderId]: {
-            lastReadAt: FieldValue.serverTimestamp(),
+            lastReadAt: serverTimestamp(),
             lastReadMessageId: messageRef.id,
             unreadCount: 0,
           },
@@ -92,6 +113,7 @@ async function sendMessage(senderId, receiverId, text) {
         },
       });
     }
+
     transaction.set(messageRef, message);
   });
 }
@@ -105,7 +127,7 @@ function announcement(adminId, overrides = {}) {
     targetAudience: 'allActiveUsers',
     isActive: true,
     createdByAdminId: adminId,
-    createdAt: FieldValue.serverTimestamp(),
+    createdAt: serverTimestamp(),
     expiresAt: null,
     ...overrides,
   };
@@ -134,7 +156,7 @@ describe('firestore rules', () => {
   it('allows two consecutive messages before receiver ever reads', async () => {
     await assertSucceeds(sendMessage('alice', 'bob', 'first'));
     await assertSucceeds(sendMessage('alice', 'bob', 'second'));
-    const snap = await authed('alice').doc('chats/alice_bob').get();
+    const snap = await getDoc(doc(authed('alice'), 'chats/alice_bob'));
     assert.strictEqual(snap.data().unreadCounts.bob, 2);
     assert.strictEqual(snap.data().readStates.bob.unreadCount, 2);
   });
@@ -151,35 +173,57 @@ describe('firestore rules', () => {
       lastMessageIsUnsent: false,
       createdAt: new Date(0),
     });
+
     await assertSucceeds(sendMessage('alice', 'bob', 'after upgrade'));
-    const snap = await authed('alice').doc('chats/alice_bob').get();
-    assert.deepStrictEqual(Object.keys(snap.data().unreadCounts).sort(), ['alice', 'bob']);
+    const snap = await getDoc(doc(authed('alice'), 'chats/alice_bob'));
+    assert.deepStrictEqual(
+      Object.keys(snap.data().unreadCounts).sort(),
+      ['alice', 'bob'],
+    );
     assert.strictEqual(snap.data().unreadCounts.bob, 1);
     assert.strictEqual(snap.data().readStates.bob.unreadCount, 1);
   });
 
   it('rejects arbitrary unread map replacement with extra participants', async () => {
-    await seed('chats/alice_bob', { participants: ['alice', 'bob'], unreadCounts: { alice: 0, bob: 0 }, readStates: { alice: { unreadCount: 0 }, bob: { unreadCount: 0 } } });
-    await assertFails(authed('alice').doc('chats/alice_bob').update({ unreadCounts: { alice: 0, bob: 0, mallory: 99 } }));
+    await seed('chats/alice_bob', {
+      participants: ['alice', 'bob'],
+      unreadCounts: { alice: 0, bob: 0 },
+      readStates: {
+        alice: { unreadCount: 0 },
+        bob: { unreadCount: 0 },
+      },
+    });
+
+    await assertFails(
+      updateDoc(doc(authed('alice'), 'chats/alice_bob'), {
+        unreadCounts: { alice: 0, bob: 0, mallory: 99 },
+      }),
+    );
   });
 
   it('allows active user to list active all-user announcements', async () => {
     await seed(
       'supportAnnouncements/active',
-      announcement('adminA', { createdAt: new Date(2), expiresAt: new Date(0) }),
+      announcement('adminA', {
+        createdAt: new Date(2),
+        expiresAt: new Date(0),
+      }),
     );
     await seed(
       'supportAnnouncements/inactive',
-      announcement('adminA', { isActive: false, createdAt: new Date(1) }),
+      announcement('adminA', {
+        isActive: false,
+        createdAt: new Date(1),
+      }),
     );
-    const snap = await assertSucceeds(
-      authed('alice')
-        .collection('supportAnnouncements')
-        .where('isActive', '==', true)
-        .where('targetAudience', '==', 'allActiveUsers')
-        .get(),
+
+    const announcementsQuery = query(
+      collection(authed('alice'), 'supportAnnouncements'),
+      where('isActive', '==', true),
+      where('targetAudience', '==', 'allActiveUsers'),
     );
-    assert.deepStrictEqual(snap.docs.map((doc) => doc.id), ['active']);
+    const snap = await assertSucceeds(getDocs(announcementsQuery));
+    assert.deepStrictEqual(snap.docs.map((item) => item.id), ['active']);
   });
 
   it('rejects suspended user support announcement reads', async () => {
@@ -188,33 +232,65 @@ describe('firestore rules', () => {
       'supportAnnouncements/active',
       announcement('adminA', { createdAt: new Date(0) }),
     );
-    await assertFails(authed('suspended').doc('supportAnnouncements/active').get());
+
     await assertFails(
-      authed('suspended')
-        .collection('supportAnnouncements')
-        .where('isActive', '==', true)
-        .where('targetAudience', '==', 'allActiveUsers')
-        .get(),
+      getDoc(doc(authed('suspended'), 'supportAnnouncements/active')),
     );
+
+    const announcementsQuery = query(
+      collection(authed('suspended'), 'supportAnnouncements'),
+      where('isActive', '==', true),
+      where('targetAudience', '==', 'allActiveUsers'),
+    );
+    await assertFails(getDocs(announcementsQuery));
   });
 
   it('allows admin to create and expire announcements', async () => {
-    const ref = authed('adminA').collection('supportAnnouncements').doc('ann1');
-    await assertSucceeds(ref.set(announcement('adminA')));
-    await assertSucceeds(authed('adminB').doc('supportAnnouncements/ann1').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
-    const snap = await authed('adminA').doc('supportAnnouncements/ann1').get();
+    const ref = doc(collection(authed('adminA'), 'supportAnnouncements'), 'ann1');
+    await assertSucceeds(setDoc(ref, announcement('adminA')));
+    await assertSucceeds(
+      updateDoc(doc(authed('adminB'), 'supportAnnouncements/ann1'), {
+        isActive: false,
+        expiresAt: serverTimestamp(),
+      }),
+    );
+
+    const snap = await getDoc(
+      doc(authed('adminA'), 'supportAnnouncements/ann1'),
+    );
     assert.strictEqual(snap.data().createdByAdminId, 'adminA');
-    await assertFails(authed('adminA').doc('supportAnnouncements/ann1').delete());
+    await assertFails(deleteDoc(ref));
   });
 
   it('rejects admin creator spoofing', async () => {
-    await assertFails(authed('adminA').collection('supportAnnouncements').doc('spoof').set(announcement('adminB')));
+    const ref = doc(collection(authed('adminA'), 'supportAnnouncements'), 'spoof');
+    await assertFails(setDoc(ref, announcement('adminB')));
   });
 
   it('rejects normal user announcement writes', async () => {
-    await assertFails(authed('alice').collection('supportAnnouncements').doc('ann').set(announcement('alice')));
-    await seed('supportAnnouncements/ann', { title: 't', message: 'm', priority: 'normal', type: 'official_announcement', targetAudience: 'allActiveUsers', isActive: true, createdByAdminId: 'adminA', createdAt: new Date(0), expiresAt: null });
-    await assertFails(authed('alice').doc('supportAnnouncements/ann').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
-    await assertFails(authed('alice').doc('supportAnnouncements/ann').delete());
+    const ref = doc(collection(authed('alice'), 'supportAnnouncements'), 'ann');
+    await assertFails(setDoc(ref, announcement('alice')));
+
+    await seed('supportAnnouncements/ann', {
+      title: 't',
+      message: 'm',
+      priority: 'normal',
+      type: 'official_announcement',
+      targetAudience: 'allActiveUsers',
+      isActive: true,
+      createdByAdminId: 'adminA',
+      createdAt: new Date(0),
+      expiresAt: null,
+    });
+
+    await assertFails(
+      updateDoc(doc(authed('alice'), 'supportAnnouncements/ann'), {
+        isActive: false,
+        expiresAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      deleteDoc(doc(authed('alice'), 'supportAnnouncements/ann')),
+    );
   });
 });
