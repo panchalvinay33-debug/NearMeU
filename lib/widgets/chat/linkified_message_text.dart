@@ -51,7 +51,9 @@ class ChatLinkParser {
       segments.add(ChatTextSegment.text(text.substring(index)));
     }
 
-    return segments.isEmpty ? <ChatTextSegment>[ChatTextSegment.text(text)] : segments;
+    return segments.isEmpty
+        ? <ChatTextSegment>[ChatTextSegment.text(text)]
+        : segments;
   }
 
   static Uri? _safeUri(String raw) {
@@ -103,7 +105,8 @@ class LinkifiedMessageText extends StatelessWidget {
     final linkStyle = normalStyle.copyWith(
       color: isMe ? const Color(0xFFE7D4FF) : Colors.purpleAccent,
       decoration: TextDecoration.underline,
-      decorationColor: isMe ? const Color(0xFFE7D4FF) : Colors.purpleAccent,
+      decorationColor:
+          isMe ? const Color(0xFFE7D4FF) : Colors.purpleAccent,
       fontWeight: FontWeight.w700,
     );
     final segments = ChatLinkParser.parse(text);
@@ -114,13 +117,20 @@ class LinkifiedMessageText extends StatelessWidget {
           if (!segment.isLink) {
             return TextSpan(text: segment.text, style: normalStyle);
           }
+
           final uri = segment.uri!;
+          final recognizer = TapGestureRecognizer()
+            ..onTap = () {
+              _open(context, uri);
+            }
+            ..onSecondaryTap = () {
+              _copy(context, uri);
+            };
+
           return TextSpan(
             text: segment.text,
             style: linkStyle,
-            recognizer: TapGestureRecognizer()
-              ..onTap = () => _open(context, uri)
-              ..onSecondaryTap = () => _copy(context, uri),
+            recognizer: recognizer,
           );
         }).toList(),
       ),
