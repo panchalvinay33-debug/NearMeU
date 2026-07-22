@@ -7,6 +7,7 @@ import '../models/app_user.dart';
 import '../services/user_service.dart';
 
 import '../theme/app_colors.dart';
+import '../utils/nearby_user_presenter.dart';
 
 import '../widgets/empty_nearby_widget.dart';
 import '../widgets/nearby_header.dart';
@@ -35,6 +36,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
   bool isRefreshing = false;
   bool _loadInProgress = false;
   final Map<String, String> _distanceTextByUserId = <String, String>{};
+  double? _appliedMaxDistanceKm;
 
   @override
   void initState() {
@@ -72,19 +74,20 @@ class _NearbyScreenState extends State<NearbyScreen> {
           await _userService.getNearbyUsers(currentUser!.uid).first;
 
       currentMe = await _userService.getUser(currentUser!.uid);
-
-      await _cacheDistances(result);
-
-      result.sort((a, b) {
-        if (a.isOnline != b.isOnline) {
-          return a.isOnline ? -1 : 1;
-        }
-
-        final aSeen = a.lastSeen ?? DateTime(2000);
-        final bSeen = b.lastSeen ?? DateTime(2000);
-
-        return bSeen.compareTo(aSeen);
-      });
+      if (currentMe == null) {
+        result.clear();
+      } else {
+        final filtered = NearbyUserPresenter.filterEligibleUsers(
+          currentUser: currentMe!,
+          candidates: result,
+          maxDistanceKm: _appliedMaxDistanceKm,
+        );
+        result
+          ..clear()
+          ..addAll(filtered);
+        await _cacheDistances(result);
+        NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+      }
 
       if (!mounted) {
         _loadInProgress = false;
@@ -107,19 +110,20 @@ class _NearbyScreenState extends State<NearbyScreen> {
             await _userService.getNearbyUsers(currentUser!.uid).first;
 
         currentMe = await _userService.getUser(currentUser!.uid);
-
-        await _cacheDistances(result);
-
-        result.sort((a, b) {
-          if (a.isOnline != b.isOnline) {
-            return a.isOnline ? -1 : 1;
-          }
-
-          final aSeen = a.lastSeen ?? DateTime(2000);
-          final bSeen = b.lastSeen ?? DateTime(2000);
-
-          return bSeen.compareTo(aSeen);
-        });
+        if (currentMe == null) {
+          result.clear();
+        } else {
+          final filtered = NearbyUserPresenter.filterEligibleUsers(
+            currentUser: currentMe!,
+            candidates: result,
+            maxDistanceKm: _appliedMaxDistanceKm,
+          );
+          result
+            ..clear()
+            ..addAll(filtered);
+          await _cacheDistances(result);
+          NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+        }
 
         if (!mounted) {
           _loadInProgress = false;
@@ -159,6 +163,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
     }
   }
 
+  Future<void> _applyDistanceFilter(double? maxDistanceKm) async {
+    setState(() {
+      _appliedMaxDistanceKm = maxDistanceKm;
+    });
+    await _loadNearbyUsers(showLoader: false);
+  }
+
   Future<void> _refreshUsers() async {
     if (!mounted) return;
 
@@ -178,21 +189,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
   Future<String> _distanceText(AppUser user) async {
     if (currentMe == null) {
-      return '';
+      return NearbyUserPresenter.privacySafeLocationText(
+        distanceText: 'Distance unavailable',
+        state: user.state,
+      );
     }
 
-    final distance =
-        await _userService.getDistanceBetweenUsers(currentMe!, user);
-
-    if (distance == null) {
-      return '';
-    }
-
-    if (distance < 1) {
-      return '${(distance * 1000).round()} m';
-    }
-
-    return '${distance.toStringAsFixed(1)} km';
+    final distance = await _userService.getDistanceBetweenUsers(currentMe!, user);
+    return NearbyUserPresenter.privacySafeLocationText(
+      distanceText: NearbyUserPresenter.distanceText(distance),
+      state: user.state,
+    );
   }
 
   Widget _buildBody() {
@@ -278,6 +285,23 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
         ),
         actions: [
+          PopupMenuButton<double?>(
+            tooltip: 'Distance filter',
+            icon: const Icon(Icons.tune),
+            initialValue: _appliedMaxDistanceKm,
+            onSelected: _applyDistanceFilter,
+            itemBuilder: (context) => const [
+              PopupMenuItem<double?>(value: null, child: Text('Any distance')),
+              PopupMenuItem<double?>(value: 25, child: Text('Within 25 km')),
+              PopupMenuItem<double?>(value: 50, child: Text('Within 50 km')),
+              PopupMenuItem<double?>(value: 100, child: Text('Within 100 km')),
+            ],
+          ),
+          IconButton(
+            tooltip: 'Clear all filters',
+            onPressed: isRefreshing ? null : () => _applyDistanceFilter(null),
+            icon: const Icon(Icons.filter_alt_off),
+          ),
           IconButton(
             onPressed: isRefreshing ? null : _refreshUsers,
             icon: const Icon(Icons.refresh),
