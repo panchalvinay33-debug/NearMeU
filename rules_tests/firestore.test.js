@@ -163,24 +163,46 @@ describe('firestore rules', () => {
     await assertFails(authed('alice').doc('chats/alice_bob').update({ unreadCounts: { alice: 0, bob: 0, mallory: 99 } }));
   });
 
-  it('allows active user to list active all-user announcements', async () => {
+  it('allows active user to run production active all-user announcements query', async () => {
     await seed(
-      'supportAnnouncements/active',
-      announcement('adminA', { createdAt: new Date(2), expiresAt: new Date(0) }),
+      'supportAnnouncements/no-expiry',
+      announcement('adminA', { createdAt: new Date(1), expiresAt: null }),
+    );
+    await seed(
+      'supportAnnouncements/future-expiry',
+      announcement('adminA', { createdAt: new Date(2), expiresAt: new Date('2999-01-01T00:00:00Z') }),
+    );
+    await seed(
+      'supportAnnouncements/expired',
+      announcement('adminA', { createdAt: new Date(3), expiresAt: new Date(0) }),
     );
     await seed(
       'supportAnnouncements/inactive',
-      announcement('adminA', { isActive: false, createdAt: new Date(1) }),
+      announcement('adminA', { isActive: false, createdAt: new Date(4) }),
     );
+
     const snap = await assertSucceeds(
       authed('alice')
         .collection('supportAnnouncements')
         .where('isActive', '==', true)
         .where('targetAudience', '==', 'allActiveUsers')
-        .orderBy('createdAt', 'desc')
         .get(),
     );
-    assert.deepStrictEqual(snap.docs.map((doc) => doc.id), ['active']);
+    assert.deepStrictEqual(snap.docs.map((doc) => doc.id).sort(), [
+      'expired',
+      'future-expiry',
+      'no-expiry',
+    ]);
+
+    const now = new Date();
+    const clientVisibleIds = snap.docs
+      .filter((doc) => {
+        const expiresAt = doc.data().expiresAt;
+        return expiresAt == null || expiresAt.toDate() > now;
+      })
+      .map((doc) => doc.id)
+      .sort();
+    assert.deepStrictEqual(clientVisibleIds, ['future-expiry', 'no-expiry']);
   });
 
   it('rejects suspended user support announcement reads', async () => {
@@ -195,7 +217,6 @@ describe('firestore rules', () => {
         .collection('supportAnnouncements')
         .where('isActive', '==', true)
         .where('targetAudience', '==', 'allActiveUsers')
-        .orderBy('createdAt', 'desc')
         .get(),
     );
   });
@@ -217,5 +238,6 @@ describe('firestore rules', () => {
     await seed('supportAnnouncements/ann', { title: 't', message: 'm', priority: 'normal', type: 'official_announcement', targetAudience: 'allActiveUsers', isActive: true, createdByAdminId: 'adminA', createdAt: new Date(0), expiresAt: null });
     await assertFails(authed('alice').doc('supportAnnouncements/ann').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
     await assertFails(authed('alice').doc('supportAnnouncements/ann').delete());
+    await assertFails(authed('adminA').doc('supportAnnouncements/ann').delete());
   });
 });

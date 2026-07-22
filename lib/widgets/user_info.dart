@@ -13,21 +13,11 @@ class UserInfo extends StatelessWidget {
   });
 
   String _location() {
-    final parts = <String>[];
-
-    if (user.city != null && user.city!.trim().isNotEmpty) {
-      parts.add(user.city!.trim());
+    if (user.state != null && user.state!.trim().isNotEmpty) {
+      return user.state!.trim();
     }
 
-    if (user.state != null &&
-        user.state!.trim().isNotEmpty &&
-        user.state != user.city) {
-      parts.add(user.state!.trim());
-    }
-
-    if (parts.isEmpty) return "Location unavailable";
-
-    return parts.join(", ");
+    return "Location unavailable";
   }
 
   @override

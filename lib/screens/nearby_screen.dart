@@ -35,6 +35,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
   bool isRefreshing = false;
   bool _loadInProgress = false;
   final Map<String, String> _distanceTextByUserId = <String, String>{};
+  final Map<String, double> _distanceKmByUserId = <String, double>{};
 
   @override
   void initState() {
@@ -75,16 +76,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
       await _cacheDistances(result);
 
-      result.sort((a, b) {
-        if (a.isOnline != b.isOnline) {
-          return a.isOnline ? -1 : 1;
-        }
-
-        final aSeen = a.lastSeen ?? DateTime(2000);
-        final bSeen = b.lastSeen ?? DateTime(2000);
-
-        return bSeen.compareTo(aSeen);
-      });
+      _sortNearbyUsers(result);
 
       if (!mounted) {
         _loadInProgress = false;
@@ -110,16 +102,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
         await _cacheDistances(result);
 
-        result.sort((a, b) {
-          if (a.isOnline != b.isOnline) {
-            return a.isOnline ? -1 : 1;
-          }
-
-          final aSeen = a.lastSeen ?? DateTime(2000);
-          final bSeen = b.lastSeen ?? DateTime(2000);
-
-          return bSeen.compareTo(aSeen);
-        });
+        _sortNearbyUsers(result);
 
         if (!mounted) {
           _loadInProgress = false;
@@ -169,30 +152,52 @@ class _NearbyScreenState extends State<NearbyScreen> {
     await _loadNearbyUsers(showLoader: false);
   }
 
+  void _sortNearbyUsers(List<AppUser> nearbyUsers) {
+    nearbyUsers.sort((a, b) {
+      if (a.isOnline != b.isOnline) {
+        return a.isOnline ? -1 : 1;
+      }
+
+      final aDistance = _distanceKmByUserId[a.uid];
+      final bDistance = _distanceKmByUserId[b.uid];
+      if (aDistance == null && bDistance == null) {
+        return 0;
+      }
+      if (aDistance == null) {
+        return 1;
+      }
+      if (bDistance == null) {
+        return -1;
+      }
+
+      return aDistance.compareTo(bDistance);
+    });
+  }
+
   Future<void> _cacheDistances(List<AppUser> nearbyUsers) async {
     _distanceTextByUserId.clear();
+    _distanceKmByUserId.clear();
     for (final user in nearbyUsers) {
-      _distanceTextByUserId[user.uid] = await _distanceText(user);
+      final distance = await _distanceKm(user);
+      if (distance == null) {
+        _distanceTextByUserId[user.uid] = '';
+      } else {
+        _distanceKmByUserId[user.uid] = distance;
+        _distanceTextByUserId[user.uid] = _formatDistance(distance);
+      }
     }
   }
 
-  Future<String> _distanceText(AppUser user) async {
+  Future<double?> _distanceKm(AppUser user) async {
     if (currentMe == null) {
-      return '';
+      return null;
     }
 
-    final distance =
-        await _userService.getDistanceBetweenUsers(currentMe!, user);
+    return _userService.getDistanceBetweenUsers(currentMe!, user);
+  }
 
-    if (distance == null) {
-      return '';
-    }
-
-    if (distance < 1) {
-      return '${(distance * 1000).round()} m';
-    }
-
-    return '${distance.toStringAsFixed(1)} km';
+  String _formatDistance(double distance) {
+    return '${distance.round()} km';
   }
 
   Widget _buildBody() {

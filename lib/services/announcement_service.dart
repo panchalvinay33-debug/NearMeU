@@ -19,7 +19,6 @@ class AnnouncementService {
     return _announcements
         .where('isActive', isEqualTo: true)
         .where('targetAudience', isEqualTo: 'allActiveUsers')
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -38,7 +37,11 @@ class AnnouncementService {
         query = query.where('createdAt', isGreaterThan: lastReadAt);
       }
       final snapshot = await query.limit(100).get();
-      return snapshot.docs.length;
+      final now = DateTime.now();
+      return snapshot.docs
+          .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
+          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .length;
     });
   }
 
