@@ -41,7 +41,7 @@ async function sendMessage(senderId, receiverId, text) {
 
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(chatRef);
-    const unreadCounts = snap.exists() ? (snap.data().unreadCounts || {}) : {};
+    const unreadCounts = snap.exists ? (snap.data().unreadCounts || {}) : {};
     const receiverUnread = Number.isInteger(unreadCounts[receiverId])
       ? unreadCounts[receiverId]
       : 0;
@@ -63,7 +63,7 @@ async function sendMessage(senderId, receiverId, text) {
       deletedFor: [],
     };
 
-    if (snap.exists()) {
+    if (snap.exists) {
       transaction.update(chatRef, {
         lastMessage: text,
         lastMessageTime: serverTimestamp(),
