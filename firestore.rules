@@ -59,8 +59,10 @@ service cloud.firestore {
         && (!('nickname' in data) ||
           (data.nickname is string && data.nickname.size() > 0
             && data.nickname.size() <= 30))
-        && ('age' in data) && data.age is int
-        && data.age >= 18 && data.age <= 99
+        && ('age' in data)
+        && data.age is int
+        && data.age >= 18
+        && data.age <= 99
         && (!('gender' in data) ||
           data.gender in ['Male', 'Female', 'Other', 'Both', ''])
         && (!('lookingFor' in data) ||
@@ -83,6 +85,37 @@ service cloud.firestore {
         && validLatLng(data);
     }
 
+    function validPublicProfile(data, uid) {
+      return data.keys().hasOnly([
+          'uid', 'nickname', 'gender', 'lookingFor', 'age', 'state',
+          'photoUrl', 'approxLatitude', 'approxLongitude', 'createdAt',
+          'lastSeen', 'isOnline', 'isSuspended', 'updatedAt'
+        ])
+        && data.uid == uid
+        && data.nickname is string
+        && data.nickname.size() > 0
+        && data.nickname.size() <= 30
+        && data.gender in ['Male', 'Female', 'Other']
+        && data.lookingFor in ['Male', 'Female', 'Both']
+        && data.age is int
+        && data.age >= 18
+        && data.age <= 99
+        && (data.state == null ||
+          (data.state is string && data.state.size() <= 80))
+        && (data.photoUrl == null ||
+          (data.photoUrl is string && data.photoUrl.size() <= 2048))
+        && (data.approxLatitude == null ||
+          (data.approxLatitude is number
+            && data.approxLatitude >= -90
+            && data.approxLatitude <= 90))
+        && (data.approxLongitude == null ||
+          (data.approxLongitude is number
+            && data.approxLongitude >= -180
+            && data.approxLongitude <= 180))
+        && data.isOnline is bool
+        && data.isSuspended is bool;
+    }
+
     function validDeviceData(data) {
       return data.keys().hasOnly([
           'token', 'platform', 'enabled', 'createdAt', 'updatedAt'
@@ -90,10 +123,22 @@ service cloud.firestore {
         && data.token is string
         && data.token.size() > 20
         && data.token.size() <= 4096
-        && data.platform in ['android']
+        && data.platform == 'android'
         && data.enabled is bool
         && data.updatedAt == request.time
         && data.createdAt == request.time;
+    }
+
+    function validBlockCreate(blockId) {
+      return request.resource.data.keys().hasOnly([
+          'blockerId', 'blockedId', 'createdAt'
+        ])
+        && request.resource.data.blockerId == request.auth.uid
+        && request.resource.data.blockedId is string
+        && request.resource.data.blockedId != request.auth.uid
+        && blockId == request.auth.uid + '_'
+          + request.resource.data.blockedId
+        && request.resource.data.createdAt == request.time;
     }
 
     function validChatParticipants(participants) {
@@ -430,6 +475,27 @@ service cloud.firestore {
           && request.auth.uid == userId
           && validNotificationReadUpdate();
       }
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if activeUser() || isAdmin();
+      allow list: if (activeUser()
+          && resource.data.isSuspended == false
+          && resource.data.age >= 18)
+        || isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /blocks/{blockId} {
+      allow get, list: if (activeUser()
+          && (resource.data.blockerId == request.auth.uid
+            || resource.data.blockedId == request.auth.uid))
+        || isAdmin();
+      allow create: if activeUser() && validBlockCreate(blockId);
+      allow update: if false;
+      allow delete: if (activeUser()
+          && resource.data.blockerId == request.auth.uid)
+        || isAdmin();
     }
 
     match /chats/{chatId} {
