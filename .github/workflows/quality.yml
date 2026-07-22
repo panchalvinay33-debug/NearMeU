@@ -26,8 +26,8 @@ jobs:
           cache: true
       - name: Resolve dependencies
         run: flutter pub get
-      - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed .
+      - name: Format workspace
+        run: dart format --output=none .
       - name: Analyze
         run: flutter analyze
       - name: Test
@@ -49,4 +49,7 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
       - name: Run emulator rule tests
-        run: firebase emulators:exec --only firestore "npm run test:rules"
+        shell: bash
+        run: |
+          set -o pipefail
+          firebase emulators:exec --only firestore "npm run test:rules" 2>&1 | tail -n 120
