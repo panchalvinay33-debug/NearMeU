@@ -17,7 +17,7 @@ jobs:
   flutter:
     name: Flutter checks
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -28,21 +28,29 @@ jobs:
         run: flutter pub get
       - name: Format workspace
         run: dart format --output=none .
-      - name: Run Flutter diagnostics
-        id: flutter-diagnostics
+      - name: Analyze
+        id: analyze
+        continue-on-error: true
         shell: bash
         run: |
-          set +e
-          flutter analyze > analyze.log 2>&1
-          analyze_status=$?
-          flutter test > test.log 2>&1
-          test_status=$?
-          flutter build apk --debug > build.log 2>&1
-          build_status=$?
-          echo "analyze_status=$analyze_status" >> "$GITHUB_OUTPUT"
-          echo "test_status=$test_status" >> "$GITHUB_OUTPUT"
-          echo "build_status=$build_status" >> "$GITHUB_OUTPUT"
-          exit 0
+          set -o pipefail
+          flutter analyze 2>&1 | tee analyze.log
+      - name: Test
+        id: tests
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee test.log
+      - name: Build debug APK
+        id: build
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --debug 2>&1 | tee build.log
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,12 +65,12 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "Analyzer status: ${{ steps.flutter-diagnostics.outputs.analyze_status }}"
-          echo "Test status: ${{ steps.flutter-diagnostics.outputs.test_status }}"
-          echo "Build status: ${{ steps.flutter-diagnostics.outputs.build_status }}"
-          test "${{ steps.flutter-diagnostics.outputs.analyze_status }}" = "0"
-          test "${{ steps.flutter-diagnostics.outputs.test_status }}" = "0"
-          test "${{ steps.flutter-diagnostics.outputs.build_status }}" = "0"
+          echo "Analyze: ${{ steps.analyze.outcome }}"
+          echo "Tests: ${{ steps.tests.outcome }}"
+          echo "Build: ${{ steps.build.outcome }}"
+          test "${{ steps.analyze.outcome }}" = "success"
+          test "${{ steps.tests.outcome }}" = "success"
+          test "${{ steps.build.outcome }}" = "success"
 
   firestore-rules:
     name: Firestore rules tests
