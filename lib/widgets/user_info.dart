@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
 import '../theme/app_colors.dart';
 
@@ -13,21 +14,34 @@ class UserInfo extends StatelessWidget {
   });
 
   String _location() {
-    return distanceText ?? 'Distance unavailable';
+    final distance = distanceText?.trim();
+    final state = user.state?.trim();
+
+    if (distance != null && distance.isNotEmpty) {
+      if (state != null && state.isNotEmpty) {
+        return '$distance • $state';
+      }
+      return distance;
+    }
+
+    if (state != null && state.isNotEmpty) {
+      return state;
+    }
+
+    return 'Distance unavailable';
   }
 
   @override
   Widget build(BuildContext context) {
     final age =
-        (user.age != null && user.age! > 0) ? ", ${user.age}" : "";
+        (user.age != null && user.age! > 0) ? ', ${user.age}' : '';
 
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           Text(
-            "${user.nickname}$age",
+            '${user.nickname}$age',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -36,9 +50,7 @@ class UserInfo extends StatelessWidget {
               fontSize: 18,
             ),
           ),
-
           const SizedBox(height: 6),
-
           Row(
             children: [
               const Icon(
@@ -60,31 +72,23 @@ class UserInfo extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
           Row(
             children: [
               Icon(
                 Icons.circle,
                 size: 10,
-                color: user.isOnline
-                    ? AppColors.online
-                    : Colors.grey,
+                color: user.isOnline ? AppColors.online : Colors.grey,
               ),
               const SizedBox(width: 6),
-
               Text(
-                user.isOnline ? "Online" : "Offline",
+                user.isOnline ? 'Online' : 'Offline',
                 style: TextStyle(
-                  color: user.isOnline
-                      ? AppColors.online
-                      : Colors.grey,
+                  color: user.isOnline ? AppColors.online : Colors.grey,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
               ),
-
             ],
           ),
         ],

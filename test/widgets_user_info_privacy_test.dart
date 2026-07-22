@@ -5,7 +5,7 @@ import 'package:nearmeu/widgets/user_info.dart';
 
 void main() {
   testWidgets(
-    'nearby user info shows distance and state without city or pinpoint data',
+    'nearby user info shows distance without city or pinpoint data',
     (tester) async {
       final user = AppUser(
         uid: 'nearby-user',
@@ -33,8 +33,9 @@ void main() {
         ),
       );
 
-      expect(find.text('1 km • CA'), findsOneWidget);
+      expect(find.text('1 km'), findsOneWidget);
       expect(find.textContaining('Private City'), findsNothing);
+      expect(find.textContaining('CA'), findsNothing);
       expect(find.textContaining('37.7749'), findsNothing);
       expect(find.textContaining('-122.4194'), findsNothing);
     },

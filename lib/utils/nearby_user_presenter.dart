@@ -24,11 +24,16 @@ class NearbyUserPresenter {
     const earthRadiusKm = 6371.0;
     final lat1 = _degreesToRadians(currentUser.latitude!);
     final lat2 = _degreesToRadians(otherUser.latitude!);
-    final deltaLat = _degreesToRadians(otherUser.latitude! - currentUser.latitude!);
-    final deltaLon = _degreesToRadians(otherUser.longitude! - currentUser.longitude!);
+    final deltaLat =
+        _degreesToRadians(otherUser.latitude! - currentUser.latitude!);
+    final deltaLon =
+        _degreesToRadians(otherUser.longitude! - currentUser.longitude!);
 
     final a = math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
-        math.cos(lat1) * math.cos(lat2) * math.sin(deltaLon / 2) * math.sin(deltaLon / 2);
+        math.cos(lat1) *
+            math.cos(lat2) *
+            math.sin(deltaLon / 2) *
+            math.sin(deltaLon / 2);
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusKm * c;
   }
@@ -41,7 +46,10 @@ class NearbyUserPresenter {
     return '$roundedKm km';
   }
 
-  static String privacySafeLocationText({required String distanceText, String? state}) {
+  static String privacySafeLocationText({
+    required String distanceText,
+    String? state,
+  }) {
     final safeState = state?.trim();
     if (safeState == null || safeState.isEmpty) {
       return distanceText;
@@ -49,12 +57,36 @@ class NearbyUserPresenter {
     return '$distanceText • $safeState';
   }
 
+  /// Nearby should include every usable registered adult profile.
+  ///
+  /// Email is intentionally not required because some valid legacy profiles
+  /// do not expose it in their Firestore document. Gender and looking-for are
+  /// also not required for the default directory; they matter only when the
+  /// user explicitly applies those filters.
   static bool hasRequiredIdentityFields(AppUser user) {
     return user.uid.trim().isNotEmpty &&
-        user.email.trim().isNotEmpty &&
         user.nickname.trim().isNotEmpty &&
-        user.gender.trim().isNotEmpty &&
-        user.lookingFor.trim().isNotEmpty;
+        user.isAdult;
+  }
+
+  static String _normaliseChoice(String value) {
+    final normalised = value.trim().toLowerCase();
+    switch (normalised) {
+      case 'man':
+      case 'men':
+      case 'male':
+        return 'male';
+      case 'woman':
+      case 'women':
+      case 'female':
+        return 'female';
+      case 'both':
+        return 'both';
+      case 'other':
+        return 'other';
+      default:
+        return normalised;
+    }
   }
 
   static List<AppUser> filterEligibleUsers({
@@ -67,6 +99,9 @@ class NearbyUserPresenter {
     int minAge = 18,
     int maxAge = 99,
   }) {
+    final genderFilter = _normaliseChoice(gender ?? 'all');
+    final lookingForFilter = _normaliseChoice(lookingFor ?? 'all');
+
     return candidates.where((user) {
       if (user.uid == currentUser.uid) return false;
       if (user.isSuspended || !user.isAdult) return false;
@@ -74,30 +109,44 @@ class NearbyUserPresenter {
       if (currentUser.blockedUsers.contains(user.uid)) return false;
       if (user.blockedUsers.contains(currentUser.uid)) return false;
       if (onlineOnly && !user.isOnline) return false;
+
       final userAge = user.age;
-      if (userAge == null || userAge < minAge || userAge > maxAge) return false;
-      if (gender != null && gender.toLowerCase() != 'all' && user.gender.toLowerCase() != gender.toLowerCase()) {
+      if (userAge == null || userAge < minAge || userAge > maxAge) {
         return false;
       }
-      if (lookingFor != null && lookingFor.toLowerCase() != 'all' && user.lookingFor.toLowerCase() != lookingFor.toLowerCase()) {
+
+      if (genderFilter != 'all' &&
+          _normaliseChoice(user.gender) != genderFilter) {
         return false;
       }
+
+      if (lookingForFilter != 'all' &&
+          _normaliseChoice(user.lookingFor) != lookingForFilter) {
+        return false;
+      }
+
       if (maxDistanceKm != null) {
         final distance = distanceKm(currentUser, user);
         if (distance == null || distance > maxDistanceKm) return false;
       }
+
       return true;
     }).toList();
   }
 
-  static void sortNearestFirst({required AppUser currentUser, required List<AppUser> users}) {
+  static void sortNearestFirst({
+    required AppUser currentUser,
+    required List<AppUser> users,
+  }) {
     users.sort((a, b) {
       final aDistance = distanceKm(currentUser, a);
       final bDistance = distanceKm(currentUser, b);
       final aHasDistance = aDistance != null;
       final bHasDistance = bDistance != null;
       if (aHasDistance != bHasDistance) return aHasDistance ? -1 : 1;
-      if (aHasDistance && bHasDistance) return aDistance.compareTo(bDistance);
+      if (aHasDistance && bHasDistance) {
+        return aDistance.compareTo(bDistance);
+      }
       return sortRecentlyActive(a, b);
     });
   }
@@ -108,7 +157,10 @@ class NearbyUserPresenter {
     return bSeen.compareTo(aSeen);
   }
 
-  static void sortUsers({required AppUser currentUser, required List<AppUser> users}) {
+  static void sortUsers({
+    required AppUser currentUser,
+    required List<AppUser> users,
+  }) {
     users.sort((a, b) {
       if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
 
@@ -126,5 +178,6 @@ class NearbyUserPresenter {
     });
   }
 
-  static double _degreesToRadians(double degrees) => degrees * math.pi / 180;
+  static double _degreesToRadians(double degrees) =>
+      degrees * math.pi / 180;
 }
