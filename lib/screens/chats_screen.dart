@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_preview_model.dart';
 import '../services/announcement_service.dart';
-import '../services/in_app_notification_service.dart';
 import '../services/chat_service.dart';
+import '../services/in_app_notification_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_formatters.dart';
 import 'chat_screen.dart';
 import 'nearby_screen.dart';
 import 'notifications_screen.dart';
-import 'support_announcements_screen.dart';
 import 'settings_screen.dart';
+import 'support_announcements_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -23,39 +23,44 @@ class ChatsScreen extends StatefulWidget {
 class _ChatsScreenState extends State<ChatsScreen> {
   final ChatService _chatService = ChatService();
   final AnnouncementService _announcementService = AnnouncementService();
-  final InAppNotificationService _notificationService = InAppNotificationService();
+  final InAppNotificationService _notificationService =
+      InAppNotificationService();
   final TextEditingController _searchController = TextEditingController();
+
   String _query = '';
-  bool _isRefreshing = false;
   bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      final next = _searchController.text.trim().toLowerCase();
-      if (next != _query && mounted) setState(() => _query = next);
-    });
+    _searchController.addListener(_handleSearchChanged);
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    if (_isRefreshing) return;
-    setState(() => _isRefreshing = true);
-    await Future<void>.delayed(const Duration(milliseconds: 550));
-    if (mounted) setState(() => _isRefreshing = false);
+  void _handleSearchChanged() {
+    final next = _searchController.text.trim().toLowerCase();
+    if (next == _query || !mounted) return;
+    setState(() => _query = next);
+  }
+
+  Future<void> _refresh() {
+    return Future<void>.delayed(const Duration(milliseconds: 350));
   }
 
   List<ChatPreviewModel> _filteredChats(List<ChatPreviewModel> chats) {
     if (_query.isEmpty) return chats;
     return chats
-        .where((chat) => chat.otherUserName.toLowerCase().contains(_query))
-        .toList();
+        .where(
+          (chat) => chat.otherUserName.toLowerCase().contains(_query),
+        )
+        .toList(growable: false);
   }
 
   Future<void> _openChat(ChatPreviewModel chat) async {
@@ -77,7 +82,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Color _avatarColor(String seed) {
-    const colors = [
+    const colors = <Color>[
       Color(0xFF8B5CF6),
       Color(0xFFEC4899),
       Color(0xFF06B6D4),
@@ -86,7 +91,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
       Color(0xFF6366F1),
       Color(0xFFE879F9),
     ];
-    final hash = seed.codeUnits.fold<int>(0, (value, unit) => value + unit);
+    final hash = seed.codeUnits.fold<int>(
+      0,
+      (value, unit) => value + unit,
+    );
     return colors[hash % colors.length];
   }
 
@@ -106,7 +114,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
         child: StreamBuilder<List<ChatPreviewModel>>(
           stream: _chatService.getChatsForUser(currentUser.uid),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return _ErrorState(onRetry: _refresh);
+            if (snapshot.hasError) {
+              return _ErrorState(onRetry: _refresh);
+            }
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
               return const _LoadingState();
@@ -127,36 +137,43 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     sliver: SliverList.list(
                       children: [
-                        _Header(searchController: _searchController, notificationService: _notificationService, currentUserId: currentUser.uid, onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
+                        _Header(
+                          searchController: _searchController,
+                          notificationService: _notificationService,
+                          currentUserId: currentUser.uid,
+                          onNotifications: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 18),
                         const _SectionTitle(),
                         const SizedBox(height: 14),
                       ],
                     ),
                   ),
-                  if (visibleChats.isEmpty && _query.isNotEmpty)
+                  if (visibleChats.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: _EmptyState(
-                        title: 'No conversations yet',
-                        subtitle: 'Start chatting with nearby people.',
-                        buttonText: 'Find People',
-                        onPressed: () => Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const NearbyScreen(),
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (false)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _EmptyState(
-                        title: 'No chats found',
-                        subtitle: 'Try a different name or clear search.',
-                        buttonText: 'Clear Search',
-                        onPressed: _searchController.clear,
+                        title: _query.isEmpty
+                            ? 'No conversations yet'
+                            : 'No chats found',
+                        subtitle: _query.isEmpty
+                            ? 'Start chatting with nearby people.'
+                            : 'Try a different name or clear search.',
+                        buttonText:
+                            _query.isEmpty ? 'Find People' : 'Clear Search',
+                        onPressed: _query.isEmpty
+                            ? () => Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const NearbyScreen(),
+                                  ),
+                                )
+                            : _searchController.clear,
                       ),
                     )
                   else
@@ -169,17 +186,28 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                       sliver: SliverList.separated(
                         itemCount: visibleChats.length + 1,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 14),
                         itemBuilder: (context, index) {
                           if (index == 0) {
                             return StreamBuilder<int>(
-                              stream: _announcementService.watchUnreadCount(currentUser.uid),
-                              builder: (context, unreadSnapshot) => _SupportCard(
+                              stream: _announcementService.watchUnreadCount(
+                                currentUser.uid,
+                              ),
+                              builder: (context, unreadSnapshot) =>
+                                  _SupportCard(
                                 unreadCount: unreadSnapshot.data ?? 0,
-                                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportAnnouncementsScreen())),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const SupportAnnouncementsScreen(),
+                                  ),
+                                ),
                               ),
                             );
                           }
+
                           final chat = visibleChats[index - 1];
                           return _ChatCard(
                             chat: chat,
@@ -215,7 +243,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           }
         },
         items: [
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
             label: 'Nearby',
           ),
@@ -225,14 +253,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
               builder: (context, privateSnapshot) => StreamBuilder<int>(
                 stream: _announcementService.watchUnreadCount(currentUser.uid),
                 builder: (context, announcementSnapshot) {
-                  final count = (privateSnapshot.data ?? 0) + (announcementSnapshot.data ?? 0);
-                  return _NavBadge(count: count, child: const Icon(Icons.chat_bubble_outline));
+                  final count = (privateSnapshot.data ?? 0) +
+                      (announcementSnapshot.data ?? 0);
+                  return _NavBadge(
+                    count: count,
+                    child: const Icon(Icons.chat_bubble_outline),
+                  );
                 },
               ),
             ),
             label: 'Chats',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.settings),
             label: 'Settings',
           ),
@@ -243,7 +275,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.searchController, required this.notificationService, required this.currentUserId, required this.onNotifications});
+  const _Header({
+    required this.searchController,
+    required this.notificationService,
+    required this.currentUserId,
+    required this.onNotifications,
+  });
+
   final TextEditingController searchController;
   final InAppNotificationService notificationService;
   final String currentUserId;
@@ -309,7 +347,10 @@ class _Header extends StatelessWidget {
                   child: IconButton(
                     tooltip: 'Notifications',
                     onPressed: onNotifications,
-                    icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+                    icon: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -329,7 +370,7 @@ class _Header extends StatelessWidget {
               ),
               suffixIcon: ValueListenableBuilder<TextEditingValue>(
                 valueListenable: searchController,
-                builder: (_, value, __) => value.text.isEmpty
+                builder: (_, value, _) => value.text.isEmpty
                     ? const SizedBox.shrink()
                     : IconButton(
                         tooltip: 'Clear search',
@@ -358,46 +399,40 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.count, required this.isRefreshing, required this.onRefresh});
-  final int count;
-  final bool isRefreshing;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(28)),
-        child: Row(children: [
-          const Icon(Icons.forum_rounded, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Your Chats', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text('$count active conversation${count == 1 ? '' : 's'}', style: const TextStyle(color: Colors.white70)),
-          ])),
-          IconButton(
-            tooltip: 'Refresh chats',
-            onPressed: isRefreshing ? null : onRefresh,
-            icon: isRefreshing
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                : const Icon(Icons.refresh_rounded, color: Colors.white),
-          ),
-        ]),
-      );
-}
-
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle();
+
   @override
-  Widget build(BuildContext context) => const Row(children: [
-        Icon(Icons.chat_bubble_rounded, color: AppColors.primary, size: 20),
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Icon(
+          Icons.chat_bubble_rounded,
+          color: AppColors.primary,
+          size: 20,
+        ),
         SizedBox(width: 8),
-        Text('Recent Chats', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-      ]);
+        Text(
+          'Recent Chats',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ChatCard extends StatelessWidget {
-  const _ChatCard({required this.chat, required this.currentUserId, required this.avatarColor, required this.onTap});
+  const _ChatCard({
+    required this.chat,
+    required this.currentUserId,
+    required this.avatarColor,
+    required this.onTap,
+  });
+
   final ChatPreviewModel chat;
   final String currentUserId;
   final Color avatarColor;
@@ -406,8 +441,10 @@ class _ChatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = chat.unreadCount > 0;
-    final initial = chat.otherUserName.trim().isEmpty ? '?' : chat.otherUserName.trim()[0].toUpperCase();
+    final name = chat.otherUserName.trim();
+    final initial = name.isEmpty ? '?' : name[0].toUpperCase();
     final sentByMe = chat.lastMessageSenderId == currentUserId;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -418,35 +455,122 @@ class _ChatCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: unread ? const Color(0xFF1E1630) : AppColors.surface,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: unread ? AppColors.primary.withValues(alpha: .55) : AppColors.cardBorder),
+            border: Border.all(
+              color: unread
+                  ? AppColors.primary.withValues(alpha: .55)
+                  : AppColors.cardBorder,
+            ),
           ),
-          child: Row(children: [
-            Stack(children: [
-              CircleAvatar(radius: 31, backgroundColor: avatarColor, child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
-              if (chat.isOtherUserOnline != null)
-                Positioned(right: 1, bottom: 1, child: Container(width: 14, height: 14, decoration: BoxDecoration(color: chat.isOtherUserOnline! ? AppColors.online : AppColors.offline, shape: BoxShape.circle, border: Border.all(color: AppColors.surface, width: 2)))),
-            ]),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(chat.otherUserName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))),
-                const SizedBox(width: 8),
-                Text(DateFormatters.chatPreview(chat.lastMessageTime), style: TextStyle(color: unread ? Colors.white : Colors.white54, fontSize: 12, fontWeight: FontWeight.w600)),
-              ]),
-              const SizedBox(height: 7),
-              Row(children: [
-                if (sentByMe && chat.lastMessageSeen != null) ...[
-                  Icon(chat.lastMessageSeen! ? Icons.done_all_rounded : Icons.done_rounded, size: 16, color: chat.lastMessageSeen! ? AppColors.primaryLight : Colors.white54),
-                  const SizedBox(width: 4),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 31,
+                    backgroundColor: avatarColor,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (chat.isOtherUserOnline != null)
+                    Positioned(
+                      right: 1,
+                      bottom: 1,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: chat.isOtherUserOnline!
+                              ? AppColors.online
+                              : AppColors.offline,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.surface,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
-                Expanded(child: Text(chat.previewText, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: unread ? Colors.white : AppColors.textSecondary, fontSize: 14, height: 1.25, fontWeight: unread ? FontWeight.w600 : FontWeight.w400))),
-                if (unread) ...[
-                  const SizedBox(width: 10),
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.rectangle, borderRadius: BorderRadius.all(Radius.circular(999))), child: Text(chat.unreadCount > 99 ? '99+' : '${chat.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800))),
-                ],
-              ]),
-            ])),
-          ]),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.otherUserName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          DateFormatters.chatPreview(chat.lastMessageTime),
+                          style: TextStyle(
+                            color: unread ? Colors.white : Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        if (sentByMe && chat.lastMessageSeen != null) ...[
+                          Icon(
+                            chat.lastMessageSeen!
+                                ? Icons.done_all_rounded
+                                : Icons.done_rounded,
+                            size: 16,
+                            color: chat.lastMessageSeen!
+                                ? AppColors.primaryLight
+                                : Colors.white54,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            chat.previewText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: unread
+                                  ? Colors.white
+                                  : AppColors.textSecondary,
+                              fontSize: 14,
+                              height: 1.25,
+                              fontWeight: unread
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (unread) ...[
+                          const SizedBox(width: 10),
+                          _UnreadPill(count: chat.unreadCount),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -455,61 +579,134 @@ class _ChatCard extends StatelessWidget {
 
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
+
   @override
-  Widget build(BuildContext context) => ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (_, index) => Container(height: index == 0 ? 160 : 92, decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(index == 0 ? 28 : 24), border: Border.all(color: AppColors.cardBorder))),
-        separatorBuilder: (_, __) => const SizedBox(height: 14),
-        itemCount: 5,
-      );
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (_, index) => Container(
+        height: index == 0 ? 160 : 92,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(index == 0 ? 28 : 24),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+      ),
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
+      itemCount: 5,
+    );
+  }
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.subtitle, required this.buttonText, required this.onPressed});
+  const _EmptyState({
+    required this.title,
+    required this.subtitle,
+    required this.buttonText,
+    required this.onPressed,
+  });
+
   final String title;
   final String subtitle;
   final String buttonText;
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.forum_outlined, color: AppColors.primary, size: 54),
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.forum_outlined,
+              color: AppColors.primary,
+              size: 54,
+            ),
             const SizedBox(height: 16),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary, fontSize: 15)),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 15,
+              ),
+            ),
             const SizedBox(height: 22),
-            ElevatedButton(onPressed: onPressed, child: Text(buttonText)),
-          ]),
+            ElevatedButton(
+              onPressed: onPressed,
+              child: Text(buttonText),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.onRetry});
-  final VoidCallback onRetry;
+
+  final Future<void> Function() onRetry;
+
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.wifi_off_rounded, color: AppColors.primary, size: 52),
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.wifi_off_rounded,
+              color: AppColors.primary,
+              size: 52,
+            ),
             const SizedBox(height: 16),
-            const Text('Could not load chats', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            const Text(
+              'Could not load chats',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text('Check your connection and try again.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary)),
+            const Text(
+              'Check your connection and try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
             const SizedBox(height: 22),
-            ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Retry')),
-          ]),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _SupportCard extends StatelessWidget {
-  const _SupportCard({required this.unreadCount, required this.onTap});
+  const _SupportCard({
+    required this.unreadCount,
+    required this.onTap,
+  });
+
   final int unreadCount;
   final VoidCallback onTap;
 
@@ -524,27 +721,87 @@ class _SupportCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFF2D174A), Color(0xFF171717)]),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF2D174A), Color(0xFF171717)],
+            ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.primary.withValues(alpha: .65)),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: .65),
+            ),
           ),
-          child: Row(children: [
-            const CircleAvatar(radius: 31, backgroundColor: AppColors.primary, child: Icon(Icons.support_agent_rounded, color: Colors.white)),
-            const SizedBox(width: 14),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const Expanded(child: Text('NearMeU Support', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))),
-                const Icon(Icons.verified_rounded, color: AppColors.primaryLight, size: 18),
-                const SizedBox(width: 4),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(99)), child: const Text('Official', style: TextStyle(color: Colors.white70, fontSize: 11))),
-              ]),
-              const SizedBox(height: 7),
-              Row(children: [
-                const Expanded(child: Text('Official announcements and safety updates.', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary))),
-                if (unread) _UnreadPill(count: unreadCount),
-              ]),
-            ])),
-          ]),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 31,
+                backgroundColor: AppColors.primary,
+                child: Icon(
+                  Icons.support_agent_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'NearMeU Support',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.verified_rounded,
+                          color: AppColors.primaryLight,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: const Text(
+                            'Official',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Official announcements and safety updates.',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        if (unread) _UnreadPill(count: unreadCount),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -553,23 +810,51 @@ class _SupportCard extends StatelessWidget {
 
 class _UnreadPill extends StatelessWidget {
   const _UnreadPill({required this.count});
+
   final int count;
+
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: const BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.all(Radius.circular(999))),
-        child: Text(count > 99 ? '99+' : '$count', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-      );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.all(Radius.circular(999)),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }
 
 class _NavBadge extends StatelessWidget {
-  const _NavBadge({required this.count, required this.child});
+  const _NavBadge({
+    required this.count,
+    required this.child,
+  });
+
   final int count;
   final Widget child;
+
   @override
-  Widget build(BuildContext context) => Stack(clipBehavior: Clip.none, children: [
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
         child,
         if (count > 0)
-          Positioned(right: -10, top: -8, child: _UnreadPill(count: count)),
-      ]);
+          Positioned(
+            right: -10,
+            top: -8,
+            child: _UnreadPill(count: count),
+          ),
+      ],
+    );
+  }
 }
