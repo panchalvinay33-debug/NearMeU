@@ -316,10 +316,6 @@ class ChatService {
         .asyncMap((snapshot) async {
           final List<ChatPreviewModel> chats = [];
 
-          final currentUser = await _userService.getUser(currentUserId);
-
-          if (currentUser == null) return chats;
-
           for (final doc in snapshot.docs) {
             final data = doc.data();
 
@@ -332,22 +328,21 @@ class ChatService {
 
             if (otherUserId.isEmpty) continue;
 
-            final userDoc = await _firestore
-                .collection('users')
-                .doc(otherUserId)
-                .get();
-
-            AppUser? otherUser;
-            if (userDoc.exists && userDoc.data() != null) {
-              otherUser = AppUser.fromMap(userDoc.data()!, userDoc.id);
+            if (await _userService.isBlockedEitherWay(
+              currentUserId: currentUserId,
+              otherUserId: otherUserId,
+            )) {
+              continue;
             }
 
-            if (otherUser != null &&
-                _userService.areUsersBlockedEitherWay(
-                  currentUser: currentUser,
-                  otherUser: otherUser,
-                )) {
-              continue;
+            AppUser? otherUser;
+            try {
+              otherUser = await _userService.getUser(otherUserId);
+            } catch (error) {
+              developer.log(
+                'Unable to read chat participant public profile',
+                error: error,
+              );
             }
 
             final unreadCounts = Map<String, dynamic>.from(

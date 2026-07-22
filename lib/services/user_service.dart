@@ -6,58 +6,224 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../constants/app_constants.dart';
-import '../utils/nearby_user_presenter.dart';
 import '../models/app_user.dart';
+import '../security/location_privacy.dart';
 import '../security/suspension_service.dart';
+import '../utils/nearby_user_presenter.dart';
 import 'validation_service.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final SuspensionService _suspensionService = SuspensionService();
 
+  DocumentReference<Map<String, dynamic>> _userRef(String uid) {
+    return _firestore.collection('users').doc(uid);
+  }
+
+  DocumentReference<Map<String, dynamic>> _privateProfileRef(String uid) {
+    return _firestore.collection('privateProfiles').doc(uid);
+  }
+
+  CollectionReference<Map<String, dynamic>> _blocksRef(String uid) {
+    return _userRef(uid).collection('blocks');
+  }
+
   Future<void> createUser(AppUser user) async {
     ValidationService.age(user.age ?? AppConstants.minimumUserAge);
-    await _firestore.collection('users').doc(user.uid).set(user.toMap());
+    final batch = _firestore.batch();
+    batch.set(_userRef(user.uid), user.toPublicMap());
+    batch.set(_privateProfileRef(user.uid), user.toPrivateMap());
+    await batch.commit();
+    await _writeLegacyBlocks(user.uid, user.blockedUsers);
   }
 
   Future<void> saveUser(AppUser user) async {
     ValidationService.age(user.age ?? AppConstants.minimumUserAge);
-    await _firestore.collection('users').doc(user.uid).set(
-          user.toMap(),
-          SetOptions(merge: true),
-        );
+    final batch = _firestore.batch();
+    batch.set(_userRef(user.uid), user.toPublicMap(), SetOptions(merge: true));
+    batch.set(
+      _privateProfileRef(user.uid),
+      user.toPrivateMap(),
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+    await _writeLegacyBlocks(user.uid, user.blockedUsers);
   }
 
   Future<AppUser?> getUser(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return AppUser.fromMap(doc.data()!, doc.id);
+    final document = await _userRef(uid).get();
+    if (!document.exists || document.data() == null) return null;
+    return _hydrateUser(uid, document.data()!);
   }
 
   Stream<AppUser?> streamUser(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
-      if (!doc.exists || doc.data() == null) return null;
-      return AppUser.fromMap(doc.data()!, doc.id);
+    return _userRef(uid).snapshots().asyncMap((document) async {
+      if (!document.exists || document.data() == null) return null;
+      return _hydrateUser(uid, document.data()!);
     });
+  }
+
+  Future<AppUser> _hydrateUser(
+    String uid,
+    Map<String, dynamic> publicData,
+  ) async {
+    if (FirebaseAuth.instance.currentUser?.uid == uid) {
+      await _migrateLegacyPrivateData(uid, publicData);
+      final refreshedPublic = await _userRef(uid).get();
+      final merged = Map<String, dynamic>.from(
+        refreshedPublic.data() ?? publicData,
+      );
+      final privateDocument = await _privateProfileRef(uid).get();
+      if (privateDocument.exists && privateDocument.data() != null) {
+        merged.addAll(privateDocument.data()!);
+      }
+      final blocks = await _blocksRef(uid).get();
+      merged['blockedUsers'] = blocks.docs.map((document) => document.id).toList();
+      return AppUser.fromMap(merged, uid);
+    }
+    return AppUser.fromMap(publicData, uid);
+  }
+
+  Future<void> _migrateLegacyPrivateData(
+    String uid,
+    Map<String, dynamic> publicData,
+  ) async {
+    const legacyKeys = <String>{
+      'email',
+      'latitude',
+      'longitude',
+      'city',
+      'blockedUsers',
+      'messageNotificationsEnabled',
+      'nearbyAlertsEnabled',
+    };
+    final needsMigration =
+        (publicData['privacyVersion'] as num?)?.toInt() !=
+            LocationPrivacy.privacyVersion ||
+        legacyKeys.any(publicData.containsKey);
+    if (!needsMigration) return;
+
+    final latitude = (publicData['latitude'] as num?)?.toDouble() ??
+        (publicData['approxLatitude'] as num?)?.toDouble();
+    final longitude = (publicData['longitude'] as num?)?.toDouble() ??
+        (publicData['approxLongitude'] as num?)?.toDouble();
+    final blockedUsers = List<String>.from(
+      publicData['blockedUsers'] ?? const <String>[],
+    );
+    final nickname = publicData['nickname'] is String &&
+            (publicData['nickname'] as String).trim().isNotEmpty
+        ? (publicData['nickname'] as String).trim()
+        : 'User';
+    final gender = _allowedGender(publicData['gender']);
+    final lookingFor = _allowedLookingFor(publicData['lookingFor']);
+    final age = publicData['age'] is int
+        ? (publicData['age'] as int).clamp(
+            AppConstants.minimumUserAge,
+            AppConstants.maximumUserAge,
+          )
+        : AppConstants.minimumUserAge;
+
+    final privateData = <String, dynamic>{
+      'email': publicData['email'] is String ? publicData['email'] : '',
+      'exactLatitude': latitude,
+      'exactLongitude': longitude,
+      'city': publicData['city'] is String ? publicData['city'] : null,
+      'messageNotificationsEnabled':
+          publicData['messageNotificationsEnabled'] is bool
+          ? publicData['messageNotificationsEnabled']
+          : true,
+      'nearbyAlertsEnabled': publicData['nearbyAlertsEnabled'] is bool
+          ? publicData['nearbyAlertsEnabled']
+          : false,
+      'privacyVersion': LocationPrivacy.privacyVersion,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final publicReplacement = <String, dynamic>{
+      'uid': uid,
+      'nickname': nickname,
+      'gender': gender,
+      'lookingFor': lookingFor,
+      'createdAt': publicData['createdAt'] is Timestamp
+          ? publicData['createdAt']
+          : FieldValue.serverTimestamp(),
+      'approxLatitude': LocationPrivacy.approximateLatitude(latitude),
+      'approxLongitude': LocationPrivacy.approximateLongitude(longitude),
+      'locationCell': LocationPrivacy.discoveryCellFor(latitude, longitude),
+      'discoveryCells': LocationPrivacy.neighboringDiscoveryCells(
+        latitude,
+        longitude,
+      ),
+      'state': publicData['state'] is String ? publicData['state'] : null,
+      'country': publicData['country'] is String ? publicData['country'] : null,
+      'photoUrl': publicData['photoUrl'] is String ? publicData['photoUrl'] : null,
+      'age': age,
+      'lastSeen': publicData['lastSeen'] is Timestamp
+          ? publicData['lastSeen']
+          : null,
+      'isOnline': publicData['isOnline'] is bool
+          ? publicData['isOnline']
+          : false,
+      'isAdmin': publicData['isAdmin'] is bool ? publicData['isAdmin'] : false,
+      'isSuspended': publicData['isSuspended'] is bool
+          ? publicData['isSuspended']
+          : false,
+      'privacyVersion': LocationPrivacy.privacyVersion,
+    };
+
+    final batch = _firestore.batch();
+    batch.set(_privateProfileRef(uid), privateData, SetOptions(merge: true));
+    batch.set(_userRef(uid), publicReplacement);
+    await batch.commit();
+    await _writeLegacyBlocks(uid, blockedUsers);
+  }
+
+  String _allowedGender(dynamic value) {
+    return value is String &&
+            const <String>{'Male', 'Female', 'Other', 'Both', ''}.contains(value)
+        ? value
+        : '';
+  }
+
+  String _allowedLookingFor(dynamic value) {
+    return value is String &&
+            const <String>{'Male', 'Female', 'Both', ''}.contains(value)
+        ? value
+        : '';
+  }
+
+  Future<void> _writeLegacyBlocks(
+    String uid,
+    Iterable<String> blockedUsers,
+  ) async {
+    final validIds = blockedUsers
+        .where((blockedUid) => blockedUid.isNotEmpty && blockedUid != uid)
+        .toSet()
+        .toList();
+    for (var start = 0; start < validIds.length; start += 400) {
+      final batch = _firestore.batch();
+      final end = (start + 400).clamp(0, validIds.length).toInt();
+      for (final blockedUid in validIds.sublist(start, end)) {
+        batch.set(_blocksRef(uid).doc(blockedUid), <String, dynamic>{
+          'blockerId': uid,
+          'blockedUserId': blockedUid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
   }
 
   Stream<DateTime?> watchLastSeen(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
-      if (!doc.exists || doc.data() == null) return null;
-
-      final data = doc.data()!;
-
-      if (data['lastSeen'] is Timestamp) {
-        return (data['lastSeen'] as Timestamp).toDate();
-      }
-
-      return null;
+    return _userRef(uid).snapshots().map((document) {
+      final data = document.data();
+      if (!document.exists || data == null) return null;
+      return data['lastSeen'] is Timestamp
+          ? (data['lastSeen'] as Timestamp).toDate()
+          : null;
     });
   }
 
-  String? getCurrentUserId() {
-    return FirebaseAuth.instance.currentUser?.uid;
-  }
+  String? getCurrentUserId() => FirebaseAuth.instance.currentUser?.uid;
 
   bool isProfileComplete(AppUser user) {
     return user.nickname.trim().isNotEmpty &&
@@ -68,66 +234,48 @@ class UserService {
   }
 
   String normalizeGender(String value) {
-    final v = value.trim().toLowerCase();
-
-    if (v == 'male') return 'Male';
-    if (v == 'female') return 'Female';
-    if (v == 'both') return 'Both';
-
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'male') return 'Male';
+    if (normalized == 'female') return 'Female';
+    if (normalized == 'other') return 'Other';
+    if (normalized == 'both') return 'Both';
     return '';
   }
 
   String normalizeLookingFor(String value) {
-    final v = value.trim().toLowerCase();
-
-    if (v == 'male') return 'Male';
-    if (v == 'female') return 'Female';
-    if (v == 'both') return 'Both';
-
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'male') return 'Male';
+    if (normalized == 'female') return 'Female';
+    if (normalized == 'both') return 'Both';
     return '';
   }
 
-  Future<void> updateNickname(
-    String uid,
-    String nickname,
-  ) async {
+  Future<void> updateNickname(String uid, String nickname) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).update({
+    await _userRef(uid).update({
       'nickname': ValidationService.nickname(nickname),
     });
   }
 
-  Future<void> updateAge(
-    String uid,
-    int age,
-  ) async {
+  Future<void> updateAge(String uid, int age) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).update({
-      'age': ValidationService.age(age),
-    });
+    await _userRef(uid).update({'age': ValidationService.age(age)});
   }
 
-  Future<void> updateGender(
-    String uid,
-    String gender,
-  ) async {
+  Future<void> updateGender(String uid, String gender) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).update({
+    await _userRef(uid).update({
       'gender': ValidationService.profileChoice(gender, 'gender'),
     });
   }
 
-  Future<void> updateLookingFor(
-    String uid,
-    String lookingFor,
-  ) async {
+  Future<void> updateLookingFor(String uid, String lookingFor) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).update({
-      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
+    await _userRef(uid).update({
+      'lookingFor': ValidationService.profileChoice(
+        lookingFor,
+        'preference',
+      ),
     });
   }
 
@@ -139,12 +287,14 @@ class UserService {
     required String lookingFor,
   }) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).set({
+    await _userRef(uid).set(<String, dynamic>{
       'nickname': ValidationService.nickname(nickname),
       'age': ValidationService.age(age),
       'gender': ValidationService.profileChoice(gender, 'gender'),
-      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
+      'lookingFor': ValidationService.profileChoice(
+        lookingFor,
+        'preference',
+      ),
     }, SetOptions(merge: true));
   }
 
@@ -157,39 +307,48 @@ class UserService {
     String? country,
   }) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).set({
-      'latitude': ValidationService.latitude(latitude),
-      'longitude': ValidationService.longitude(longitude),
-      'city': city,
+    final safeLatitude = ValidationService.latitude(latitude);
+    final safeLongitude = ValidationService.longitude(longitude);
+    final batch = _firestore.batch();
+    batch.set(_userRef(uid), <String, dynamic>{
+      'approxLatitude': LocationPrivacy.approximateLatitude(safeLatitude),
+      'approxLongitude': LocationPrivacy.approximateLongitude(safeLongitude),
+      'locationCell': LocationPrivacy.discoveryCellFor(
+        safeLatitude,
+        safeLongitude,
+      ),
+      'discoveryCells': LocationPrivacy.neighboringDiscoveryCells(
+        safeLatitude,
+        safeLongitude,
+      ),
       'state': state,
       'country': country,
+      'privacyVersion': LocationPrivacy.privacyVersion,
     }, SetOptions(merge: true));
+    batch.set(_privateProfileRef(uid), <String, dynamic>{
+      'exactLatitude': safeLatitude,
+      'exactLongitude': safeLongitude,
+      'city': city,
+      'privacyVersion': LocationPrivacy.privacyVersion,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await batch.commit();
   }
 
   Future<void> updateUserLocation(String uid) async {
     await _suspensionService.ensureUserAllowed(uid);
+    if (!await Geolocator.isLocationServiceEnabled()) return;
 
-    final serviceEnabled =
-        await Geolocator.isLocationServiceEnabled();
-
-    if (!serviceEnabled) return;
-
-    LocationPermission permission =
-        await Geolocator.checkPermission();
-
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      permission =
-          await Geolocator.requestPermission();
+      permission = await Geolocator.requestPermission();
     }
-
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return;
     }
 
-    final position =
-        await Geolocator.getCurrentPosition(
+    final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.medium,
       timeLimit: const Duration(seconds: 10),
     );
@@ -197,31 +356,22 @@ class UserService {
     String? city;
     String? state;
     String? country;
-
     try {
-      final placemarks =
-          await placemarkFromCoordinates(
+      final placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
-
       if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-
-        city = p.locality?.trim().isNotEmpty == true
-            ? p.locality!.trim()
-            : (p.subAdministrativeArea
-                        ?.trim()
-                        .isNotEmpty ==
-                    true
-                ? p.subAdministrativeArea!.trim()
-                : null);
-
-        state = p.administrativeArea;
-        country = p.country;
+        final place = placemarks.first;
+        city = place.locality?.trim().isNotEmpty == true
+            ? place.locality!.trim()
+            : (place.subAdministrativeArea?.trim().isNotEmpty == true
+                  ? place.subAdministrativeArea!.trim()
+                  : null);
+        state = place.administrativeArea;
+        country = place.country;
       }
     } catch (error) {
-      // Reverse geocoding is best-effort; keep valid coordinates when it fails.
       developer.log('Reverse geocoding failed', error: error);
     }
 
@@ -237,18 +387,14 @@ class UserService {
 
   Future<void> updateLastSeen(String uid) async {
     await _suspensionService.ensureUserAllowed(uid);
-
-    await _firestore.collection('users').doc(uid).set({
+    await _userRef(uid).set(<String, dynamic>{
       'lastSeen': FieldValue.serverTimestamp(),
       'isOnline': false,
     }, SetOptions(merge: true));
   }
 
-  Future<void> setOnlineStatus(
-    String uid,
-    bool isOnline,
-  ) async {
-    await _firestore.collection('users').doc(uid).set({
+  Future<void> setOnlineStatus(String uid, bool isOnline) async {
+    await _userRef(uid).set(<String, dynamic>{
       'isOnline': isOnline,
       'lastSeen': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -258,8 +404,10 @@ class UserService {
     required String uid,
     required bool enabled,
   }) async {
-    await _firestore.collection('users').doc(uid).set({
+    await _privateProfileRef(uid).set(<String, dynamic>{
       'messageNotificationsEnabled': enabled,
+      'privacyVersion': LocationPrivacy.privacyVersion,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -267,8 +415,10 @@ class UserService {
     required String uid,
     required bool enabled,
   }) async {
-    await _firestore.collection('users').doc(uid).set({
+    await _privateProfileRef(uid).set(<String, dynamic>{
       'nearbyAlertsEnabled': enabled,
+      'privacyVersion': LocationPrivacy.privacyVersion,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -276,100 +426,69 @@ class UserService {
     required String currentUserId,
     required String targetUserId,
   }) async {
-    await _firestore
-        .collection('users')
-        .doc(currentUserId)
-        .set({
-      'blockedUsers':
-          FieldValue.arrayUnion([targetUserId]),
-    }, SetOptions(merge: true));
+    await _suspensionService.ensureUserAllowed(currentUserId);
+    if (currentUserId == targetUserId) throw Exception('Cannot block yourself.');
+    await _blocksRef(currentUserId).doc(targetUserId).set(<String, dynamic>{
+      'blockerId': currentUserId,
+      'blockedUserId': targetUserId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> unblockUser({
     required String currentUserId,
     required String targetUserId,
   }) async {
-    await _firestore
-        .collection('users')
-        .doc(currentUserId)
-        .set({
-      'blockedUsers':
-          FieldValue.arrayRemove([targetUserId]),
-    }, SetOptions(merge: true));
+    await _blocksRef(currentUserId).doc(targetUserId).delete();
   }
 
   Future<bool> isUserBlockedByMe({
     required String currentUserId,
     required String targetUserId,
   }) async {
-    final currentUser =
-        await getUser(currentUserId);
-
-    if (currentUser == null) return false;
-
-    return currentUser.blockedUsers
-        .contains(targetUserId);
+    return (await _blocksRef(currentUserId).doc(targetUserId).get()).exists;
   }
 
-  Future<List<AppUser>> getBlockedUsers(
-    String currentUserId,
-  ) async {
-    final currentUser =
-        await getUser(currentUserId);
-
-    if (currentUser == null ||
-        currentUser.blockedUsers.isEmpty) {
-      return [];
-    }
-
-    final List<AppUser> blocked = [];
-
-    for (final blockedUid
-        in currentUser.blockedUsers) {
-      final user = await getUser(blockedUid);
-
-      if (user != null) {
-        blocked.add(user);
-      }
-    }
-
-    return blocked;
+  Future<List<AppUser>> getBlockedUsers(String currentUserId) async {
+    final blockDocuments = await _blocksRef(currentUserId).get();
+    final users = await Future.wait(
+      blockDocuments.docs.map((document) => getUser(document.id)),
+    );
+    return users.whereType<AppUser>().toList();
   }
 
   Future<bool> isBlockedEitherWay({
     required String currentUserId,
     required String otherUserId,
   }) async {
-    final currentUser =
-        await getUser(currentUserId);
-
-    final otherUser =
-        await getUser(otherUserId);
-
-    if (currentUser == null ||
-        otherUser == null) {
-      return false;
-    }
-
-    return areUsersBlockedEitherWay(
-      currentUser: currentUser,
-      otherUser: otherUser,
-    );
+    final results = await Future.wait<
+        DocumentSnapshot<Map<String, dynamic>>>(<
+      Future<DocumentSnapshot<Map<String, dynamic>>>
+    >[
+      _blocksRef(currentUserId).doc(otherUserId).get(),
+      _blocksRef(otherUserId).doc(currentUserId).get(),
+    ]);
+    return results.any((document) => document.exists);
   }
 
   bool areUsersBlockedEitherWay({
     required AppUser currentUser,
     required AppUser otherUser,
   }) {
-    final currentBlocked =
-        currentUser.blockedUsers
-            .contains(otherUser.uid);
+    return currentUser.blockedUsers.contains(otherUser.uid) ||
+        otherUser.blockedUsers.contains(currentUser.uid);
+  }
 
-    final otherBlocked =
-        otherUser.blockedUsers
-            .contains(currentUser.uid);
+  bool areUsersMutuallyCompatible({
+    required AppUser currentUser,
+    required AppUser otherUser,
+  }) {
+    return _preferenceMatches(currentUser.lookingFor, otherUser.gender) &&
+        _preferenceMatches(otherUser.lookingFor, currentUser.gender);
+  }
 
-    return currentBlocked || otherBlocked;
+  bool _preferenceMatches(String preference, String gender) {
+    return preference == 'Both' || preference == gender;
   }
 
   Future<double?> getDistanceBetweenUsers(
@@ -380,7 +499,6 @@ class UserService {
         !NearbyUserPresenter.hasValidLocation(otherUser)) {
       return null;
     }
-
     return Geolocator.distanceBetween(
           currentUser.latitude!,
           currentUser.longitude!,
@@ -390,93 +508,66 @@ class UserService {
         1000.0;
   }
 
-  Stream<List<AppUser>> getNearbyUsers(
-    String currentUserId,
-  ) async* {
+  Stream<List<AppUser>> getNearbyUsers(String currentUserId) async* {
     await _suspensionService.ensureUserAllowed(currentUserId);
-
-    final currentUser =
-        await getUser(currentUserId);
-
-    if (currentUser == null) {
-      yield [];
+    final currentUser = await getUser(currentUserId);
+    if (currentUser == null || !currentUser.hasLocation) {
+      yield const <AppUser>[];
       return;
     }
 
+    final cells = LocationPrivacy.neighboringDiscoveryCells(
+      currentUser.latitude,
+      currentUser.longitude,
+    );
+    if (cells.isEmpty) {
+      yield const <AppUser>[];
+      return;
+    }
+
+    final ownBlocks = await _blocksRef(currentUserId).get();
+    final blockedByMe = ownBlocks.docs.map((document) => document.id).toSet();
+
     yield* _firestore
         .collection('users')
-        .where('isSuspended', isEqualTo: false)
-        .where('age', isGreaterThanOrEqualTo: AppConstants.minimumUserAge)
+        .where('locationCell', whereIn: cells)
+        .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
-        .map((snapshot) {
-      final List<AppUser> users = [];
-
-      for (final doc in snapshot.docs) {
-        if (doc.id == currentUserId) {
-          continue;
-        }
-
-        final user =
-            AppUser.fromMap(
-          doc.data(),
-          doc.id,
-        );
-
-        // Suspended users do not appear in Nearby.
-        if (user.isSuspended || !user.isAdult) {
-          continue;
-        }
-
-        if (areUsersBlockedEitherWay(
+        .asyncMap((snapshot) async {
+      final candidates = <AppUser>[];
+      for (final document in snapshot.docs) {
+        if (document.id == currentUserId) continue;
+        final user = AppUser.fromMap(document.data(), document.id);
+        if (user.isSuspended || !user.isAdult) continue;
+        if (!areUsersMutuallyCompatible(
           currentUser: currentUser,
           otherUser: user,
         )) {
           continue;
         }
-
-        users.add(user);
+        if (blockedByMe.contains(user.uid)) continue;
+        final blockedMe = await _blocksRef(user.uid).doc(currentUserId).get();
+        if (blockedMe.exists) continue;
+        candidates.add(user);
       }
-
-      return users;
+      return candidates;
     });
   }
 
   String getLastSeenText(AppUser user) {
-    if (user.isOnline) {
-      return 'online now';
+    if (user.isOnline) return 'online now';
+    if (user.lastSeen == null) return 'last seen recently';
+    final difference = DateTime.now().difference(user.lastSeen!);
+    if (difference.inMinutes < 1) return 'last seen just now';
+    if (difference.inMinutes < 60) {
+      return 'last seen ${difference.inMinutes} min ago';
     }
-
-    if (user.lastSeen == null) {
-      return 'last seen recently';
+    if (difference.inHours < 24) {
+      return 'last seen ${difference.inHours} hr ago';
     }
-
-    final diff =
-        DateTime.now().difference(
-      user.lastSeen!,
-    );
-
-    if (diff.inMinutes < 1) {
-      return 'last seen just now';
-    }
-
-    if (diff.inMinutes < 60) {
-      return 'last seen ${diff.inMinutes} min ago';
-    }
-
-    if (diff.inHours < 24) {
-      return 'last seen ${diff.inHours} hr ago';
-    }
-
-    if (diff.inDays == 1) {
-      return 'last seen yesterday';
-    }
-
+    if (difference.inDays == 1) return 'last seen yesterday';
     return 'last seen recently';
   }
-
-  // ==================================================
-  // ADMIN V1
-  // ==================================================
 
   Future<bool> isAdmin(String uid) async {
     final user = await getUser(uid);
@@ -486,72 +577,48 @@ class UserService {
   Stream<List<AppUser>> getAllUsersForAdmin() {
     return _firestore
         .collection('users')
-        .orderBy(
-          'createdAt',
-          descending: true,
-        )
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map(
-            (doc) => AppUser.fromMap(
-              doc.data(),
-              doc.id,
-            ),
-          )
-          .toList();
-    });
+        .map(
+          (snapshot) => snapshot.docs
+              .map((document) => AppUser.fromMap(document.data(), document.id))
+              .toList(),
+        );
   }
 
   Future<int> getTotalUsersCount() async {
-    final snapshot =
-        await _firestore
-            .collection('users')
-            .get();
-
-    return snapshot.docs.length;
+    return (await _firestore.collection('users').get()).docs.length;
   }
 
   Future<int> getOnlineUsersCount() async {
-    final snapshot =
-        await _firestore
+    return (await _firestore
             .collection('users')
-            .where(
-              'isOnline',
-              isEqualTo: true,
-            )
-            .get();
-
-    return snapshot.docs.length;
+            .where('isOnline', isEqualTo: true)
+            .get())
+        .docs
+        .length;
   }
 
   Future<int> getSuspendedUsersCount() async {
-    final snapshot =
-        await _firestore
+    return (await _firestore
             .collection('users')
-            .where(
-              'isSuspended',
-              isEqualTo: true,
-            )
-            .get();
-
-    return snapshot.docs.length;
+            .where('isSuspended', isEqualTo: true)
+            .get())
+        .docs
+        .length;
   }
 
-  Future<Map<String, int>>
-      getAdminDashboardStats() async {
-    final results = await Future.wait([
+  Future<Map<String, int>> getAdminDashboardStats() async {
+    final results = await Future.wait(<Future<int>>[
       getTotalUsersCount(),
       getOnlineUsersCount(),
       getSuspendedUsersCount(),
     ]);
-
-    return {
+    return <String, int>{
       'total': results[0],
       'online': results[1],
       'suspended': results[2],
-      'offline':
-          results[0] - results[1],
+      'offline': results[0] - results[1],
     };
   }
 
@@ -560,34 +627,35 @@ class UserService {
     required bool suspended,
   }) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-
-    if (currentUid == null) {
-      throw Exception('Admin not logged in');
-    }
-
+    if (currentUid == null) throw Exception('Admin not logged in');
     final admin = await getUser(currentUid);
-
     if (admin == null || !admin.isAdmin) {
       throw Exception('Admin permission required');
     }
-
     if (userId == currentUid) {
       throw Exception('Admin cannot suspend own account');
     }
-
-    await _firestore.collection('users').doc(userId).update({
+    await _userRef(userId).update(<String, dynamic>{
       'isSuspended': suspended,
       'isOnline': suspended ? false : FieldValue.delete(),
     });
   }
 
   Future<void> deleteCurrentUserData(String uid) async {
-    await _firestore.collection('users').doc(uid).delete();
+    final blocks = await _blocksRef(uid).get();
+    for (var start = 0; start < blocks.docs.length; start += 400) {
+      final batch = _firestore.batch();
+      final end = (start + 400).clamp(0, blocks.docs.length).toInt();
+      for (final document in blocks.docs.sublist(start, end)) {
+        batch.delete(document.reference);
+      }
+      await batch.commit();
+    }
+    final batch = _firestore.batch();
+    batch.delete(_privateProfileRef(uid));
+    batch.delete(_userRef(uid));
+    await batch.commit();
   }
-
-  // ==================================================
-  // REPORT SYSTEM
-  // ==================================================
 
   CollectionReference<Map<String, dynamic>> get _reports =>
       _firestore.collection('reports');
@@ -602,7 +670,6 @@ class UserService {
         .where('status', isEqualTo: 'pending')
         .limit(1)
         .get();
-
     return snapshot.docs.isNotEmpty;
   }
 
@@ -613,24 +680,18 @@ class UserService {
     String description = '',
   }) async {
     await _suspensionService.ensureUserAllowed(reporterId);
-
     if (reporterId == reportedUserId) {
       throw Exception("You can't report yourself.");
     }
-
-    final already = await hasAlreadyReported(
+    if (await hasAlreadyReported(
       reporterId: reporterId,
       reportedUserId: reportedUserId,
-    );
-
-    if (already) {
-      throw Exception("User already reported.");
+    )) {
+      throw Exception('User already reported.');
     }
-
     final reporter = await getUser(reporterId);
     final reported = await getUser(reportedUserId);
-
-    await _reports.add({
+    await _reports.add(<String, dynamic>{
       'reporterId': reporterId,
       'reportedUserId': reportedUserId,
       'reporterName': reporter?.nickname ?? '',

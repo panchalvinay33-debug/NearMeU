@@ -22,6 +22,10 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/chats/$(chatId));
     }
 
+    function blockExists(blockerId, blockedUserId) {
+      return exists(/databases/$(database)/documents/users/$(blockerId)/blocks/$(blockedUserId));
+    }
+
     function isAdmin() {
       return signedIn()
         && userExists(request.auth.uid)
@@ -38,6 +42,43 @@ service cloud.firestore {
         && userExists(request.auth.uid)
         && userDoc(request.auth.uid).data.get('age', 0) >= 18
         && !isSuspended(request.auth.uid);
+    }
+
+    function deterministicChatId(firstId, secondId) {
+      return firstId < secondId
+        ? firstId + '_' + secondId
+        : secondId + '_' + firstId;
+    }
+
+    function sharesChatWith(userId) {
+      let chatId = deterministicChatId(request.auth.uid, userId);
+      return chatExists(chatId)
+        && request.auth.uid in chatDoc(chatId).data.get('participants', [])
+        && userId in chatDoc(chatId).data.get('participants', []);
+    }
+
+    function hasBlockRelationshipWith(userId) {
+      return blockExists(request.auth.uid, userId)
+        || blockExists(userId, request.auth.uid);
+    }
+
+    function isDiscoverablePublicUser() {
+      let allowedCells = userDoc(request.auth.uid).data.get('discoveryCells', []);
+      return allowedCells is list
+        && resource.data.get('locationCell', '') is string
+        && resource.data.get('locationCell', '') in allowedCells;
+    }
+
+    function canReadPublicUser(userId) {
+      return request.auth.uid == userId
+        || (activeUser()
+          && resource.data.get('privacyVersion', 0) == 1
+          && (
+            isDiscoverablePublicUser()
+            || sharesChatWith(userId)
+            || hasBlockRelationshipWith(userId)
+          ))
+        || isAdmin();
     }
 
     function isCurrentChatParticipant() {
@@ -59,35 +100,107 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.get('participants', []);
     }
 
-    function validLatLng(data) {
-      return (!('latitude' in data) || data.latitude == null ||
-          (data.latitude is number && data.latitude >= -90 && data.latitude <= 90))
-        && (!('longitude' in data) || data.longitude == null ||
-          (data.longitude is number && data.longitude >= -180 && data.longitude <= 180));
+    function validApproxLocation(data) {
+      let latitude = data.get('approxLatitude', null);
+      let longitude = data.get('approxLongitude', null);
+      let cell = data.get('locationCell', null);
+      let discoveryCells = data.get('discoveryCells', []);
+      return (
+          latitude == null
+          && longitude == null
+          && cell == null
+          && discoveryCells is list
+          && discoveryCells.size() == 0
+        ) || (
+          latitude is number
+          && latitude >= -90
+          && latitude <= 90
+          && longitude is number
+          && longitude >= -180
+          && longitude <= 180
+          && cell is string
+          && cell.size() > 0
+          && cell.size() <= 32
+          && discoveryCells is list
+          && discoveryCells.size() > 0
+          && discoveryCells.size() <= 9
+          && cell in discoveryCells
+        );
     }
 
-    function validUserData(data, uid) {
+    function validPublicUserData(data, uid) {
       return data.keys().hasOnly([
-          'uid', 'email', 'nickname', 'gender', 'lookingFor', 'createdAt',
-          'latitude', 'longitude', 'city', 'state', 'country', 'photoUrl', 'age',
-          'blockedUsers', 'lastSeen', 'isOnline', 'messageNotificationsEnabled',
-          'nearbyAlertsEnabled', 'isAdmin', 'isSuspended'
+          'uid', 'nickname', 'gender', 'lookingFor', 'createdAt',
+          'approxLatitude', 'approxLongitude', 'locationCell', 'discoveryCells',
+          'state', 'country', 'photoUrl', 'age', 'lastSeen', 'isOnline',
+          'isAdmin', 'isSuspended', 'privacyVersion'
         ])
         && data.uid == uid
-        && (!('email' in data) || data.email is string)
-        && (!('nickname' in data) || (data.nickname is string && data.nickname.size() > 0 && data.nickname.size() <= 30))
-        && ('age' in data) && data.age is int && data.age >= 18 && data.age <= 99
-        && (!('gender' in data) || data.gender in ['Male', 'Female', 'Other', 'Both', ''])
-        && (!('lookingFor' in data) || data.lookingFor in ['Male', 'Female', 'Both', ''])
-        && (!('blockedUsers' in data) || (data.blockedUsers is list && data.blockedUsers.size() <= 500))
-        && (!('city' in data) || data.city == null || (data.city is string && data.city.size() <= 80))
+        && data.nickname is string
+        && data.nickname.size() > 0
+        && data.nickname.size() <= 30
+        && data.age is int
+        && data.age >= 18
+        && data.age <= 99
+        && data.gender in ['Male', 'Female', 'Other', 'Both', '']
+        && data.lookingFor in ['Male', 'Female', 'Both', '']
+        && data.createdAt is timestamp
         && (!('state' in data) || data.state == null || (data.state is string && data.state.size() <= 80))
         && (!('country' in data) || data.country == null || (data.country is string && data.country.size() <= 80))
         && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048))
-        && (!('isOnline' in data) || data.isOnline is bool)
+        && (!('lastSeen' in data) || data.lastSeen == null || data.lastSeen is timestamp)
+        && data.isOnline is bool
+        && data.isAdmin is bool
+        && data.isSuspended is bool
+        && data.privacyVersion == 1
+        && validApproxLocation(data);
+    }
+
+    function validLegacyPrivacyMigration(userId) {
+      let oldCreatedAt = resource.data.get('createdAt', null);
+      return signedIn()
+        && request.auth.uid == userId
+        && resource.data.get('privacyVersion', 0) != 1
+        && validPublicUserData(request.resource.data, userId)
+        && request.resource.data.uid == resource.data.get('uid', userId)
+        && request.resource.data.isAdmin == resource.data.get('isAdmin', false)
+        && request.resource.data.isSuspended == resource.data.get('isSuspended', false)
+        && ((oldCreatedAt == null && request.resource.data.createdAt == request.time)
+          || (oldCreatedAt is timestamp && request.resource.data.createdAt == oldCreatedAt));
+    }
+
+    function validPrivateProfileData(data) {
+      let latitude = data.get('exactLatitude', null);
+      let longitude = data.get('exactLongitude', null);
+      return data.keys().hasOnly([
+          'email', 'exactLatitude', 'exactLongitude', 'city',
+          'messageNotificationsEnabled', 'nearbyAlertsEnabled',
+          'privacyVersion', 'updatedAt'
+        ])
+        && (!('email' in data) || (data.email is string && data.email.size() <= 320))
+        && ((latitude == null && longitude == null) || (
+          latitude is number
+          && latitude >= -90
+          && latitude <= 90
+          && longitude is number
+          && longitude >= -180
+          && longitude <= 180
+        ))
+        && (!('city' in data) || data.city == null || (data.city is string && data.city.size() <= 80))
         && (!('messageNotificationsEnabled' in data) || data.messageNotificationsEnabled is bool)
         && (!('nearbyAlertsEnabled' in data) || data.nearbyAlertsEnabled is bool)
-        && validLatLng(data);
+        && data.privacyVersion == 1
+        && data.updatedAt == request.time;
+    }
+
+    function validBlockData(userId, blockedUserId) {
+      return request.resource.data.keys().hasOnly([
+          'blockerId', 'blockedUserId', 'createdAt'
+        ])
+        && userId != blockedUserId
+        && request.resource.data.blockerId == userId
+        && request.resource.data.blockedUserId == blockedUserId
+        && request.resource.data.createdAt == request.time;
     }
 
     function validChatParticipants(participants) {
@@ -311,22 +424,46 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if signedIn() && (request.auth.uid == userId || activeUser() || isAdmin());
-      allow list: if activeUser() || isAdmin();
+      allow get: if signedIn() && canReadPublicUser(userId);
+      allow list: if (activeUser()
+          && request.query.limit != null
+          && request.query.limit <= 50
+          && isDiscoverablePublicUser())
+        || isAdmin();
       allow create: if signedIn()
         && request.auth.uid == userId
-        && validUserData(request.resource.data, userId)
-        && request.resource.data.get('isAdmin', false) != true
-        && request.resource.data.get('isSuspended', false) != true
-        && request.resource.data.age >= 18;
+        && validPublicUserData(request.resource.data, userId)
+        && request.resource.data.isAdmin == false
+        && request.resource.data.isSuspended == false;
       allow update: if isAdmin()
+        || validLegacyPrivacyMigration(userId)
         || (activeUser()
           && request.auth.uid == userId
-          && validUserData(request.resource.data, userId)
+          && validPublicUserData(request.resource.data, userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['isAdmin', 'isSuspended', 'createdAt', 'email', 'uid'])
-          && request.resource.data.age >= 18);
+            .hasAny(['isAdmin', 'isSuspended', 'createdAt', 'uid']));
       allow delete: if isAdmin() || (activeUser() && request.auth.uid == userId);
+
+      match /blocks/{blockedUserId} {
+        allow get: if activeUser()
+          && (request.auth.uid == userId || request.auth.uid == blockedUserId)
+          || isAdmin();
+        allow list: if activeUser() && request.auth.uid == userId || isAdmin();
+        allow create: if activeUser()
+          && request.auth.uid == userId
+          && validBlockData(userId, blockedUserId);
+        allow update: if false;
+        allow delete: if activeUser() && request.auth.uid == userId;
+      }
+    }
+
+    match /privateProfiles/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && validPrivateProfileData(request.resource.data);
+      allow delete: if signedIn() && request.auth.uid == userId;
     }
 
     match /chats/{chatId} {
