@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/support_announcement.dart';
@@ -47,7 +49,14 @@ class _AdminAnnouncementScreenState extends State<AdminAnnouncementScreen> {
       _message.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement sent.')));
-    } catch (_) {
+    } catch (error) {
+      if (kDebugMode) {
+        if (error is FirebaseException) {
+          debugPrint('Admin announcement write failed: code=${error.code}, message=${error.message}');
+        } else {
+          debugPrint('Admin announcement write failed: $error');
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to send announcement. Check fields and admin access.')));
     } finally {

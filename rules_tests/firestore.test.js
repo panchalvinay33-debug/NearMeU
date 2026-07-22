@@ -177,7 +177,6 @@ describe('firestore rules', () => {
         .collection('supportAnnouncements')
         .where('isActive', '==', true)
         .where('targetAudience', '==', 'allActiveUsers')
-        .orderBy('createdAt', 'desc')
         .get(),
     );
     assert.deepStrictEqual(snap.docs.map((doc) => doc.id), ['active']);
@@ -195,7 +194,6 @@ describe('firestore rules', () => {
         .collection('supportAnnouncements')
         .where('isActive', '==', true)
         .where('targetAudience', '==', 'allActiveUsers')
-        .orderBy('createdAt', 'desc')
         .get(),
     );
   });
@@ -206,6 +204,7 @@ describe('firestore rules', () => {
     await assertSucceeds(authed('adminB').doc('supportAnnouncements/ann1').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
     const snap = await authed('adminA').doc('supportAnnouncements/ann1').get();
     assert.strictEqual(snap.data().createdByAdminId, 'adminA');
+    await assertFails(authed('adminA').doc('supportAnnouncements/ann1').delete());
   });
 
   it('rejects admin creator spoofing', async () => {
