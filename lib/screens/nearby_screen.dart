@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../constants/app_constants.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
@@ -23,10 +24,10 @@ class NearbyScreen extends StatefulWidget {
 }
 
 class _DistanceFilterOption {
-  _DistanceFilterOption({required this.label, required this.value});
+  const _DistanceFilterOption({required this.label, required this.value});
 
   final String label;
-  final double? value;
+  final double value;
 }
 
 class _NearbyScreenState extends State<NearbyScreen> {
@@ -39,10 +40,9 @@ class _NearbyScreenState extends State<NearbyScreen> {
   bool isRefreshing = false;
   bool _loadInProgress = false;
   final Map<String, String> _distanceTextByUserId = <String, String>{};
-  double? _appliedMaxDistanceKm;
+  double _appliedMaxDistanceKm = AppConstants.defaultNearbyRadiusKm;
 
-  final List<_DistanceFilterOption> _distanceFilterOptions = [
-    _DistanceFilterOption(label: 'Any distance', value: null),
+  final List<_DistanceFilterOption> _distanceFilterOptions = const [
     _DistanceFilterOption(label: 'Within 25 km', value: 25),
     _DistanceFilterOption(label: 'Within 50 km', value: 50),
     _DistanceFilterOption(label: 'Within 100 km', value: 100),
@@ -148,7 +148,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Location update not available right now. Showing available users.',
+              'Location update not available right now. Showing cached nearby users only.',
             ),
           ),
         );
@@ -194,7 +194,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Choose how far away people can be. Any distance keeps all eligible users visible.',
+                  'For privacy, discovery is limited to people within 100 km.',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 18),
@@ -258,8 +258,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
     await _applyDistanceFilter(selectedOption.value);
   }
 
-  Future<void> _applyDistanceFilter(double? maxDistanceKm) async {
-    setState(() => _appliedMaxDistanceKm = maxDistanceKm);
+  Future<void> _applyDistanceFilter(double maxDistanceKm) async {
+    setState(() {
+      _appliedMaxDistanceKm = maxDistanceKm.clamp(
+        1,
+        AppConstants.maximumNearbyRadiusKm,
+      );
+    });
     await _loadNearbyUsers(showLoader: false);
   }
 
@@ -367,8 +372,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
             icon: const Icon(Icons.tune),
           ),
           IconButton(
-            tooltip: 'Clear all filters',
-            onPressed: isRefreshing ? null : () => _applyDistanceFilter(null),
+            tooltip: 'Reset to 50 km',
+            onPressed: isRefreshing
+                ? null
+                : () => _applyDistanceFilter(
+                    AppConstants.defaultNearbyRadiusKm,
+                  ),
             icon: const Icon(Icons.filter_alt_off),
           ),
           IconButton(
