@@ -40,7 +40,14 @@ service cloud.firestore {
         && !isSuspended(request.auth.uid);
     }
 
-    function isParticipant(chatId) {
+    function isCurrentChatParticipant() {
+      return signedIn()
+        && ('participants' in resource.data)
+        && resource.data.participants is list
+        && request.auth.uid in resource.data.participants;
+    }
+
+    function isChatParticipant(chatId) {
       return signedIn()
         && chatExists(chatId)
         && chatDoc(chatId).data.get('participants', []) is list
@@ -272,17 +279,17 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if (activeUser() && isParticipant(chatId)) || isAdmin();
+      allow read: if (activeUser() && isCurrentChatParticipant()) || isAdmin();
       allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
-      allow update: if (activeUser() && isParticipant(chatId) && validChatUpdate(chatId))
-        || (activeUser() && isParticipant(chatId) && validReadStateUpdate())
+      allow update: if (activeUser() && isCurrentChatParticipant() && validChatUpdate(chatId))
+        || (activeUser() && isCurrentChatParticipant() && validReadStateUpdate())
         || isAdmin();
-      allow delete: if (activeUser() && isParticipant(chatId)) || isAdmin();
+      allow delete: if (activeUser() && isCurrentChatParticipant()) || isAdmin();
 
       match /messages/{messageId} {
-        allow read: if (activeUser() && isParticipant(chatId)) || isAdmin();
+        allow read: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
         allow create: if activeUser() && validMessageCreate(chatId, messageId);
-        allow update, delete: if (activeUser() && isParticipant(chatId)) || isAdmin();
+        allow update, delete: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
       }
     }
 
