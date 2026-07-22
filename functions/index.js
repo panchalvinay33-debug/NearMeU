@@ -54,6 +54,65 @@ async function assertAdmin(request) {
   }
 }
 
+function assertRecentLogin(request, maxAgeSeconds = 600) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in is required.");
+  }
+
+  const authTime = Number(request.auth.token.auth_time);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(authTime) || nowSeconds - authTime > maxAgeSeconds) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Please sign in again before deleting your account.",
+      { reason: "RECENT_LOGIN_REQUIRED" },
+    );
+  }
+}
+
+async function deleteQueryRecursively(query, pageSize = 50) {
+  let deleted = 0;
+  while (true) {
+    const snapshot = await query.limit(pageSize).get();
+    if (snapshot.empty) return deleted;
+    for (const document of snapshot.docs) {
+      await db.recursiveDelete(document.ref);
+      deleted += 1;
+    }
+  }
+}
+
+async function deleteQueryDocuments(query, pageSize = 400) {
+  let deleted = 0;
+  while (true) {
+    const snapshot = await query.limit(pageSize).get();
+    if (snapshot.empty) return deleted;
+    const batch = db.batch();
+    snapshot.docs.forEach((document) => batch.delete(document.ref));
+    await batch.commit();
+    deleted += snapshot.size;
+  }
+}
+
+async function anonymizeReports(uid, field, updates) {
+  let updated = 0;
+  while (true) {
+    const snapshot = await db
+      .collection("reports")
+      .where(field, "==", uid)
+      .limit(400)
+      .get();
+    if (snapshot.empty) return updated;
+
+    const batch = db.batch();
+    snapshot.docs.forEach((document) => batch.update(document.ref, updates));
+    await batch.commit();
+    updated += snapshot.size;
+
+    if (snapshot.size < 400) return updated;
+  }
+}
+
 exports.syncPublicProfile = onDocumentWritten(
   {
     document: "users/{userId}",
@@ -69,10 +128,21 @@ exports.syncPublicProfile = onDocumentWritten(
       return;
     }
 
-    await publicRef.set(
-      publicProfileFromPrivate(event.params.userId, after.data() || {}),
-      { merge: false },
-    );
+    const data = after.data() || {};
+    const profile = publicProfileFromPrivate(event.params.userId, data);
+    if (
+      !profile.nickname ||
+      !Number.isInteger(profile.age) ||
+      profile.age < 18 ||
+      profile.age > 99 ||
+      !["Male", "Female", "Other"].includes(profile.gender) ||
+      !["Male", "Female", "Both"].includes(profile.lookingFor)
+    ) {
+      await publicRef.delete();
+      return;
+    }
+
+    await publicRef.set(profile, { merge: false });
   },
 );
 
@@ -93,11 +163,18 @@ exports.backfillPublicProfiles = onCall(
     for (const userSnapshot of usersSnapshot.docs) {
       const uid = userSnapshot.id;
       const user = userSnapshot.data() || {};
-      writer.set(
-        db.collection("publicProfiles").doc(uid),
-        publicProfileFromPrivate(uid, user),
-      );
-      publicProfilesWritten += 1;
+      const profile = publicProfileFromPrivate(uid, user);
+      if (
+        profile.nickname &&
+        Number.isInteger(profile.age) &&
+        profile.age >= 18 &&
+        profile.age <= 99 &&
+        ["Male", "Female", "Other"].includes(profile.gender) &&
+        ["Male", "Female", "Both"].includes(profile.lookingFor)
+      ) {
+        writer.set(db.collection("publicProfiles").doc(uid), profile);
+        publicProfilesWritten += 1;
+      }
 
       const blockedUsers = Array.isArray(user.blockedUsers)
         ? user.blockedUsers
@@ -107,16 +184,77 @@ exports.backfillPublicProfiles = onCall(
         writer.set(db.collection("blocks").doc(`${uid}_${blockedId}`), {
           blockerId: uid,
           blockedId,
-          createdAt: user.updatedAt || serverTimestamp(),
+          createdAt: serverTimestamp(),
         });
         blockEdgesWritten += 1;
       }
     }
 
     await writer.close();
+    return { publicProfilesWritten, blockEdgesWritten };
+  },
+);
+
+exports.deleteMyAccount = onCall(
+  {
+    region: "asia-south1",
+    timeoutSeconds: 540,
+    memory: "1GiB",
+  },
+  async (request) => {
+    assertRecentLogin(request);
+    const uid = request.auth.uid;
+
+    const [chatsDeleted, outgoingBlocksDeleted, incomingBlocksDeleted] =
+      await Promise.all([
+        deleteQueryRecursively(
+          db.collection("chats").where("participants", "array-contains", uid),
+        ),
+        deleteQueryDocuments(
+          db.collection("blocks").where("blockerId", "==", uid),
+        ),
+        deleteQueryDocuments(
+          db.collection("blocks").where("blockedId", "==", uid),
+        ),
+      ]);
+
+    const [reporterReportsAnonymized, subjectReportsAnonymized] =
+      await Promise.all([
+        anonymizeReports(uid, "reporterId", {
+          reporterName: "Deleted user",
+          reporterPhoto: "",
+        }),
+        anonymizeReports(uid, "reportedUserId", {
+          reportedUserName: "Deleted user",
+          reportedUserPhoto: "",
+        }),
+      ]);
+
+    await Promise.all([
+      db.collection("publicProfiles").doc(uid).delete(),
+      db.recursiveDelete(db.collection("users").doc(uid)),
+    ]);
+
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (error.code !== "auth/user-not-found") throw error;
+    }
+
+    logger.info("Account deletion completed", {
+      uid,
+      chatsDeleted,
+      outgoingBlocksDeleted,
+      incomingBlocksDeleted,
+      reporterReportsAnonymized,
+      subjectReportsAnonymized,
+    });
+
     return {
-      publicProfilesWritten,
-      blockEdgesWritten,
+      success: true,
+      chatsDeleted,
+      reportsAnonymized:
+        reporterReportsAnonymized + subjectReportsAnonymized,
     };
   },
 );
@@ -153,7 +291,6 @@ exports.sendPrivateChatNotification = onDocumentCreated(
       db.collection("users").doc(senderId).get(),
       db.collection("users").doc(receiverId).get(),
     ]);
-
     if (!receiverSnapshot.exists) return;
 
     const receiver = receiverSnapshot.data() || {};
@@ -187,10 +324,7 @@ exports.sendPrivateChatNotification = onDocumentCreated(
       .get();
 
     const devices = devicesSnapshot.docs
-      .map((doc) => ({
-        ref: doc.ref,
-        token: doc.get("token"),
-      }))
+      .map((doc) => ({ ref: doc.ref, token: doc.get("token") }))
       .filter(
         (device) =>
           typeof device.token === "string" && device.token.length > 20,
@@ -221,11 +355,7 @@ exports.sendPrivateChatNotification = onDocumentCreated(
           title: "New NearMeU message",
           body: `${senderName} sent you a message`,
         },
-        data: {
-          type: "private_chat",
-          chatId,
-          senderId,
-        },
+        data: { type: "private_chat", chatId, senderId },
         android: {
           priority: "high",
           notification: {
