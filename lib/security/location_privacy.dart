@@ -6,8 +6,8 @@ class LocationPrivacy {
   static const int privacyVersion = 1;
   static const int coordinatePrecision = 2;
   static const double discoveryCellSizeDegrees = 0.5;
-  static const int discoveryCellRadius = 2;
-  static const int maximumDiscoveryCells = 25;
+  static const int discoveryCellRadius = 1;
+  static const int maximumDiscoveryCells = 9;
 
   static bool isValidLatitude(double? value) {
     return value != null && value.isFinite && value >= -90 && value <= 90;
