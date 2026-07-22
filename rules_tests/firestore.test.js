@@ -32,6 +32,14 @@ async function seed(path, data) {
   });
 }
 
+async function readWithoutRules(path) {
+  let snapshot;
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    snapshot = await getDoc(doc(ctx.firestore(), path));
+  });
+  return snapshot;
+}
+
 async function seedUser(uid, extra = {}) {
   await seed(`users/${uid}`, {
     uid,
@@ -156,7 +164,18 @@ describe('firestore rules', () => {
   it('allows two consecutive messages before receiver ever reads', async () => {
     await assertSucceeds(sendMessage('alice', 'bob', 'first'));
     await assertSucceeds(sendMessage('alice', 'bob', 'second'));
-    const snap = await getDoc(doc(authed('alice'), 'chats/alice_bob'));
+
+    const internalSnap = await readWithoutRules('chats/alice_bob');
+    assert.strictEqual(internalSnap.exists(), true, 'chat document must exist');
+    assert.deepStrictEqual(
+      internalSnap.data().participants,
+      ['alice', 'bob'],
+      'chat participants must be preserved',
+    );
+
+    const snap = await assertSucceeds(
+      getDoc(doc(authed('alice'), 'chats/alice_bob')),
+    );
     assert.strictEqual(snap.data().unreadCounts.bob, 2);
     assert.strictEqual(snap.data().readStates.bob.unreadCount, 2);
   });
