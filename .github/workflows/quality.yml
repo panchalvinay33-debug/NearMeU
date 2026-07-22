@@ -1,0 +1,121 @@
+name: NearMeU quality gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Validate changed Dart files with formatter
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            mapfile -t dart_files < <(
+              git diff --name-only --diff-filter=ACM \
+                "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" \
+                -- '*.dart'
+            )
+          else
+            mapfile -t dart_files < <(
+              git diff-tree --no-commit-id --name-only -r HEAD -- '*.dart'
+            )
+          fi
+
+          if (( ${#dart_files[@]} == 0 )); then
+            echo "No changed Dart files to validate."
+            exit 0
+          fi
+
+          printf 'Validating Dart files:\n%s\n' "${dart_files[*]}"
+          dart format --output=none "${dart_files[@]}"
+
+      - name: Analyze for compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+  firestore-rules:
+    name: Firestore rules tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install rule-test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Run Firestore emulator tests
+        shell: bash
+        run: |
+          set +e
+          firebase emulators:exec \
+            --debug \
+            --project demo-nearmeu-rules-test \
+            --only firestore \
+            "npm run test:rules" > firestore-test.log 2>&1
+          status=$?
+          cat firestore-test.log
+          exit "$status"
+
+      - name: Upload Firestore diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rules-test-log
+          path: firestore-test.log
+          if-no-files-found: error
+          retention-days: 7
