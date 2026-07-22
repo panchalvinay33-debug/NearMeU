@@ -7,35 +7,50 @@ import '../models/support_announcement.dart';
 import '../services/announcement_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_formatters.dart';
+import '../widgets/chat/linkified_message_text.dart';
 
 class SupportAnnouncementsScreen extends StatefulWidget {
   const SupportAnnouncementsScreen({super.key});
 
   @override
-  State<SupportAnnouncementsScreen> createState() => _SupportAnnouncementsScreenState();
+  State<SupportAnnouncementsScreen> createState() =>
+      _SupportAnnouncementsScreenState();
 }
 
-class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen> {
+class _SupportAnnouncementsScreenState
+    extends State<SupportAnnouncementsScreen> {
   final AnnouncementService _service = AnnouncementService();
   late Stream<List<SupportAnnouncement>> _announcementsStream;
+  bool _markingRead = false;
 
   @override
   void initState() {
     super.initState();
     _announcementsStream = _service.watchActiveAnnouncements();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _markRead());
   }
 
   Future<void> _markRead() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null || _markingRead) return;
+
+    setState(() => _markingRead = true);
     try {
       await _service.markAllRead(uid);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All support announcements marked read.')),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Announcements will be marked read when connection returns.')),
+        const SnackBar(
+          content: Text(
+            'Could not mark announcements read. Please check your connection.',
+          ),
+        ),
       );
+    } finally {
+      if (mounted) setState(() => _markingRead = false);
     }
   }
 
@@ -64,12 +79,26 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('NearMeU Support'),
         backgroundColor: Colors.black,
-        actions: [IconButton(onPressed: _markRead, icon: const Icon(Icons.done_all_rounded))],
+        actions: [
+          IconButton(
+            tooltip: 'Mark all as read',
+            onPressed: uid == null || _markingRead ? null : _markRead,
+            icon: _markingRead
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.done_all_rounded),
+          ),
+        ],
       ),
       body: StreamBuilder<List<SupportAnnouncement>>(
         stream: _announcementsStream,
@@ -79,46 +108,157 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
             return _AnnouncementErrorState(onRetry: _retryAnnouncements);
           }
           if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            );
           }
+
           final items = snapshot.data!;
           if (items.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: Text('Official NearMeU announcements will appear here.', textAlign: TextAlign.center),
+                child: Text(
+                  'Official NearMeU announcements will appear here.',
+                  textAlign: TextAlign.center,
+                ),
               ),
             );
           }
-          return RefreshIndicator(
-            onRefresh: _markRead,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final color = _priorityColor(item.priority);
-                return Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: color.withValues(alpha: .45)),
+
+          if (uid == null) {
+            return _AnnouncementList(
+              items: items,
+              lastReadAt: null,
+              service: _service,
+              priorityColor: _priorityColor,
+              onRefresh: _markRead,
+            );
+          }
+
+          return StreamBuilder<DateTime?>(
+            stream: _service.watchLastReadAt(uid),
+            builder: (context, readSnapshot) {
+              final lastReadAt = readSnapshot.data;
+              final sorted = List<SupportAnnouncement>.from(items)
+                ..sort((a, b) {
+                  final aUnread = _service.isUnread(a, lastReadAt);
+                  final bUnread = _service.isUnread(b, lastReadAt);
+                  if (aUnread != bUnread) return aUnread ? -1 : 1;
+                  return b.createdAt.compareTo(a.createdAt);
+                });
+
+              return _AnnouncementList(
+                items: sorted,
+                lastReadAt: lastReadAt,
+                service: _service,
+                priorityColor: _priorityColor,
+                onRefresh: _markRead,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AnnouncementList extends StatelessWidget {
+  const _AnnouncementList({
+    required this.items,
+    required this.lastReadAt,
+    required this.service,
+    required this.priorityColor,
+    required this.onRefresh,
+  });
+
+  final List<SupportAnnouncement> items;
+  final DateTime? lastReadAt;
+  final AnnouncementService service;
+  final Color Function(String priority) priorityColor;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final color = priorityColor(item.priority);
+          final unread = service.isUnread(item, lastReadAt);
+
+          return Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: unread
+                  ? AppColors.primary.withValues(alpha: .10)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: unread
+                    ? AppColors.primaryLight
+                    : color.withValues(alpha: .45),
+                width: unread ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.verified_rounded, color: color),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (unread)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text(
+                          'Unread',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                LinkifiedMessageText(
+                  text: item.message,
+                  baseStyle: const TextStyle(
+                    color: Colors.white70,
+                    height: 1.35,
                   ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Icon(Icons.verified_rounded, color: color),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(item.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(item.message, style: const TextStyle(color: Colors.white70, height: 1.35)),
-                    const SizedBox(height: 12),
-                    Text(DateFormatters.chatPreview(item.createdAt), style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                  ]),
-                );
-              },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  DateFormatters.chatPreview(item.createdAt),
+                  style: const TextStyle(
+                    color: Colors.white38,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           );
         },
