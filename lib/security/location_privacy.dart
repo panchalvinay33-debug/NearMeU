@@ -48,7 +48,9 @@ class LocationPrivacy {
     final cells = <String>{};
 
     for (var latOffset = -1; latOffset <= 1; latOffset++) {
-      final latIndex = (centerLat + latOffset).clamp(0, latCellCount - 1);
+      final latIndex = (centerLat + latOffset)
+          .clamp(0, latCellCount - 1)
+          .toInt();
       for (var lngOffset = -1; lngOffset <= 1; lngOffset++) {
         final lngIndex = (centerLng + lngOffset) % lngCellCount;
         cells.add('$latIndex:$lngIndex');
@@ -67,13 +69,15 @@ class LocationPrivacy {
     final cellCount = (180 / discoveryCellSizeDegrees).ceil();
     return ((latitude + 90) / discoveryCellSizeDegrees)
         .floor()
-        .clamp(0, cellCount - 1);
+        .clamp(0, cellCount - 1)
+        .toInt();
   }
 
   static int _longitudeIndex(double longitude) {
     final cellCount = (360 / discoveryCellSizeDegrees).ceil();
     return ((longitude + 180) / discoveryCellSizeDegrees)
         .floor()
-        .clamp(0, cellCount - 1);
+        .clamp(0, cellCount - 1)
+        .toInt();
   }
 }
