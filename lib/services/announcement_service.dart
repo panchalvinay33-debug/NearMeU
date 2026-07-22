@@ -10,6 +10,8 @@ class AnnouncementService {
 
   final FirebaseFirestore _firestore;
 
+  static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
+
   CollectionReference<Map<String, dynamic>> get _announcements =>
       _firestore.collection('supportAnnouncements');
 
@@ -19,6 +21,9 @@ class AnnouncementService {
           .doc(uid)
           .collection('privateState')
           .doc('supportAnnouncements');
+
+  DateTime effectiveCreatedAt(SupportAnnouncement item) =>
+      item.createdAt ?? _legacyDate;
 
   Stream<List<SupportAnnouncement>> watchActiveAnnouncements({int limit = 50}) {
     return _announcements
@@ -33,7 +38,9 @@ class AnnouncementService {
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
           .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
           .toList();
-      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      items.sort(
+        (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
+      );
       return items;
     });
   }
@@ -46,7 +53,9 @@ class AnnouncementService {
   }
 
   bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
-    return lastReadAt == null || item.createdAt.isAfter(lastReadAt);
+    final createdAt = item.createdAt;
+    if (createdAt == null) return false;
+    return lastReadAt == null || createdAt.isAfter(lastReadAt);
   }
 
   void _debugLogFirebaseException(Object error) {
