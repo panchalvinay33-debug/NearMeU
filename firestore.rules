@@ -156,6 +156,19 @@ service cloud.firestore {
         && validApproxLocation(data);
     }
 
+    function validLegacyPrivacyMigration(userId) {
+      let oldCreatedAt = resource.data.get('createdAt', null);
+      return signedIn()
+        && request.auth.uid == userId
+        && resource.data.get('privacyVersion', 0) != 1
+        && validPublicUserData(request.resource.data, userId)
+        && request.resource.data.uid == resource.data.get('uid', userId)
+        && request.resource.data.isAdmin == resource.data.get('isAdmin', false)
+        && request.resource.data.isSuspended == resource.data.get('isSuspended', false)
+        && ((oldCreatedAt == null && request.resource.data.createdAt == request.time)
+          || (oldCreatedAt is timestamp && request.resource.data.createdAt == oldCreatedAt));
+    }
+
     function validPrivateProfileData(data) {
       let latitude = data.get('exactLatitude', null);
       let longitude = data.get('exactLongitude', null);
@@ -423,6 +436,7 @@ service cloud.firestore {
         && request.resource.data.isAdmin == false
         && request.resource.data.isSuspended == false;
       allow update: if isAdmin()
+        || validLegacyPrivacyMigration(userId)
         || (activeUser()
           && request.auth.uid == userId
           && validPublicUserData(request.resource.data, userId)
