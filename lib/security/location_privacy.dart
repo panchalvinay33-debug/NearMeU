@@ -5,7 +5,9 @@ class LocationPrivacy {
 
   static const int privacyVersion = 1;
   static const int coordinatePrecision = 2;
-  static const double discoveryCellSizeDegrees = 2.0;
+  static const double discoveryCellSizeDegrees = 0.5;
+  static const int discoveryCellRadius = 2;
+  static const int maximumDiscoveryCells = 25;
 
   static bool isValidLatitude(double? value) {
     return value != null && value.isFinite && value >= -90 && value <= 90;
@@ -47,17 +49,27 @@ class LocationPrivacy {
     final lngCellCount = (360 / discoveryCellSizeDegrees).ceil();
     final cells = <String>{};
 
-    for (var latOffset = -1; latOffset <= 1; latOffset++) {
+    for (
+      var latOffset = -discoveryCellRadius;
+      latOffset <= discoveryCellRadius;
+      latOffset++
+    ) {
       final latIndex = (centerLat + latOffset)
           .clamp(0, latCellCount - 1)
           .toInt();
-      for (var lngOffset = -1; lngOffset <= 1; lngOffset++) {
+      for (
+        var lngOffset = -discoveryCellRadius;
+        lngOffset <= discoveryCellRadius;
+        lngOffset++
+      ) {
         final lngIndex = (centerLng + lngOffset) % lngCellCount;
         cells.add('$latIndex:$lngIndex');
       }
     }
 
-    return cells.toList()..sort();
+    final result = cells.toList()..sort();
+    assert(result.length <= maximumDiscoveryCells);
+    return result;
   }
 
   static double _round(double value) {
