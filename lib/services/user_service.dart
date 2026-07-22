@@ -67,17 +67,21 @@ class UserService {
     String uid,
     Map<String, dynamic> publicData,
   ) async {
-    final merged = Map<String, dynamic>.from(publicData);
     if (FirebaseAuth.instance.currentUser?.uid == uid) {
       await _migrateLegacyPrivateData(uid, publicData);
+      final refreshedPublic = await _userRef(uid).get();
+      final merged = Map<String, dynamic>.from(
+        refreshedPublic.data() ?? publicData,
+      );
       final privateDocument = await _privateProfileRef(uid).get();
       if (privateDocument.exists && privateDocument.data() != null) {
         merged.addAll(privateDocument.data()!);
       }
       final blocks = await _blocksRef(uid).get();
       merged['blockedUsers'] = blocks.docs.map((document) => document.id).toList();
+      return AppUser.fromMap(merged, uid);
     }
-    return AppUser.fromMap(merged, uid);
+    return AppUser.fromMap(publicData, uid);
   }
 
   Future<void> _migrateLegacyPrivateData(
@@ -106,19 +110,42 @@ class UserService {
     final blockedUsers = List<String>.from(
       publicData['blockedUsers'] ?? const <String>[],
     );
+    final nickname = publicData['nickname'] is String &&
+            (publicData['nickname'] as String).trim().isNotEmpty
+        ? (publicData['nickname'] as String).trim()
+        : 'User';
+    final gender = _allowedGender(publicData['gender']);
+    final lookingFor = _allowedLookingFor(publicData['lookingFor']);
+    final age = publicData['age'] is int
+        ? (publicData['age'] as int).clamp(
+            AppConstants.minimumUserAge,
+            AppConstants.maximumUserAge,
+          )
+        : AppConstants.minimumUserAge;
 
     final privateData = <String, dynamic>{
-      'email': publicData['email'] ?? '',
+      'email': publicData['email'] is String ? publicData['email'] : '',
       'exactLatitude': latitude,
       'exactLongitude': longitude,
-      'city': publicData['city'],
+      'city': publicData['city'] is String ? publicData['city'] : null,
       'messageNotificationsEnabled':
-          publicData['messageNotificationsEnabled'] ?? true,
-      'nearbyAlertsEnabled': publicData['nearbyAlertsEnabled'] ?? false,
+          publicData['messageNotificationsEnabled'] is bool
+          ? publicData['messageNotificationsEnabled']
+          : true,
+      'nearbyAlertsEnabled': publicData['nearbyAlertsEnabled'] is bool
+          ? publicData['nearbyAlertsEnabled']
+          : false,
       'privacyVersion': LocationPrivacy.privacyVersion,
       'updatedAt': FieldValue.serverTimestamp(),
     };
-    final publicUpdate = <String, dynamic>{
+    final publicReplacement = <String, dynamic>{
+      'uid': uid,
+      'nickname': nickname,
+      'gender': gender,
+      'lookingFor': lookingFor,
+      'createdAt': publicData['createdAt'] is Timestamp
+          ? publicData['createdAt']
+          : FieldValue.serverTimestamp(),
       'approxLatitude': LocationPrivacy.approximateLatitude(latitude),
       'approxLongitude': LocationPrivacy.approximateLongitude(longitude),
       'locationCell': LocationPrivacy.discoveryCellFor(latitude, longitude),
@@ -126,19 +153,42 @@ class UserService {
         latitude,
         longitude,
       ),
+      'state': publicData['state'] is String ? publicData['state'] : null,
+      'country': publicData['country'] is String ? publicData['country'] : null,
+      'photoUrl': publicData['photoUrl'] is String ? publicData['photoUrl'] : null,
+      'age': age,
+      'lastSeen': publicData['lastSeen'] is Timestamp
+          ? publicData['lastSeen']
+          : null,
+      'isOnline': publicData['isOnline'] is bool
+          ? publicData['isOnline']
+          : false,
+      'isAdmin': publicData['isAdmin'] is bool ? publicData['isAdmin'] : false,
+      'isSuspended': publicData['isSuspended'] is bool
+          ? publicData['isSuspended']
+          : false,
       'privacyVersion': LocationPrivacy.privacyVersion,
-      for (final key in legacyKeys) key: FieldValue.delete(),
     };
 
     final batch = _firestore.batch();
-    batch.set(
-      _privateProfileRef(uid),
-      privateData,
-      SetOptions(merge: true),
-    );
-    batch.update(_userRef(uid), publicUpdate);
+    batch.set(_privateProfileRef(uid), privateData, SetOptions(merge: true));
+    batch.set(_userRef(uid), publicReplacement);
     await batch.commit();
     await _writeLegacyBlocks(uid, blockedUsers);
+  }
+
+  String _allowedGender(dynamic value) {
+    return value is String &&
+            const <String>{'Male', 'Female', 'Other', 'Both', ''}.contains(value)
+        ? value
+        : '';
+  }
+
+  String _allowedLookingFor(dynamic value) {
+    return value is String &&
+            const <String>{'Male', 'Female', 'Both', ''}.contains(value)
+        ? value
+        : '';
   }
 
   Future<void> _writeLegacyBlocks(
