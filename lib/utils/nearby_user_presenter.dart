@@ -49,22 +49,63 @@ class NearbyUserPresenter {
     return '$distanceText • $safeState';
   }
 
+  static bool hasRequiredIdentityFields(AppUser user) {
+    return user.uid.trim().isNotEmpty &&
+        user.email.trim().isNotEmpty &&
+        user.nickname.trim().isNotEmpty &&
+        user.gender.trim().isNotEmpty &&
+        user.lookingFor.trim().isNotEmpty;
+  }
+
   static List<AppUser> filterEligibleUsers({
     required AppUser currentUser,
     required Iterable<AppUser> candidates,
     double? maxDistanceKm,
+    bool onlineOnly = false,
+    String? gender,
+    String? lookingFor,
+    int minAge = 18,
+    int maxAge = 99,
   }) {
     return candidates.where((user) {
       if (user.uid == currentUser.uid) return false;
       if (user.isSuspended || !user.isAdult) return false;
+      if (!hasRequiredIdentityFields(user)) return false;
       if (currentUser.blockedUsers.contains(user.uid)) return false;
       if (user.blockedUsers.contains(currentUser.uid)) return false;
+      if (onlineOnly && !user.isOnline) return false;
+      final userAge = user.age;
+      if (userAge == null || userAge < minAge || userAge > maxAge) return false;
+      if (gender != null && gender.toLowerCase() != 'all' && user.gender.toLowerCase() != gender.toLowerCase()) {
+        return false;
+      }
+      if (lookingFor != null && lookingFor.toLowerCase() != 'all' && user.lookingFor.toLowerCase() != lookingFor.toLowerCase()) {
+        return false;
+      }
       if (maxDistanceKm != null) {
         final distance = distanceKm(currentUser, user);
         if (distance == null || distance > maxDistanceKm) return false;
       }
       return true;
     }).toList();
+  }
+
+  static void sortNearestFirst({required AppUser currentUser, required List<AppUser> users}) {
+    users.sort((a, b) {
+      final aDistance = distanceKm(currentUser, a);
+      final bDistance = distanceKm(currentUser, b);
+      final aHasDistance = aDistance != null;
+      final bHasDistance = bDistance != null;
+      if (aHasDistance != bHasDistance) return aHasDistance ? -1 : 1;
+      if (aHasDistance && bHasDistance) return aDistance.compareTo(bDistance);
+      return sortRecentlyActive(a, b);
+    });
+  }
+
+  static int sortRecentlyActive(AppUser a, AppUser b) {
+    final aSeen = a.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final bSeen = b.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return bSeen.compareTo(aSeen);
   }
 
   static void sortUsers({required AppUser currentUser, required List<AppUser> users}) {
@@ -81,9 +122,7 @@ class NearbyUserPresenter {
         if (compared != 0) return compared;
       }
 
-      final aSeen = a.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bSeen = b.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bSeen.compareTo(aSeen);
+      return sortRecentlyActive(a, b);
     });
   }
 
