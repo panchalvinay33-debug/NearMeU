@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,6 +15,7 @@ class NotificationService {
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'asia-south1',
   );
@@ -23,6 +25,8 @@ class NotificationService {
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _profileSubscription;
   String? _registeredUid;
   String? _registeredToken;
   bool _initialized = false;
@@ -139,20 +143,44 @@ class NotificationService {
   }
 
   Future<void> _handleAuthState(User? user) async {
-    if (user == null) {
-      _registeredUid = null;
-      _registeredToken = null;
-      return;
-    }
+    await _profileSubscription?.cancel();
+    _profileSubscription = null;
+    _registeredUid = null;
+    _registeredToken = null;
 
+    if (user == null) return;
+
+    _profileSubscription = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((profile) {
+          final data = profile.data();
+          if (!profile.exists || data == null || data['isSuspended'] == true) {
+            return;
+          }
+          unawaited(_registerCurrentToken(user.uid));
+        }, onError: (Object error, StackTrace stackTrace) {
+          developer.log(
+            'Notification profile listener failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        });
+  }
+
+  Future<void> _registerCurrentToken(String uid) async {
     final token = await _messaging.getToken();
     if (token == null || token.isEmpty) return;
-    await _registerToken(user.uid, token);
+    await _registerToken(uid, token);
   }
 
   Future<void> _handleTokenRefresh(String token) async {
     final user = _auth.currentUser;
     if (user == null || token.isEmpty) return;
+
+    final profile = await _firestore.collection('users').doc(user.uid).get();
+    if (!profile.exists || profile.data()?['isSuspended'] == true) return;
 
     final previousToken = _registeredToken;
     if (previousToken != null && previousToken != token) {
@@ -237,9 +265,11 @@ class NotificationService {
   }
 
   Future<void> dispose() async {
+    await _profileSubscription?.cancel();
     await _authSubscription?.cancel();
     await _tokenSubscription?.cancel();
     await _foregroundSubscription?.cancel();
+    _profileSubscription = null;
     _authSubscription = null;
     _tokenSubscription = null;
     _foregroundSubscription = null;
