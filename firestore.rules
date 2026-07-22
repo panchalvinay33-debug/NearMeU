@@ -10,19 +10,26 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
     function isAdmin() {
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && userDoc(request.auth.uid).data.isAdmin == true;
+        && userExists(request.auth.uid)
+        && userDoc(request.auth.uid).data.get('isAdmin', false) == true;
     }
 
     function isSuspended(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid))
-        && userDoc(uid).data.isSuspended == true;
+      return userExists(uid)
+        && userDoc(uid).data.get('isSuspended', false) == true;
     }
 
     function activeUser() {
-      return signedIn() && !isSuspended(request.auth.uid);
+      return signedIn()
+        && userExists(request.auth.uid)
+        && userDoc(request.auth.uid).data.get('age', 0) >= 18
+        && !isSuspended(request.auth.uid);
     }
 
     function isParticipant() {
@@ -236,12 +243,12 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || activeUser() || isAdmin());
-      allow list: if (activeUser() && userDoc(request.auth.uid).data.age >= 18) || isAdmin();
+      allow list: if activeUser() || isAdmin();
       allow create: if signedIn()
         && request.auth.uid == userId
         && validUserData(request.resource.data, userId)
-        && request.resource.data.isAdmin != true
-        && request.resource.data.isSuspended != true
+        && request.resource.data.get('isAdmin', false) != true
+        && request.resource.data.get('isSuspended', false) != true
         && request.resource.data.age >= 18;
       allow update: if isAdmin()
         || (activeUser()
@@ -312,7 +319,7 @@ service cloud.firestore {
     }
 
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }
