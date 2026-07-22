@@ -102,12 +102,14 @@ class PresenceCoordinator with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         unawaited(_enqueuePresence(uid, isOnline: true));
+        break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
         _profileRetryTimer?.cancel();
         unawaited(_enqueuePresence(uid, isOnline: false));
+        break;
     }
   }
 
