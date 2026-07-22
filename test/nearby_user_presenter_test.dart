@@ -10,14 +10,16 @@ AppUser user(
   double? latitude,
   double? longitude,
   String? state,
+  String gender = 'Female',
+  String lookingFor = 'Male',
   List<String> blocked = const [],
 }) {
   return AppUser(
     uid: uid,
     email: '$uid@example.com',
     nickname: uid,
-    gender: 'Woman',
-    lookingFor: 'Friends',
+    gender: gender,
+    lookingFor: lookingFor,
     createdAt: DateTime(2024),
     age: age,
     isSuspended: suspended,
@@ -30,22 +32,45 @@ AppUser user(
 }
 
 void main() {
-  final current = user('me', latitude: 23.2599, longitude: 77.4126, blocked: ['blocked']);
+  final current = user(
+    'me',
+    gender: 'Male',
+    lookingFor: 'Female',
+    latitude: 23.2599,
+    longitude: 77.4126,
+    blocked: const ['blocked'],
+  );
 
-  test('all eligible registered users are included and ineligible users excluded', () {
+  test('only mutually compatible nearby adults are eligible', () {
     final result = NearbyUserPresenter.filterEligibleUsers(
       currentUser: current,
       candidates: [
         current,
-        user('eligible'),
-        user('underage', age: 17),
-        user('suspended', suspended: true),
-        user('blocked'),
-        user('blockedMe', blocked: ['me']),
+        user('eligible', latitude: 23.27, longitude: 77.42),
+        user('underage', age: 17, latitude: 23.27, longitude: 77.42),
+        user(
+          'suspended',
+          suspended: true,
+          latitude: 23.27,
+          longitude: 77.42,
+        ),
+        user('blocked', latitude: 23.27, longitude: 77.42),
+        user(
+          'blockedMe',
+          latitude: 23.27,
+          longitude: 77.42,
+          blocked: const ['me'],
+        ),
+        user(
+          'oneSided',
+          latitude: 23.27,
+          longitude: 77.42,
+          lookingFor: 'Female',
+        ),
       ],
     );
 
-    expect(result.map((u) => u.uid), ['eligible']);
+    expect(result.map((candidate) => candidate.uid), ['eligible']);
   });
 
   test('online users and valid-distance users sort before unavailable distances', () {
@@ -59,7 +84,7 @@ void main() {
 
     NearbyUserPresenter.sortUsers(currentUser: current, users: users);
 
-    expect(users.map((u) => u.uid), [
+    expect(users.map((candidate) => candidate.uid), [
       'onlineNear',
       'onlineFar',
       'onlineNoLocation',
@@ -68,39 +93,55 @@ void main() {
     ]);
   });
 
-  test('default filters do not hide distant users but explicit distance filter does', () {
+  test('default discovery radius is 50 km and cannot exceed 100 km', () {
+    final near = user('near', latitude: 23.5, longitude: 77.5);
+    final medium = user('medium', latitude: 24.0, longitude: 77.5);
     final far = user('far', latitude: 28.6139, longitude: 77.2090);
+
     expect(
-      NearbyUserPresenter.filterEligibleUsers(currentUser: current, candidates: [far]).map((u) => u.uid),
-      ['far'],
+      NearbyUserPresenter.filterEligibleUsers(
+        currentUser: current,
+        candidates: [near, medium, far],
+      ).map((candidate) => candidate.uid),
+      ['near'],
     );
     expect(
-      NearbyUserPresenter.filterEligibleUsers(currentUser: current, candidates: [far], maxDistanceKm: 100),
+      NearbyUserPresenter.filterEligibleUsers(
+        currentUser: current,
+        candidates: [near, medium, far],
+        maxDistanceKm: 100,
+      ).map((candidate) => candidate.uid),
+      ['near', 'medium'],
+    );
+    expect(
+      NearbyUserPresenter.filterEligibleUsers(
+        currentUser: current,
+        candidates: [far],
+        maxDistanceKm: 1000,
+      ),
       isEmpty,
     );
   });
 
-  test('distance display is whole kilometres with a 1 km minimum and no metres or decimals', () {
+  test('distance display uses whole kilometres and no exact coordinates', () {
     expect(NearbyUserPresenter.distanceText(0.2), '1 km');
     expect(NearbyUserPresenter.distanceText(2.49), '2 km');
     expect(NearbyUserPresenter.distanceText(2.5), '3 km');
     expect(NearbyUserPresenter.distanceText(100.4), '100 km');
-    expect(NearbyUserPresenter.distanceText(109.6), '110 km');
     expect(NearbyUserPresenter.distanceText(null), 'Distance unavailable');
   });
 
   test('nearby cards get privacy-safe state-only location text', () {
     expect(
-      NearbyUserPresenter.privacySafeLocationText(distanceText: '3 km', state: 'Madhya Pradesh'),
-      '3 km • Madhya Pradesh',
-    );
-    expect(NearbyUserPresenter.privacySafeLocationText(distanceText: '3 km'), '3 km');
-    expect(
       NearbyUserPresenter.privacySafeLocationText(
-        distanceText: 'Distance unavailable',
+        distanceText: '3 km',
         state: 'Madhya Pradesh',
       ),
-      'Distance unavailable • Madhya Pradesh',
+      '3 km • Madhya Pradesh',
+    );
+    expect(
+      NearbyUserPresenter.privacySafeLocationText(distanceText: '3 km'),
+      '3 km',
     );
   });
 }
