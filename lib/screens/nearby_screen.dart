@@ -5,15 +5,13 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../services/user_service.dart';
-
 import '../theme/app_colors.dart';
 import '../utils/nearby_user_presenter.dart';
-
 import '../widgets/empty_nearby_widget.dart';
 import '../widgets/nearby_header.dart';
 import '../widgets/nearby_section_title.dart';
 import '../widgets/nearby_user_card.dart';
-
+import '../widgets/unread_nav_icon.dart';
 import 'chats_screen.dart';
 import 'settings_screen.dart';
 
@@ -36,9 +34,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? currentMe;
-
   List<AppUser> users = [];
-
   bool isLoading = true;
   bool isRefreshing = false;
   bool _loadInProgress = false;
@@ -64,29 +60,18 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
     if (currentUser == null) {
       if (!mounted) return;
-
-      setState(() {
-        isLoading = false;
-      });
-
+      setState(() => isLoading = false);
       _loadInProgress = false;
       return;
     }
 
-    if (showLoader) {
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = true;
-      });
-    }
+    if (showLoader && mounted) setState(() => isLoading = true);
 
     try {
       await _userService.updateUserLocation(currentUser!.uid);
-
       final result = await _userService.getNearbyUsers(currentUser!.uid).first;
-
       currentMe = await _userService.getUser(currentUser!.uid);
+
       if (currentMe == null) {
         result.clear();
       } else {
@@ -112,7 +97,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
         isLoading = false;
         isRefreshing = false;
       });
-      _loadInProgress = false;
     } catch (error) {
       developer.log(
         'Location refresh failed; loading cached nearby users',
@@ -120,8 +104,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
       );
       try {
         final result = await _userService.getNearbyUsers(currentUser!.uid).first;
-
         currentMe = await _userService.getUser(currentUser!.uid);
+
         if (currentMe == null) {
           result.clear();
         } else {
@@ -147,20 +131,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
           isLoading = false;
           isRefreshing = false;
         });
-        _loadInProgress = false;
-      } catch (error) {
-        developer.log('Nearby fallback load failed', error: error);
+      } catch (fallbackError) {
+        developer.log('Nearby fallback load failed', error: fallbackError);
         if (!mounted) {
           _loadInProgress = false;
           return;
         }
-
         setState(() {
           users = [];
           isLoading = false;
           isRefreshing = false;
         });
-        _loadInProgress = false;
       }
 
       if (mounted) {
@@ -172,6 +153,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
         );
       }
+    } finally {
+      _loadInProgress = false;
     }
   }
 
@@ -276,19 +259,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
   }
 
   Future<void> _applyDistanceFilter(double? maxDistanceKm) async {
-    setState(() {
-      _appliedMaxDistanceKm = maxDistanceKm;
-    });
+    setState(() => _appliedMaxDistanceKm = maxDistanceKm);
     await _loadNearbyUsers(showLoader: false);
   }
 
   Future<void> _refreshUsers() async {
     if (!mounted) return;
-
-    setState(() {
-      isRefreshing = true;
-    });
-
+    setState(() => isRefreshing = true);
     await _loadNearbyUsers(showLoader: false);
   }
 
@@ -317,18 +294,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
   Widget _buildBody() {
     if (currentUser == null) {
       return const Center(
-        child: Text(
-          'User not logged in',
-          style: TextStyle(color: Colors.white),
-        ),
+        child: Text('User not logged in', style: TextStyle(color: Colors.white)),
       );
     }
 
     if (isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-        ),
+        child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
@@ -338,10 +310,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
         color: AppColors.primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          children: const [
-            SizedBox(height: 100),
-            EmptyNearbyWidget(),
-          ],
+          children: const [SizedBox(height: 100), EmptyNearbyWidget()],
         ),
       );
     }
@@ -359,17 +328,16 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
           const SizedBox(height: 24),
           const NearbySectionTitle(
-            title: "People Near You",
+            title: 'People Near You',
             icon: Icons.people_alt_rounded,
           ),
           const SizedBox(height: 16),
-
           ...users.map(
             (user) => Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: NearbyUserCard(
                 user: user,
-                distanceText: _distanceTextByUserId[user.uid] ?? "",
+                distanceText: _distanceTextByUserId[user.uid] ?? '',
               ),
             ),
           ),
@@ -380,19 +348,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final uid = currentUser?.uid ?? '';
+
     return Scaffold(
       backgroundColor: AppColors.background,
-
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
         centerTitle: false,
         title: const Text(
-          "Nearby",
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+          'Nearby',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -411,9 +377,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
         ],
       ),
-
       body: _buildBody(),
-
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         backgroundColor: const Color(0xFF1A1A1A),
@@ -423,31 +387,30 @@ class _NearbyScreenState extends State<NearbyScreen> {
           if (index == 1) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (_) => const ChatsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const ChatsScreen()),
             );
           } else if (index == 2) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (_) => const SettingsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             );
           }
         },
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
-            label: "Nearby",
+            label: 'Nearby',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: "Chats",
+            icon: UnreadNavIcon(
+              userId: uid,
+              icon: Icons.chat_bubble_outline,
+            ),
+            label: 'Chats',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: "Settings",
+            label: 'Settings',
           ),
         ],
       ),
