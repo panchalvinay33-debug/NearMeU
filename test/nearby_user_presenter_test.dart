@@ -11,13 +11,15 @@ AppUser user(
   double? longitude,
   String? state,
   List<String> blocked = const [],
+  String gender = 'Woman',
+  String lookingFor = 'Friends',
 }) {
   return AppUser(
     uid: uid,
     email: '$uid@example.com',
     nickname: uid,
-    gender: 'Woman',
-    lookingFor: 'Friends',
+    gender: gender,
+    lookingFor: lookingFor,
     createdAt: DateTime(2024),
     age: age,
     isSuspended: suspended,
@@ -38,14 +40,16 @@ void main() {
       candidates: [
         current,
         user('eligible'),
+        user('missingLocation'),
         user('underage', age: 17),
         user('suspended', suspended: true),
         user('blocked'),
         user('blockedMe', blocked: ['me']),
+        user('missingIdentity', gender: ''),
       ],
     );
 
-    expect(result.map((u) => u.uid), ['eligible']);
+    expect(result.map((u) => u.uid), ['eligible', 'missingLocation']);
   });
 
   test('online users and valid-distance users sort before unavailable distances', () {

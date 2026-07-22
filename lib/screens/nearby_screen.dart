@@ -37,6 +37,11 @@ class _NearbyScreenState extends State<NearbyScreen> {
   bool _loadInProgress = false;
   final Map<String, String> _distanceTextByUserId = <String, String>{};
   double? _appliedMaxDistanceKm;
+  bool _onlineOnly = false;
+  String _gender = 'All';
+  String _lookingFor = 'All';
+  RangeValues _ageRange = const RangeValues(18, 99);
+  String _sort = 'Recommended';
 
   @override
   void initState() {
@@ -81,12 +86,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
           currentUser: currentMe!,
           candidates: result,
           maxDistanceKm: _appliedMaxDistanceKm,
+          onlineOnly: _onlineOnly,
+          gender: _gender,
+          lookingFor: _lookingFor,
+          minAge: _ageRange.start.round(),
+          maxAge: _ageRange.end.round(),
         );
         result
           ..clear()
           ..addAll(filtered);
         await _cacheDistances(result);
-        NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+        _sortUsers(result);
       }
 
       if (!mounted) {
@@ -117,12 +127,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
             currentUser: currentMe!,
             candidates: result,
             maxDistanceKm: _appliedMaxDistanceKm,
+            onlineOnly: _onlineOnly,
+            gender: _gender,
+            lookingFor: _lookingFor,
+            minAge: _ageRange.start.round(),
+            maxAge: _ageRange.end.round(),
           );
           result
             ..clear()
             ..addAll(filtered);
           await _cacheDistances(result);
-          NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+          _sortUsers(result);
         }
 
         if (!mounted) {
@@ -163,10 +178,86 @@ class _NearbyScreenState extends State<NearbyScreen> {
     }
   }
 
-  Future<void> _applyDistanceFilter(double? maxDistanceKm) async {
+  void _sortUsers(List<AppUser> result) {
+    if (currentMe == null) return;
+    switch (_sort) {
+      case 'Nearest first':
+        NearbyUserPresenter.sortNearestFirst(currentUser: currentMe!, users: result);
+        break;
+      case 'Recently active':
+        result.sort(NearbyUserPresenter.sortRecentlyActive);
+        break;
+      default:
+        NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+    }
+  }
+
+  bool get _hasActiveFilters =>
+      _onlineOnly ||
+      _appliedMaxDistanceKm != null ||
+      _gender != 'All' ||
+      _lookingFor != 'All' ||
+      _ageRange.start.round() != 18 ||
+      _ageRange.end.round() != 99 ||
+      _sort != 'Recommended';
+
+  Future<void> _clearAllFilters() async {
     setState(() {
-      _appliedMaxDistanceKm = maxDistanceKm;
+      _onlineOnly = false;
+      _appliedMaxDistanceKm = null;
+      _gender = 'All';
+      _lookingFor = 'All';
+      _ageRange = const RangeValues(18, 99);
+      _sort = 'Recommended';
     });
+    await _loadNearbyUsers(showLoader: false);
+  }
+
+  Future<void> _openFilterSheet() async {
+    var onlineOnly = _onlineOnly;
+    var distance = _appliedMaxDistanceKm;
+    var gender = _gender;
+    var lookingFor = _lookingFor;
+    var ageRange = _ageRange;
+    var sort = _sort;
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Row(children: [
+                  const Expanded(child: Text('Nearby filters', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800))),
+                  IconButton(tooltip: 'Close filters', onPressed: () => Navigator.pop(context, false), icon: const Icon(Icons.close, color: Colors.white70)),
+                ]),
+                SwitchListTile.adaptive(title: const Text('Online only', style: TextStyle(color: Colors.white)), value: onlineOnly, activeColor: AppColors.primary, onChanged: (v) => setSheetState(() => onlineOnly = v)),
+                _FilterDropdown<double?>(label: 'Distance', value: distance, items: const {null: 'Any distance', 25.0: 'Within 25 km', 50.0: 'Within 50 km', 100.0: 'Within 100 km'}, onChanged: (v) => setSheetState(() => distance = v)),
+                _FilterDropdown<String>(label: 'Gender', value: gender, items: const {'All': 'All', 'Male': 'Male', 'Female': 'Female', 'Other': 'Other'}, onChanged: (v) => setSheetState(() => gender = v ?? 'All')),
+                _FilterDropdown<String>(label: 'Looking For', value: lookingFor, items: const {'All': 'All', 'Male': 'Male', 'Female': 'Female', 'Both': 'Both'}, onChanged: (v) => setSheetState(() => lookingFor = v ?? 'All')),
+                const SizedBox(height: 12),
+                Text('Age range ${ageRange.start.round()}–${ageRange.end.round()}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                RangeSlider(values: ageRange, min: 18, max: 99, divisions: 81, activeColor: AppColors.primary, labels: RangeLabels('${ageRange.start.round()}', '${ageRange.end.round()}'), onChanged: (v) => setSheetState(() => ageRange = v)),
+                _FilterDropdown<String>(label: 'Sort', value: sort, items: const {'Recommended': 'Recommended', 'Nearest first': 'Nearest first', 'Recently active': 'Recently active'}, onChanged: (v) => setSheetState(() => sort = v ?? 'Recommended')),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(child: OutlinedButton(onPressed: () { setSheetState(() { onlineOnly = false; distance = null; gender = 'All'; lookingFor = 'All'; ageRange = const RangeValues(18, 99); sort = 'Recommended'; }); }, child: const Text('Clear All'))),
+                  const SizedBox(width: 12),
+                  Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Apply'))),
+                ]),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (applied != true) return;
+    setState(() { _onlineOnly = onlineOnly; _appliedMaxDistanceKm = distance; _gender = gender; _lookingFor = lookingFor; _ageRange = ageRange; _sort = sort; });
     await _loadNearbyUsers(showLoader: false);
   }
 
@@ -246,6 +337,19 @@ class _NearbyScreenState extends State<NearbyScreen> {
     onRefresh: _refreshUsers,
   ),
 
+  if (_hasActiveFilters) ...[
+    const SizedBox(height: 14),
+    Wrap(spacing: 8, runSpacing: 8, children: [
+      if (_onlineOnly) const Chip(label: Text('Online only')),
+      if (_appliedMaxDistanceKm != null) Chip(label: Text('Within ${_appliedMaxDistanceKm!.round()} km')),
+      if (_gender != 'All') Chip(label: Text('Gender: $_gender')),
+      if (_lookingFor != 'All') Chip(label: Text('Looking for: $_lookingFor')),
+      if (_ageRange.start.round() != 18 || _ageRange.end.round() != 99) Chip(label: Text('Ages ${_ageRange.start.round()}–${_ageRange.end.round()}')),
+      if (_sort != 'Recommended') Chip(label: Text(_sort)),
+      ActionChip(label: const Text('Clear All'), onPressed: _clearAllFilters),
+    ]),
+  ],
+
   const SizedBox(height: 24),
 
   const NearbySectionTitle(
@@ -285,22 +389,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
         ),
         actions: [
-          PopupMenuButton<double?>(
-            tooltip: 'Distance filter',
-            icon: const Icon(Icons.tune),
-            initialValue: _appliedMaxDistanceKm,
-            onSelected: _applyDistanceFilter,
-            itemBuilder: (context) => const [
-              PopupMenuItem<double?>(value: null, child: Text('Any distance')),
-              PopupMenuItem<double?>(value: 25, child: Text('Within 25 km')),
-              PopupMenuItem<double?>(value: 50, child: Text('Within 50 km')),
-              PopupMenuItem<double?>(value: 100, child: Text('Within 100 km')),
-            ],
-          ),
           IconButton(
-            tooltip: 'Clear all filters',
-            onPressed: isRefreshing ? null : () => _applyDistanceFilter(null),
-            icon: const Icon(Icons.filter_alt_off),
+            tooltip: 'Open filters',
+            onPressed: _openFilterSheet,
+            icon: Icon(_hasActiveFilters ? Icons.filter_alt : Icons.tune),
           ),
           IconButton(
             onPressed: isRefreshing ? null : _refreshUsers,
@@ -347,6 +439,39 @@ class _NearbyScreenState extends State<NearbyScreen> {
             label: "Settings",
           ),
         ],
+      ),
+    );
+  }
+}
+class _FilterDropdown<T> extends StatelessWidget {
+  const _FilterDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final Map<T, String> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: DropdownButtonFormField<T>(
+        value: value,
+        dropdownColor: AppColors.surface,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.cardBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.primary)),
+        ),
+        style: const TextStyle(color: Colors.white),
+        items: items.entries.map((entry) => DropdownMenuItem<T>(value: entry.key, child: Text(entry.value))).toList(),
+        onChanged: onChanged,
       ),
     );
   }

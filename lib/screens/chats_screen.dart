@@ -129,12 +129,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       children: [
                         _Header(searchController: _searchController, notificationService: _notificationService, currentUserId: currentUser.uid, onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                         const SizedBox(height: 18),
-                        _SummaryCard(
-                          count: chats.length,
-                          isRefreshing: _isRefreshing,
-                          onRefresh: _refresh,
-                        ),
-                        const SizedBox(height: 22),
                         const _SectionTitle(),
                         const SizedBox(height: 14),
                       ],
@@ -362,34 +356,6 @@ class _Header extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.count, required this.isRefreshing, required this.onRefresh});
-  final int count;
-  final bool isRefreshing;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(28)),
-        child: Row(children: [
-          const Icon(Icons.forum_rounded, color: Colors.white, size: 34),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Your Chats', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-            Text('$count active conversation${count == 1 ? '' : 's'}', style: const TextStyle(color: Colors.white70)),
-          ])),
-          IconButton(
-            tooltip: 'Refresh chats',
-            onPressed: isRefreshing ? null : onRefresh,
-            icon: isRefreshing
-                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
-                : const Icon(Icons.refresh_rounded, color: Colors.white),
-          ),
-        ]),
-      );
 }
 
 class _SectionTitle extends StatelessWidget {

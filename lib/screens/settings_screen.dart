@@ -307,13 +307,7 @@ final AuthService _authService = AuthService();
     Color iconColor = Colors.purpleAccent,
     Color titleColor = Colors.white,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xff171717),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: ListTile(
+    return ListTile(
         leading: Icon(
           icon,
           color: iconColor,
@@ -336,6 +330,33 @@ final AuthService _authService = AuthService();
           color: Colors.grey,
         ),
         onTap: onTap,
+      );
+  }
+
+  Widget _settingsSection(String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 10),
+            child: Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: .5)),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xff171717),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFF2A2A2A)),
+            ),
+            child: Column(children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i != children.length - 1) const Divider(height: 1, color: Color(0xFF2A2A2A), indent: 56),
+              ],
+            ]),
+          ),
+        ],
       ),
     );
   }
@@ -405,109 +426,33 @@ final AuthService _authService = AuthService();
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 28 + MediaQuery.paddingOf(context).bottom),
               children: [
                 _buildProfileCard(),
-
-                const SizedBox(height: 20),
-
-                _settingTile(
-                  icon: Icons.person_outline,
-                  title: "Edit Profile",
-                  subtitle: "Update your profile info",
-                  onTap: _openEditProfile,
-                ),
-
-                _settingTile(
-                  icon: Icons.lock_outline,
-                  title: "Blocked Users",
-                  subtitle:
-                      "Manage blocked users and unblock anytime",
-                  onTap: _openBlockedUsers,
-                ),
-
-                _settingTile(
-                  icon: Icons.notifications_none,
-                  title: "Notifications",
-                  subtitle:
-                      "Manage message and nearby alerts",
-                  onTap: _openNotifications,
-                ),
-
-                // =====================================
-                // ADMIN PANEL
-                // Only visible to admin accounts
-                // =====================================
-
+                const SizedBox(height: 24),
+                _settingsSection('Account', [
+                  _settingTile(icon: Icons.person_outline, title: 'Edit Profile', subtitle: 'Update your profile info', onTap: _openEditProfile),
+                ]),
+                _settingsSection('Privacy & Safety', [
+                  _settingTile(icon: Icons.lock_outline, title: 'Blocked Users', subtitle: 'Manage blocked users and unblock anytime', onTap: _openBlockedUsers),
+                ]),
+                _settingsSection('Notifications', [
+                  _settingTile(icon: Icons.notifications_none, title: 'Notification Settings', subtitle: 'Manage message and nearby alerts', onTap: _openNotifications),
+                ]),
                 if (userData?.isAdmin == true)
-                  _settingTile(
-                    icon: Icons.admin_panel_settings,
-                    title: "Admin Panel",
-                    subtitle:
-                        "Manage users and view app overview",
-                    iconColor: Colors.amber,
-                    onTap: _openAdminPanel,
-                  ),
-
-                _settingTile(
-                  icon: Icons.info_outline,
-                  title: "About NearMeU",
-                  subtitle: "App version and information",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()));
-                  },
-                ),
-
-                _settingTile(
-                  icon: Icons.privacy_tip_outlined,
-                  title: "Privacy Policy",
-                  subtitle: "Read how we protect your data",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
-                  },
-                ),
-
-                _settingTile(
-                  icon: Icons.description_outlined,
-                  title: "Terms & Conditions",
-                  subtitle: "Application terms of use",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsScreen()));
-                  },
-                ),
-
-                _settingTile(
-                  icon: Icons.groups_outlined,
-                  title: "Community Guidelines",
-                  subtitle: "Keep NearMeU safe for everyone",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityGuidelinesScreen()));
-                  },
-                ),
-
-                _settingTile(
-                  icon: Icons.help_outline,
-                  title: "Help & Support",
-                  subtitle: "FAQ and contact support",
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen()));
-                  },
-                ),
-
-                const SizedBox(height: 20),
-
-_settingTile(
-  icon: Icons.delete_forever,
-  iconColor: Colors.red,
-  titleColor: Colors.red,
-  title: "Delete Account",
-  subtitle: "Permanently delete your account",
-  onTap: isDeletingAccount ? () {} : _deleteAccount,
-),
-
-const SizedBox(height: 20),
-
-_buildLogoutTile(),
+                  _settingsSection('Admin', [
+                    _settingTile(icon: Icons.admin_panel_settings, title: 'Admin Panel', subtitle: 'Manage users and view app overview', iconColor: Colors.amber, onTap: _openAdminPanel),
+                  ]),
+                _settingsSection('Support & Legal', [
+                  _settingTile(icon: Icons.info_outline, title: 'About NearMeU', subtitle: 'App version and information', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
+                  _settingTile(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', subtitle: 'Read how we protect your data', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()))),
+                  _settingTile(icon: Icons.description_outlined, title: 'Terms & Conditions', subtitle: 'Application terms of use', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsScreen()))),
+                  _settingTile(icon: Icons.groups_outlined, title: 'Community Guidelines', subtitle: 'Keep NearMeU safe for everyone', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityGuidelinesScreen()))),
+                ]),
+                _settingsSection('Account Actions', [
+                  _settingTile(icon: Icons.logout, iconColor: Colors.orangeAccent, titleColor: Colors.orangeAccent, title: 'Sign Out', subtitle: 'Sign out from this device', onTap: _logout),
+                  _settingTile(icon: Icons.delete_forever, iconColor: Colors.redAccent, titleColor: Colors.redAccent, title: 'Delete Account', subtitle: 'Permanently delete your account', onTap: isDeletingAccount ? () {} : _deleteAccount),
+                ]),
               ],
             ),
       bottomNavigationBar: BottomNavigationBar(

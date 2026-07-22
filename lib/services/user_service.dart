@@ -403,10 +403,12 @@ class UserService {
       return;
     }
 
+    // Load the full registered-user collection and apply Nearby eligibility in
+    // Dart. Firestore `where` clauses on `isSuspended` and `age` exclude older
+    // valid profiles where those fields are missing; AppUser supplies safe
+    // defaults for those legacy documents.
     yield* _firestore
         .collection('users')
-        .where('isSuspended', isEqualTo: false)
-        .where('age', isGreaterThanOrEqualTo: AppConstants.minimumUserAge)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final List<AppUser> users = [];
