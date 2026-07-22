@@ -1,21 +1,125 @@
 const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onCall } = require("firebase-functions/v2/https");
+const {
+  onDocumentCreated,
+  onDocumentWritten,
+} = require("firebase-functions/v2/firestore");
+const { HttpsError, onCall } = require("firebase-functions/v2/https");
 
 admin.initializeApp();
 
 const db = admin.firestore();
 const messaging = admin.messaging();
+const serverTimestamp = admin.firestore.FieldValue.serverTimestamp;
 
-exports.testConnection = onCall(async () => ({
-  success: true,
-  message: "NearMeU Cloud Functions Working",
-}));
+function approximateCoordinate(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.round(value * 10) / 10;
+}
 
-exports.getServerTime = onCall(async () => ({
-  timestamp: Date.now(),
-}));
+function publicProfileFromPrivate(uid, user) {
+  const suspended = user.isSuspended === true;
+  return {
+    uid,
+    nickname: typeof user.nickname === "string" ? user.nickname.trim() : "",
+    gender: typeof user.gender === "string" ? user.gender : "",
+    lookingFor: typeof user.lookingFor === "string" ? user.lookingFor : "",
+    age: Number.isInteger(user.age) ? user.age : null,
+    state: typeof user.state === "string" ? user.state.trim() : null,
+    photoUrl:
+      typeof user.photoUrl === "string" && user.photoUrl.trim().length > 0
+        ? user.photoUrl.trim()
+        : null,
+    approxLatitude: approximateCoordinate(user.latitude),
+    approxLongitude: approximateCoordinate(user.longitude),
+    createdAt: user.createdAt || serverTimestamp(),
+    lastSeen: user.lastSeen || null,
+    isOnline: suspended ? false : user.isOnline === true,
+    isSuspended: suspended,
+    updatedAt: serverTimestamp(),
+  };
+}
+
+async function assertAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in is required.");
+  }
+
+  const adminSnapshot = await db
+    .collection("users")
+    .doc(request.auth.uid)
+    .get();
+  if (!adminSnapshot.exists || adminSnapshot.get("isAdmin") !== true) {
+    throw new HttpsError("permission-denied", "Admin permission required.");
+  }
+}
+
+exports.syncPublicProfile = onDocumentWritten(
+  {
+    document: "users/{userId}",
+    region: "asia-south1",
+    retry: true,
+  },
+  async (event) => {
+    const publicRef = db.collection("publicProfiles").doc(event.params.userId);
+    const after = event.data && event.data.after;
+
+    if (!after || !after.exists) {
+      await publicRef.delete();
+      return;
+    }
+
+    await publicRef.set(
+      publicProfileFromPrivate(event.params.userId, after.data() || {}),
+      { merge: false },
+    );
+  },
+);
+
+exports.backfillPublicProfiles = onCall(
+  {
+    region: "asia-south1",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async (request) => {
+    await assertAdmin(request);
+
+    const usersSnapshot = await db.collection("users").get();
+    const writer = db.bulkWriter();
+    let publicProfilesWritten = 0;
+    let blockEdgesWritten = 0;
+
+    for (const userSnapshot of usersSnapshot.docs) {
+      const uid = userSnapshot.id;
+      const user = userSnapshot.data() || {};
+      writer.set(
+        db.collection("publicProfiles").doc(uid),
+        publicProfileFromPrivate(uid, user),
+      );
+      publicProfilesWritten += 1;
+
+      const blockedUsers = Array.isArray(user.blockedUsers)
+        ? user.blockedUsers
+        : [];
+      for (const blockedId of blockedUsers) {
+        if (typeof blockedId !== "string" || blockedId === uid) continue;
+        writer.set(db.collection("blocks").doc(`${uid}_${blockedId}`), {
+          blockerId: uid,
+          blockedId,
+          createdAt: user.updatedAt || serverTimestamp(),
+        });
+        blockEdgesWritten += 1;
+      }
+    }
+
+    await writer.close();
+    return {
+      publicProfilesWritten,
+      blockEdgesWritten,
+    };
+  },
+);
 
 exports.sendPrivateChatNotification = onDocumentCreated(
   {
@@ -68,7 +172,7 @@ exports.sendPrivateChatNotification = onDocumentCreated(
       receiverBlocked
     ) {
       await snapshot.ref.update({
-        pushProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushProcessedAt: serverTimestamp(),
         pushDeliveryCount: 0,
         pushSkipped: true,
       });
@@ -87,13 +191,14 @@ exports.sendPrivateChatNotification = onDocumentCreated(
         ref: doc.ref,
         token: doc.get("token"),
       }))
-      .filter((device) =>
-        typeof device.token === "string" && device.token.length > 20,
+      .filter(
+        (device) =>
+          typeof device.token === "string" && device.token.length > 20,
       );
 
     if (devices.length === 0) {
       await snapshot.ref.update({
-        pushProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+        pushProcessedAt: serverTimestamp(),
         pushDeliveryCount: 0,
         pushSkipped: false,
       });
@@ -144,19 +249,19 @@ exports.sendPrivateChatNotification = onDocumentCreated(
     }
 
     if (invalidDeviceRefs.length > 0) {
-      const batches = [];
+      const writes = [];
       for (let start = 0; start < invalidDeviceRefs.length; start += 400) {
         const batch = db.batch();
         invalidDeviceRefs
           .slice(start, start + 400)
           .forEach((ref) => batch.delete(ref));
-        batches.push(batch.commit());
+        writes.push(batch.commit());
       }
-      await Promise.all(batches);
+      await Promise.all(writes);
     }
 
     await snapshot.ref.update({
-      pushProcessedAt: admin.firestore.FieldValue.serverTimestamp(),
+      pushProcessedAt: serverTimestamp(),
       pushDeliveryCount: successfulDeliveries,
       pushSkipped: false,
     });
