@@ -24,11 +24,16 @@ class NearbyUserPresenter {
     const earthRadiusKm = 6371.0;
     final lat1 = _degreesToRadians(currentUser.latitude!);
     final lat2 = _degreesToRadians(otherUser.latitude!);
-    final deltaLat = _degreesToRadians(otherUser.latitude! - currentUser.latitude!);
-    final deltaLon = _degreesToRadians(otherUser.longitude! - currentUser.longitude!);
+    final deltaLat =
+        _degreesToRadians(otherUser.latitude! - currentUser.latitude!);
+    final deltaLon =
+        _degreesToRadians(otherUser.longitude! - currentUser.longitude!);
 
     final a = math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
-        math.cos(lat1) * math.cos(lat2) * math.sin(deltaLon / 2) * math.sin(deltaLon / 2);
+        math.cos(lat1) *
+            math.cos(lat2) *
+            math.sin(deltaLon / 2) *
+            math.sin(deltaLon / 2);
     final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusKm * c;
   }
@@ -41,12 +46,20 @@ class NearbyUserPresenter {
     return '$roundedKm km';
   }
 
-  static String privacySafeLocationText({required String distanceText, String? state}) {
+  static String privacySafeLocationText({
+    required String distanceText,
+    String? state,
+  }) {
     final safeState = state?.trim();
     if (safeState == null || safeState.isEmpty) {
       return distanceText;
     }
     return '$distanceText • $safeState';
+  }
+
+  static bool areMutuallyCompatible(AppUser first, AppUser second) {
+    return _isInterestedIn(first.lookingFor, second.gender) &&
+        _isInterestedIn(second.lookingFor, first.gender);
   }
 
   static List<AppUser> filterEligibleUsers({
@@ -57,6 +70,7 @@ class NearbyUserPresenter {
     return candidates.where((user) {
       if (user.uid == currentUser.uid) return false;
       if (user.isSuspended || !user.isAdult) return false;
+      if (!areMutuallyCompatible(currentUser, user)) return false;
       if (currentUser.blockedUsers.contains(user.uid)) return false;
       if (user.blockedUsers.contains(currentUser.uid)) return false;
       if (maxDistanceKm != null) {
@@ -67,7 +81,10 @@ class NearbyUserPresenter {
     }).toList();
   }
 
-  static void sortUsers({required AppUser currentUser, required List<AppUser> users}) {
+  static void sortUsers({
+    required AppUser currentUser,
+    required List<AppUser> users,
+  }) {
     users.sort((a, b) {
       if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
 
@@ -85,6 +102,48 @@ class NearbyUserPresenter {
       final bSeen = b.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
       return bSeen.compareTo(aSeen);
     });
+  }
+
+  static bool _isInterestedIn(String lookingFor, String gender) {
+    final normalizedPreference = _canonicalPreference(lookingFor);
+    final normalizedGender = _canonicalGender(gender);
+    if (normalizedPreference == null || normalizedGender == null) return false;
+    return normalizedPreference == 'Both' ||
+        normalizedPreference == normalizedGender;
+  }
+
+  static String? _canonicalGender(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'male':
+      case 'man':
+      case 'men':
+        return 'Male';
+      case 'female':
+      case 'woman':
+      case 'women':
+        return 'Female';
+      case 'other':
+        return 'Other';
+      default:
+        return null;
+    }
+  }
+
+  static String? _canonicalPreference(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'male':
+      case 'man':
+      case 'men':
+        return 'Male';
+      case 'female':
+      case 'woman':
+      case 'women':
+        return 'Female';
+      case 'both':
+        return 'Both';
+      default:
+        return null;
+    }
   }
 
   static double _degreesToRadians(double degrees) => degrees * math.pi / 180;
