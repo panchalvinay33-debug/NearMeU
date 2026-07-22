@@ -14,6 +14,14 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(uid));
     }
 
+    function chatDoc(chatId) {
+      return get(/databases/$(database)/documents/chats/$(chatId));
+    }
+
+    function chatExists(chatId) {
+      return exists(/databases/$(database)/documents/chats/$(chatId));
+    }
+
     function isAdmin() {
       return signedIn()
         && userExists(request.auth.uid)
@@ -32,10 +40,11 @@ service cloud.firestore {
         && !isSuspended(request.auth.uid);
     }
 
-    function isParticipant() {
+    function isParticipant(chatId) {
       return signedIn()
-        && resource.data.get('participants', []) is list
-        && request.auth.uid in resource.data.get('participants', []);
+        && chatExists(chatId)
+        && chatDoc(chatId).data.get('participants', []) is list
+        && request.auth.uid in chatDoc(chatId).data.get('participants', []);
     }
 
     function isRequestedParticipant() {
@@ -214,8 +223,8 @@ service cloud.firestore {
     }
 
     function canSendMessage(chatId) {
-      return !exists(/databases/$(database)/documents/chats/$(chatId))
-        || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      return !chatExists(chatId)
+        || request.auth.uid in chatDoc(chatId).data.get('participants', []);
     }
 
     function validMessageCreate(chatId, messageId) {
@@ -263,21 +272,17 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if (activeUser() && isParticipant()) || isAdmin();
+      allow read: if (activeUser() && isParticipant(chatId)) || isAdmin();
       allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
-      allow update: if (activeUser() && isParticipant() && validChatUpdate(chatId))
-        || (activeUser() && isParticipant() && validReadStateUpdate())
+      allow update: if (activeUser() && isParticipant(chatId) && validChatUpdate(chatId))
+        || (activeUser() && isParticipant(chatId) && validReadStateUpdate())
         || isAdmin();
-      allow delete: if (activeUser() && isParticipant()) || isAdmin();
+      allow delete: if (activeUser() && isParticipant(chatId)) || isAdmin();
 
       match /messages/{messageId} {
-        allow read: if (activeUser()
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
-          || isAdmin();
+        allow read: if (activeUser() && isParticipant(chatId)) || isAdmin();
         allow create: if activeUser() && validMessageCreate(chatId, messageId);
-        allow update, delete: if (activeUser()
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants)
-          || isAdmin();
+        allow update, delete: if (activeUser() && isParticipant(chatId)) || isAdmin();
       }
     }
 
