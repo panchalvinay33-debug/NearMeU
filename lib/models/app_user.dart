@@ -119,7 +119,7 @@ class AppUser {
       'state': state,
       'country': country,
       'photoUrl': photoUrl,
-      'age': age,
+      'age': age ?? AppConstants.minimumUserAge,
       'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
       'isOnline': isOnline,
       'isAdmin': isAdmin,
