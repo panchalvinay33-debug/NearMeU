@@ -93,10 +93,10 @@ void main() {
     ]);
   });
 
-  test('default discovery radius is 50 km and cannot exceed 100 km', () {
-    final near = user('near', latitude: 23.5, longitude: 77.5);
-    final medium = user('medium', latitude: 24.0, longitude: 77.5);
-    final far = user('far', latitude: 28.6139, longitude: 77.2090);
+  test('default discovery radius is 25 km and cannot exceed 50 km', () {
+    final near = user('near', latitude: 23.35, longitude: 77.45);
+    final medium = user('medium', latitude: 23.6, longitude: 77.5);
+    final far = user('far', latitude: 24.0, longitude: 77.5);
 
     expect(
       NearbyUserPresenter.filterEligibleUsers(
@@ -109,7 +109,7 @@ void main() {
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
         candidates: [near, medium, far],
-        maxDistanceKm: 100,
+        maxDistanceKm: 50,
       ).map((candidate) => candidate.uid),
       ['near', 'medium'],
     );
