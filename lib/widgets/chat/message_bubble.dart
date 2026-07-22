@@ -27,6 +27,7 @@ class MessageBubble extends StatelessWidget {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
+        behavior: HitTestBehavior.deferToChild,
         onLongPress: onLongPress,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
@@ -88,6 +89,7 @@ class MessageBubble extends StatelessWidget {
                     ),
                     LinkifiedMessageText(
                       text: message.text,
+                      isMe: isMe,
                       baseStyle: const TextStyle(
                         color: Colors.white,
                         fontSize: 15.5,
