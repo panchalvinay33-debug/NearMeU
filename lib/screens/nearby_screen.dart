@@ -43,9 +43,9 @@ class _NearbyScreenState extends State<NearbyScreen> {
   double _appliedMaxDistanceKm = AppConstants.defaultNearbyRadiusKm;
 
   final List<_DistanceFilterOption> _distanceFilterOptions = const [
+    _DistanceFilterOption(label: 'Within 10 km', value: 10),
     _DistanceFilterOption(label: 'Within 25 km', value: 25),
     _DistanceFilterOption(label: 'Within 50 km', value: 50),
-    _DistanceFilterOption(label: 'Within 100 km', value: 100),
   ];
 
   @override
@@ -194,7 +194,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'For privacy, discovery is limited to people within 100 km.',
+                  'For privacy, discovery is limited to people within 50 km.',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 18),
@@ -372,7 +372,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
             icon: const Icon(Icons.tune),
           ),
           IconButton(
-            tooltip: 'Reset to 50 km',
+            tooltip: 'Reset to 25 km',
             onPressed: isRefreshing
                 ? null
                 : () => _applyDistanceFilter(
