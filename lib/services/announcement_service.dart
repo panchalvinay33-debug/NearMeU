@@ -35,7 +35,7 @@ class AnnouncementService {
           .where('isActive', isEqualTo: true)
           .where('targetAudience', isEqualTo: 'allActiveUsers');
       if (lastReadAt is Timestamp) {
-        query = query.where('createdAt', isGreaterThan: lastReadAt);
+        query = query.where('createdAt', isGreaterThan: lastReadAt).orderBy('createdAt', descending: true);
       }
       final snapshot = await query.limit(100).get();
       return snapshot.docs.length;

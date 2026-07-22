@@ -406,7 +406,6 @@ class UserService {
         .collection('users')
         .where('isSuspended', isEqualTo: false)
         .where('age', isGreaterThanOrEqualTo: AppConstants.minimumUserAge)
-        .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final List<AppUser> users = [];

@@ -279,7 +279,7 @@ service cloud.firestore {
         || isAdmin();
       allow create: if isAdmin() && validAnnouncementCreate();
       allow update: if isAdmin() && validAnnouncementUpdate();
-      allow delete: if isAdmin();
+      allow delete: if false;
     }
 
     match /users/{userId}/privateState/{stateId} {
