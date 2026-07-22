@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/message_model.dart';
 import 'message_footer.dart';
 import 'quoted_reply.dart';
+import 'linkified_message_text.dart';
 
 class MessageBubble extends StatelessWidget {
   final MessageModel message;
@@ -104,13 +105,9 @@ class MessageBubble extends StatelessWidget {
                       otherUserName: otherUserName,
                     ),
 
-                    Text(
-                      message.text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15.5,
-                        height: 1.4,
-                      ),
+                    LinkifiedMessageText(
+                      text: message.text,
+                      isMe: isMe,
                     ),
 
                     MessageFooter(

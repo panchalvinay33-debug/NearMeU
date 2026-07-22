@@ -4,7 +4,7 @@ import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../security/suspension_service.dart';
-import 'gender_screen.dart';
+import 'nickname_screen.dart';
 import 'nearby_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => GenderScreen(
+            builder: (_) => NicknameScreen(
               uid: firebaseUser.uid,
               email: firebaseUser.email ?? '',
             ),

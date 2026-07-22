@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
-import 'gender_screen.dart';
+import 'nickname_screen.dart';
 import 'login_screen.dart';
 import 'nearby_screen.dart';
 
@@ -65,7 +65,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
       // User is authenticated but profile is incomplete/new.
       _goTo(
-        GenderScreen(
+        NicknameScreen(
           uid: firebaseUser.uid,
           email: firebaseUser.email ?? '',
         ),
