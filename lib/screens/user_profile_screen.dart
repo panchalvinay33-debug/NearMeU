@@ -6,10 +6,12 @@ import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final AppUser user;
+  final bool loadBlockState;
 
   const UserProfileScreen({
     super.key,
     required this.user,
+    this.loadBlockState = true,
   });
 
   @override
@@ -21,8 +23,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   bool _isLoadingBlockState = true;
   bool _isBlockedEitherWay = false;
-  bool _blockedByMe = false;
-  bool _actionLoading = false;
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
   AppUser get user => widget.user;
@@ -30,7 +30,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBlockState();
+    if (widget.loadBlockState) {
+      _loadBlockState();
+    } else {
+      _isLoadingBlockState = false;
+    }
   }
 
   Future<void> _loadBlockState() async {
@@ -55,8 +59,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (!mounted) return;
       setState(() {
-        _blockedByMe = blockedByMe;
-        _isBlockedEitherWay = blockedEitherWay;
+        _isBlockedEitherWay = blockedEitherWay || blockedByMe;
         _isLoadingBlockState = false;
       });
     } catch (_) {
@@ -178,141 +181,88 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Future<void> _blockUser() async {
-    if (currentUser == null || _actionLoading) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF171717),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Block user?',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: const Text(
-            'Blocked user nearby list aur chat access se hide ho jayega.',
-            style: TextStyle(
-              color: Colors.white70,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Block'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm != true) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
-    try {
-      await _userService.blockUser(
-        currentUserId: currentUser!.uid,
-        targetUserId: user.uid,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _blockedByMe = true;
-        _isBlockedEitherWay = true;
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User blocked'),
-        ),
-      );
-
-      Navigator.pop(context, true);
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to block user'),
-        ),
-      );
-    }
+  String _lastSeenText() {
+    if (user.isOnline) return 'Online now';
+    final lastSeen = user.lastSeen;
+    if (lastSeen == null) return 'Last seen recently';
+    final diff = DateTime.now().difference(lastSeen);
+    if (diff.inMinutes < 1) return 'Last seen just now';
+    if (diff.inMinutes < 60) return 'Last seen ${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return 'Last seen ${diff.inHours} hr ago';
+    return 'Last seen ${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
   }
 
-  Future<void> _unblockUser() async {
-    if (currentUser == null || _actionLoading) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
-    try {
-      await _userService.unblockUser(
-        currentUserId: currentUser!.uid,
-        targetUserId: user.uid,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _blockedByMe = false;
-        _isBlockedEitherWay = false;
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User unblocked'),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to unblock user'),
-        ),
-      );
+  String _distanceText() {
+    if (user.latitude == null || user.longitude == null) {
+      return 'Distance unavailable';
     }
+    return 'Distance available in Nearby';
+  }
+
+  Widget _hero(String displayName, String displayAge) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0), Color(0xFF111111)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withValues(alpha: .18),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _buildAvatar(),
+          const SizedBox(height: 18),
+          Text(
+            '$displayName$displayAge',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 29, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _pill(user.isOnline ? Icons.circle : Icons.schedule_rounded, _lastSeenText(), user.isOnline ? Colors.greenAccent : Colors.white70),
+              _pill(Icons.location_city_rounded, _locationText(), Colors.white70),
+              _pill(Icons.near_me_rounded, _distanceText(), Colors.white70),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: .28),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: .12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon, color: color, size: 15), const SizedBox(width: 7), Flexible(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13))),],
+      ),
+    );
   }
 
   Widget _buildActionButtons(String displayName) {
     if (_isLoadingBlockState) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: CircularProgressIndicator(
-          color: Colors.purpleAccent,
-        ),
+        child: CircularProgressIndicator(color: Colors.purpleAccent),
       );
     }
 
@@ -325,64 +275,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           child: ElevatedButton.icon(
             onPressed: chatEnabled ? () => _openChat(displayName) : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  chatEnabled ? Colors.purpleAccent : Colors.grey.shade800,
+              backgroundColor: chatEnabled ? Colors.purpleAccent : Colors.grey.shade800,
               foregroundColor: Colors.white,
               disabledForegroundColor: Colors.white70,
               disabledBackgroundColor: Colors.grey.shade800,
               minimumSize: const Size.fromHeight(64),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
             ),
             icon: const Icon(Icons.chat_bubble_outline),
             label: Text(
               chatEnabled ? 'Chat Now' : 'Chat unavailable',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _actionLoading
-                ? null
-                : _blockedByMe
-                    ? _unblockUser
-                    : _blockUser,
-            style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  _blockedByMe ? Colors.greenAccent : Colors.redAccent,
-              side: BorderSide(
-                color: _blockedByMe ? Colors.greenAccent : Colors.redAccent,
-              ),
-              minimumSize: const Size.fromHeight(58),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-            ),
-            icon: _actionLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Icon(
-                    _blockedByMe ? Icons.lock_open : Icons.block,
-                  ),
-            label: Text(
-              _blockedByMe ? 'Unblock User' : 'Block User',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -391,19 +294,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF171717),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              _blockedByMe
-                  ? 'This user is blocked. Nearby/chat access restricted.'
-                  : 'This user is unavailable for chat.',
+            decoration: BoxDecoration(color: const Color(0xFF171717), borderRadius: BorderRadius.circular(18)),
+            child: const Text(
+              'This user is unavailable for chat. Manage block/report actions from chat options.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ),
         ],
@@ -436,31 +331,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
           child: Column(
             children: [
               const SizedBox(height: 12),
-              _buildAvatar(),
-              const SizedBox(height: 24),
-              Text(
-                '$displayName$displayAge',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _locationText(),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              _hero(displayName, displayAge),
               const SizedBox(height: 28),
               _infoCard(
                 icon: Icons.person,
