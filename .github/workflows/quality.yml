@@ -17,7 +17,7 @@ jobs:
   flutter:
     name: Flutter checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -28,17 +28,46 @@ jobs:
         run: flutter pub get
       - name: Format workspace
         run: dart format --output=none .
-      - name: Analyze
-        run: flutter analyze
-      - name: Test
-        run: flutter test
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Run Flutter diagnostics
+        id: flutter-diagnostics
+        shell: bash
+        run: |
+          set +e
+          flutter analyze > analyze.log 2>&1
+          analyze_status=$?
+          flutter test > test.log 2>&1
+          test_status=$?
+          flutter build apk --debug > build.log 2>&1
+          build_status=$?
+          echo "analyze_status=$analyze_status" >> "$GITHUB_OUTPUT"
+          echo "test_status=$test_status" >> "$GITHUB_OUTPUT"
+          echo "build_status=$build_status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Flutter diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-diagnostics
+          path: |
+            analyze.log
+            test.log
+            build.log
+          retention-days: 7
+      - name: Enforce Flutter checks
+        if: always()
+        shell: bash
+        run: |
+          echo "Analyzer status: ${{ steps.flutter-diagnostics.outputs.analyze_status }}"
+          echo "Test status: ${{ steps.flutter-diagnostics.outputs.test_status }}"
+          echo "Build status: ${{ steps.flutter-diagnostics.outputs.build_status }}"
+          test "${{ steps.flutter-diagnostics.outputs.analyze_status }}" = "0"
+          test "${{ steps.flutter-diagnostics.outputs.test_status }}" = "0"
+          test "${{ steps.flutter-diagnostics.outputs.build_status }}" = "0"
 
   firestore-rules:
     name: Firestore rules tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,7 +78,24 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
       - name: Run emulator rule tests
+        id: rules-test
         shell: bash
         run: |
-          set -o pipefail
-          firebase emulators:exec --only firestore "npm run test:rules" 2>&1 | tail -n 120
+          set +e
+          firebase emulators:exec --only firestore "npm run test:rules" > rules-test.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload Firestore diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-rules-diagnostics
+          path: rules-test.log
+          retention-days: 7
+      - name: Enforce Firestore rules tests
+        if: always()
+        shell: bash
+        run: |
+          tail -n 80 rules-test.log || true
+          test "${{ steps.rules-test.outputs.status }}" = "0"
