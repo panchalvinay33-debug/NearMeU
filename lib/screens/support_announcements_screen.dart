@@ -22,11 +22,19 @@ class _SupportAnnouncementsScreenState
   final AnnouncementService _service = AnnouncementService();
   late Stream<List<SupportAnnouncement>> _announcementsStream;
   bool _markingRead = false;
+  DateTime? _optimisticLastReadAt;
 
   @override
   void initState() {
     super.initState();
     _announcementsStream = _service.watchActiveAnnouncements();
+  }
+
+  DateTime? _effectiveLastReadAt(DateTime? serverValue) {
+    final optimistic = _optimisticLastReadAt;
+    if (optimistic == null) return serverValue;
+    if (serverValue == null || optimistic.isAfter(serverValue)) return optimistic;
+    return serverValue;
   }
 
   Future<void> _markRead() async {
@@ -37,18 +45,28 @@ class _SupportAnnouncementsScreenState
     try {
       await _service.markAllRead(uid);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All support announcements marked read.')),
-      );
-    } catch (_) {
+      setState(() => _optimisticLastReadAt = DateTime.now());
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('All support announcements marked read.')),
+        );
+    } on FirebaseException catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          'Mark support announcements read failed: code=${error.code}, message=${error.message}',
+        );
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not mark announcements read. Please check your connection.',
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not mark announcements read. Please check your connection.',
+            ),
           ),
-        ),
-      );
+        );
     } finally {
       if (mounted) setState(() => _markingRead = false);
     }
@@ -87,17 +105,18 @@ class _SupportAnnouncementsScreenState
         title: const Text('NearMeU Support'),
         backgroundColor: Colors.black,
         actions: [
-          IconButton(
-            tooltip: 'Mark all as read',
+          TextButton.icon(
             onPressed: uid == null || _markingRead ? null : _markRead,
             icon: _markingRead
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.done_all_rounded),
+            label: const Text('Mark all read'),
           ),
+          const SizedBox(width: 6),
         ],
       ),
       body: StreamBuilder<List<SupportAnnouncement>>(
@@ -139,7 +158,7 @@ class _SupportAnnouncementsScreenState
           return StreamBuilder<DateTime?>(
             stream: _service.watchLastReadAt(uid),
             builder: (context, readSnapshot) {
-              final lastReadAt = readSnapshot.data;
+              final lastReadAt = _effectiveLastReadAt(readSnapshot.data);
               final sorted = List<SupportAnnouncement>.from(items)
                 ..sort((a, b) {
                   final aUnread = _service.isUnread(a, lastReadAt);
@@ -183,6 +202,7 @@ class _AnnouncementList extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -191,74 +211,76 @@ class _AnnouncementList extends StatelessWidget {
           final color = priorityColor(item.priority);
           final unread = service.isUnread(item, lastReadAt);
 
-          return Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: unread
-                  ? AppColors.primary.withValues(alpha: .10)
-                  : AppColors.surface,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
+          return Semantics(
+            label: unread ? 'Unread support announcement' : 'Read support announcement',
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
                 color: unread
-                    ? AppColors.primaryLight
-                    : color.withValues(alpha: .45),
-                width: unread ? 1.5 : 1,
+                    ? AppColors.primary.withValues(alpha: .10)
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: unread
+                      ? AppColors.primaryLight
+                      : color.withValues(alpha: .45),
+                  width: unread ? 1.5 : 1,
+                ),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.verified_rounded, color: color),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.verified_rounded, color: color),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                    if (unread)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 9,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.primary,
+                          color: unread ? AppColors.primary : Colors.white10,
                           borderRadius: BorderRadius.circular(99),
                         ),
-                        child: const Text(
-                          'Unread',
+                        child: Text(
+                          unread ? 'Unread' : 'Read',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: unread ? Colors.white : Colors.white54,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                LinkifiedMessageText(
-                  text: item.message,
-                  baseStyle: const TextStyle(
-                    color: Colors.white70,
-                    height: 1.35,
+                    ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  DateFormatters.chatPreview(item.createdAt),
-                  style: const TextStyle(
-                    color: Colors.white38,
-                    fontSize: 12,
+                  const SizedBox(height: 8),
+                  LinkifiedMessageText(
+                    text: item.message,
+                    baseStyle: const TextStyle(
+                      color: Colors.white70,
+                      height: 1.35,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    DateFormatters.chatPreview(item.createdAt),
+                    style: const TextStyle(
+                      color: Colors.white38,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
