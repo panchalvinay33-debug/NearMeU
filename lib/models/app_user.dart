@@ -43,7 +43,7 @@ class AppUser {
     this.state,
     this.country,
     this.photoUrl,
-    this.age = AppConstants.minimumUserAge,
+    this.age,
     this.blockedUsers = const [],
     this.lastSeen,
     this.isOnline = false,
@@ -65,24 +65,22 @@ class AppUser {
       lookingFor: data['lookingFor'] ?? '',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+          : DateTime.fromMillisecondsSinceEpoch(0),
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
       city: data['city'],
       state: data['state'],
       country: data['country'],
       photoUrl: data['photoUrl'],
-      age: (data['age'] as num?)?.toInt() ?? AppConstants.minimumUserAge,
-      blockedUsers:
-          List<String>.from(data['blockedUsers'] ?? []),
+      age: (data['age'] as num?)?.toInt(),
+      blockedUsers: List<String>.from(data['blockedUsers'] ?? []),
       lastSeen: data['lastSeen'] is Timestamp
           ? (data['lastSeen'] as Timestamp).toDate()
           : null,
       isOnline: data['isOnline'] ?? false,
       messageNotificationsEnabled:
           data['messageNotificationsEnabled'] ?? true,
-      nearbyAlertsEnabled:
-          data['nearbyAlertsEnabled'] ?? false,
+      nearbyAlertsEnabled: data['nearbyAlertsEnabled'] ?? false,
 
       // Admin V1
       isAdmin: data['isAdmin'] ?? false,
@@ -106,11 +104,9 @@ class AppUser {
       'photoUrl': photoUrl,
       'age': age,
       'blockedUsers': blockedUsers,
-      'lastSeen':
-          lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
+      'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
       'isOnline': isOnline,
-      'messageNotificationsEnabled':
-          messageNotificationsEnabled,
+      'messageNotificationsEnabled': messageNotificationsEnabled,
       'nearbyAlertsEnabled': nearbyAlertsEnabled,
 
       // Admin V1
@@ -159,16 +155,17 @@ class AppUser {
       lastSeen: lastSeen ?? this.lastSeen,
       isOnline: isOnline ?? this.isOnline,
       messageNotificationsEnabled:
-          messageNotificationsEnabled ??
-              this.messageNotificationsEnabled,
-      nearbyAlertsEnabled:
-          nearbyAlertsEnabled ?? this.nearbyAlertsEnabled,
+          messageNotificationsEnabled ?? this.messageNotificationsEnabled,
+      nearbyAlertsEnabled: nearbyAlertsEnabled ?? this.nearbyAlertsEnabled,
       isAdmin: isAdmin ?? this.isAdmin,
       isSuspended: isSuspended ?? this.isSuspended,
     );
   }
-  bool get hasLocation =>
-      latitude != null && longitude != null;
 
-  bool get isAdult => age != null && age! >= AppConstants.minimumUserAge;
+  bool get hasLocation => latitude != null && longitude != null;
+
+  bool get isAdult =>
+      age != null &&
+      age! >= AppConstants.minimumUserAge &&
+      age! <= AppConstants.maximumUserAge;
 }
