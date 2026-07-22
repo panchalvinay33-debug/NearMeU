@@ -37,7 +37,7 @@ class AccountDeletionService {
     try {
       // Verify the sensitive operation before removing any account data.
       await _authService.reauthenticateCurrentUser();
-      await NotificationService.instance.unregisterCurrentDevice();
+      await NotificationService.instance.unregisterAllDevicesForCurrentUser();
       await PresenceService.instance.goOfflineBeforeSignOut();
       await _chatService.deleteCurrentUserChats(uid);
       await _userService.deleteCurrentUserData(uid);
