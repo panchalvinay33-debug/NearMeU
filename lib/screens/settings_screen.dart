@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
+import '../services/account_deletion_service.dart';
 import '../services/auth_service.dart';
-import '../services/chat_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/unread_nav_icon.dart';
@@ -29,13 +29,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
-  final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
-  final User? currentUser = FirebaseAuth.instance.currentUser;
+  final AccountDeletionService _accountDeletionService =
+      AccountDeletionService();
 
-  AppUser? userData;
-  bool isLoading = true;
-  bool isDeletingAccount = false;
+  AppUser? _userData;
+  bool _isLoading = true;
+  bool _isDeletingAccount = false;
 
   @override
   void initState() {
@@ -44,17 +44,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadUser() async {
-    final uid = currentUser?.uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
     final user = await _userService.getUser(uid);
     if (!mounted) return;
     setState(() {
-      userData = user;
-      isLoading = false;
+      _userData = user;
+      _isLoading = false;
     });
   }
 
@@ -70,6 +70,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _logout() async {
     await _authService.logout();
     if (!mounted) return;
+    _goToLogin();
+  }
+
+  Future<void> _deleteAccount() async {
+    if (_isDeletingAccount) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: const Text(
+          'This permanently deletes your NearMeU profile, chats, device '
+          'tokens, and authentication account. Safety reports may be retained '
+          'in anonymized form. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Delete permanently',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await _authService.reauthenticateWithGoogle();
+      await _accountDeletionService.deleteCurrentAccount();
+      await _authService.clearLocalSession();
+
+      if (!mounted) return;
+      _goToLogin();
+    } on AccountDeletionException catch (error) {
+      if (!mounted) return;
+      _showDeletionError(error.message);
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      _showDeletionError(
+        error.code == 'reauthentication-cancelled'
+            ? 'Account deletion was cancelled because sign-in was not completed.'
+            : 'Please sign in again and retry account deletion.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showDeletionError(
+        'Could not delete your account. No further action was taken. Please retry.',
+      );
+    } finally {
+      if (mounted) setState(() => _isDeletingAccount = false);
+    }
+  }
+
+  void _showDeletionError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _goToLogin() {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -77,56 +144,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _deleteAccount() async {
-    if (isDeletingAccount) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          'This permanently deletes your profile and chats. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    setState(() => isDeletingAccount = true);
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-      await _chatService.deleteCurrentUserChats(uid);
-      await _userService.deleteCurrentUserData(uid);
-      await _authService.deleteFirebaseAuthAccount();
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => isDeletingAccount = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete account. Please sign in again and retry.'),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final uid = currentUser?.uid ?? '';
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     if (uid.isEmpty) {
       return const Scaffold(
         backgroundColor: AppColors.background,
@@ -144,7 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
         ),
       ),
-      body: isLoading
+      body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             )
@@ -156,7 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 32 + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
-                _ProfileCard(user: userData),
+                _ProfileCard(user: _userData),
                 const SizedBox(height: 26),
                 _Section(
                   title: 'Account',
@@ -164,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsTile(
                       icon: Icons.person_outline_rounded,
                       title: 'Edit Profile',
-                      subtitle: 'Update your profile info',
+                      subtitle: 'Update your profile information',
                       onTap: () => _open(
                         const EditProfileScreen(),
                         reloadUser: true,
@@ -194,7 +214,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                if (userData?.isAdmin == true)
+                if (_userData?.isAdmin == true)
                   _Section(
                     title: 'Admin',
                     children: [
@@ -202,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Icons.admin_panel_settings_rounded,
                         iconColor: Colors.amber,
                         title: 'Admin Panel',
-                        subtitle: 'Manage users and view app overview',
+                        subtitle: 'Manage users and app safety',
                         onTap: () => _open(
                           const AdminDashboardScreen(),
                           reloadUser: true,
@@ -254,15 +274,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Sign Out',
                       subtitle: 'Sign out from this device',
                       titleColor: Colors.orangeAccent,
-                      onTap: _logout,
+                      onTap: _isDeletingAccount ? null : _logout,
                     ),
                     _SettingsTile(
                       icon: Icons.delete_forever_rounded,
                       iconColor: Colors.redAccent,
-                      title: isDeletingAccount ? 'Deleting…' : 'Delete Account',
-                      subtitle: 'Permanently delete your account',
+                      title:
+                          _isDeletingAccount ? 'Deleting…' : 'Delete Account',
+                      subtitle: 'Permanently delete your account and data',
                       titleColor: Colors.redAccent,
-                      onTap: isDeletingAccount ? null : _deleteAccount,
+                      onTap: _isDeletingAccount ? null : _deleteAccount,
                     ),
                   ],
                 ),
@@ -318,7 +339,9 @@ class _ProfileCard extends StatelessWidget {
     final nickname = user?.nickname.trim().isNotEmpty == true
         ? user!.nickname.trim()
         : 'NearMeU User';
-    final gender = user?.gender.trim().isNotEmpty == true ? user!.gender : 'Not set';
+    final gender = user?.gender.trim().isNotEmpty == true
+        ? user!.gender
+        : 'Not set';
     final lookingFor = user?.lookingFor.trim().isNotEmpty == true
         ? user!.lookingFor
         : 'Not set';
@@ -378,7 +401,7 @@ class _ProfileCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${user?.age ?? 0} yrs • $gender',
+                  '${user?.age ?? '—'} yrs • $gender',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
@@ -476,7 +499,10 @@ class _SettingsTile extends StatelessWidget {
             height: 1.35,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Colors.white54,
+        ),
         onTap: onTap,
       ),
     );

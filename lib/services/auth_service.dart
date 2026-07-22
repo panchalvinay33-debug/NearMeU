@@ -1,6 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'notification_service.dart';
+import 'presence_coordinator.dart';
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
@@ -8,38 +11,17 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<UserCredential?> signInWithGoogle() async {
-    try {
-      await _googleSignIn.signOut();
-
-      final GoogleSignInAccount? googleUser =
-          await _googleSignIn.signIn();
-
-      if (googleUser == null) return null;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      return await _auth.signInWithCredential(credential);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> signOut() async {
     await _googleSignIn.signOut();
-    await _auth.signOut();
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) return null;
+
+    return _auth.signInWithCredential(
+      await _credentialFor(googleUser),
+    );
   }
 
-  /// Deletes only the Firebase Authentication account.
-  /// Firestore/chat cleanup will be performed before calling this method.
-  Future<void> deleteFirebaseAuthAccount() async {
+  Future<void> reauthenticateWithGoogle() async {
     final user = _auth.currentUser;
-
     if (user == null) {
       throw FirebaseAuthException(
         code: 'no-user',
@@ -47,36 +29,55 @@ class AuthService {
       );
     }
 
-    try {
-      await user.delete();
-    } on FirebaseAuthException catch (e) {
-      if (e.code != 'requires-recent-login') {
-        rethrow;
-      }
-
-      final GoogleSignInAccount? googleUser =
-          await _googleSignIn.signIn();
-
-      if (googleUser == null) rethrow;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+    if (googleUser == null) {
+      throw FirebaseAuthException(
+        code: 'reauthentication-cancelled',
+        message: 'Google sign-in was cancelled.',
       );
-
-      await user.reauthenticateWithCredential(credential);
-      await user.delete();
     }
-  }
-Future<void> deleteAccount() async {
-  await deleteFirebaseAuthAccount();
-}
 
-  Future<void> logout() async {
+    await user.reauthenticateWithCredential(
+      await _credentialFor(googleUser),
+    );
+    await user.getIdToken(true);
+  }
+
+  Future<void> signOut() async {
+    await _prepareForSessionEnd();
+    await clearLocalSession();
+  }
+
+  /// Clears local credentials after a trusted backend has deleted the account.
+  Future<void> clearLocalSession() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
+  }
+
+  Future<void> logout() => signOut();
+
+  Future<OAuthCredential> _credentialFor(
+    GoogleSignInAccount googleUser,
+  ) async {
+    final GoogleSignInAuthentication authentication =
+        await googleUser.authentication;
+    return GoogleAuthProvider.credential(
+      accessToken: authentication.accessToken,
+      idToken: authentication.idToken,
+    );
+  }
+
+  Future<void> _prepareForSessionEnd() async {
+    try {
+      await NotificationService.instance.unregisterCurrentDevice();
+    } catch (_) {
+      // Session termination must continue even when token cleanup is offline.
+    }
+
+    try {
+      await PresenceCoordinator.instance.markCurrentUserOffline();
+    } catch (_) {
+      // Presence is best-effort and must not block sign out.
+    }
   }
 }

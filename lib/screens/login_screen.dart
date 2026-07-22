@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
-import '../services/auth_service.dart';
-import '../services/user_service.dart';
 import '../security/suspension_service.dart';
+import '../services/auth_service.dart';
+import '../services/notification_service.dart';
+import '../services/user_service.dart';
 import 'gender_screen.dart';
 import 'nearby_screen.dart';
 
@@ -22,31 +26,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleGoogleLogin() async {
     if (isLoading) return;
-
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final result = await _authService.signInWithGoogle();
-
-      if (result == null) {
-        if (mounted) {
-          setState(() {
-            isLoading = false;
-          });
-        }
-        return;
-      }
+      if (result == null) return;
 
       final User firebaseUser = result.user!;
       final AppUser? savedUser = await _userService.getUser(firebaseUser.uid);
-
       if (!mounted) return;
 
       if (savedUser != null && savedUser.isSuspended) {
         await SuspensionService().signOutSuspendedUser();
-
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,11 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (savedUser != null && _userService.isProfileComplete(savedUser)) {
+        unawaited(
+          NotificationService.instance.requestPermissionAndRegister(),
+        );
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => NearbyScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const NearbyScreen()),
         );
       } else {
         Navigator.pushReplacement(
@@ -78,19 +70,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login failed: $e'),
-        ),
+        SnackBar(content: Text('Login failed: $error')),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 

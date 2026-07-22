@@ -1,16 +1,20 @@
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
-import 'user_service.dart';
 import '../security/chat_security.dart';
 import '../security/suspension_service.dart';
+import 'user_service.dart';
 
 class ChatService {
   ChatService({ChatSecurity? chatSecurity})
-    : _chatSecurity = chatSecurity ?? ChatSecurity();
+      : _chatSecurity = chatSecurity ?? ChatSecurity();
+
+  static const int _messagePageSize = 200;
+  static const int _writeBatchSize = 400;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final ChatSecurity _chatSecurity;
@@ -35,13 +39,10 @@ class ChatService {
     );
 
     await _suspensionService.ensureUserAllowed(senderId);
-
-    final isBlocked = await _userService.isBlockedEitherWay(
+    if (await _userService.isBlockedEitherWay(
       currentUserId: senderId,
       otherUserId: receiverId,
-    );
-
-    if (isBlocked) {
+    )) {
       throw Exception('blocked');
     }
 
@@ -53,7 +54,7 @@ class ChatService {
       throw const ChatSecurityException('Message is already sending.');
     }
 
-    final messageData = {
+    final messageData = <String, dynamic>{
       'senderId': senderId,
       'receiverId': receiverId,
       'text': safeText,
@@ -89,8 +90,7 @@ class ChatService {
         if (chatSnapshot.exists) {
           final existingParticipants = List<String>.from(
             chatSnapshot.data()?['participants'] ?? <String>[],
-          );
-          existingParticipants.sort();
+          )..sort();
           if (existingParticipants.length != participants.length ||
               existingParticipants.first != participants.first ||
               existingParticipants.last != participants.last) {
@@ -106,7 +106,8 @@ class ChatService {
             'lastMessageType': 'text',
             'lastMessageIsUnsent': false,
             FieldPath(<String>['unreadCounts', senderId]): 0,
-            FieldPath(<String>['unreadCounts', receiverId]): nextReceiverUnread,
+            FieldPath(<String>['unreadCounts', receiverId]):
+                nextReceiverUnread,
             FieldPath(<String>['readStates', senderId, 'lastReadAt']):
                 FieldValue.serverTimestamp(),
             FieldPath(<String>['readStates', senderId, 'lastReadMessageId']):
@@ -155,18 +156,13 @@ class ChatService {
     required MessageModel message,
   }) async {
     await _suspensionService.ensureUserAllowed(currentUserId);
-
     if (!message.canUnsend(currentUserId)) return;
 
     final chatId = getChatId(currentUserId, otherUserId);
+    final chatRef = _firestore.collection('chats').doc(chatId);
+    final messageRef = chatRef.collection('messages').doc(message.id);
 
-    final messageRef = _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(message.id);
-
-    await messageRef.update({
+    await messageRef.update(<String, dynamic>{
       'text': '',
       'isUnsent': true,
       'unsentAt': FieldValue.serverTimestamp(),
@@ -177,21 +173,23 @@ class ChatService {
       'mediaUrl': null,
     });
 
-    final messagesSnapshot = await _firestore
-        .collection('chats')
-        .doc(chatId)
+    final latestMessage = await chatRef
         .collection('messages')
         .orderBy('timestamp', descending: true)
         .limit(1)
         .get();
 
-    if (messagesSnapshot.docs.isNotEmpty &&
-        messagesSnapshot.docs.first.id == message.id) {
-      await _firestore.collection('chats').doc(chatId).set({
+    if (latestMessage.docs.isNotEmpty &&
+        latestMessage.docs.first.id == message.id) {
+      await chatRef.update(<String, dynamic>{
         'lastMessage': 'This message was unsent',
         'lastMessageTime': FieldValue.serverTimestamp(),
+        'latestMessageAt': FieldValue.serverTimestamp(),
         'lastMessageSenderId': currentUserId,
-      }, SetOptions(merge: true));
+        'latestSenderId': currentUserId,
+        'lastMessageType': 'text',
+        'lastMessageIsUnsent': true,
+      });
     }
   }
 
@@ -203,15 +201,13 @@ class ChatService {
     await _suspensionService.ensureUserAllowed(currentUserId);
 
     final chatId = getChatId(currentUserId, otherUserId);
-
-    final messageRef = _firestore
+    await _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .doc(message.id);
-
-    await messageRef.set({
-      'deletedFor': FieldValue.arrayUnion([currentUserId]),
+        .doc(message.id)
+        .set(<String, dynamic>{
+      'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
     }, SetOptions(merge: true));
   }
 
@@ -221,7 +217,6 @@ class ChatService {
     String? lastReadMessageId,
   }) async {
     final chatId = getChatId(currentUserId, otherUserId);
-
     final updateData = <Object, Object?>{
       FieldPath(<String>['unreadCounts', currentUserId]): 0,
       FieldPath(<String>['readStates', currentUserId, 'unreadCount']): 0,
@@ -245,33 +240,33 @@ class ChatService {
   }) async {
     await _suspensionService.ensureUserAllowed(currentUserId);
 
-    final chatId = getChatId(currentUserId, otherUserId);
-
-    final snapshot = await _firestore
+    final messages = _firestore
         .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .where('receiverId', isEqualTo: currentUserId)
-        .where('isSeen', isEqualTo: false)
-        .get();
+        .doc(getChatId(currentUserId, otherUserId))
+        .collection('messages');
 
     await markChatAsRead(
       currentUserId: currentUserId,
       otherUserId: otherUserId,
     );
 
-    if (snapshot.docs.isEmpty) return;
+    while (true) {
+      final snapshot = await messages
+          .where('receiverId', isEqualTo: currentUserId)
+          .where('isSeen', isEqualTo: false)
+          .limit(_writeBatchSize)
+          .get();
+      if (snapshot.docs.isEmpty) return;
 
-    final batch = _firestore.batch();
-
-    for (final doc in snapshot.docs) {
-      batch.update(doc.reference, {
-        'isSeen': true,
-        'seenAt': FieldValue.serverTimestamp(),
-      });
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, <String, dynamic>{
+          'isSeen': true,
+          'seenAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
     }
-
-    await batch.commit();
   }
 
   Stream<List<MessageModel>> getMessages({
@@ -280,24 +275,20 @@ class ChatService {
   }) async* {
     await _suspensionService.ensureUserAllowed(user1);
 
-    final chatId = getChatId(user1, user2);
-
     yield* _firestore
         .collection('chats')
-        .doc(chatId)
+        .doc(getChatId(user1, user2))
         .collection('messages')
-        .orderBy('timestamp', descending: false)
-        .limit(200)
+        .orderBy('timestamp', descending: true)
+        .limit(_messagePageSize)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
-          final allMessages = snapshot.docs
-              .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
-              .toList();
-
-          return allMessages
-              .where((m) => !m.deletedFor.contains(user1))
-              .toList();
-        });
+      final visible = snapshot.docs
+          .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
+          .where((message) => !message.deletedFor.contains(user1))
+          .toList();
+      return visible.reversed.toList(growable: false);
+    });
   }
 
   Stream<List<ChatPreviewModel>> getChatsForUser(String currentUserId) async* {
@@ -309,131 +300,119 @@ class ChatService {
         .orderBy('lastMessageTime', descending: true)
         .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
-          final List<ChatPreviewModel> chats = [];
+      final chats = <ChatPreviewModel>[];
 
-          final currentUser = await _userService.getUser(currentUserId);
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final participants = List<String>.from(
+          data['participants'] ?? <String>[],
+        );
+        final otherUserId = participants.firstWhere(
+          (id) => id != currentUserId,
+          orElse: () => '',
+        );
+        if (otherUserId.isEmpty) continue;
 
-          if (currentUser == null) return chats;
+        if (await _userService.isBlockedEitherWay(
+          currentUserId: currentUserId,
+          otherUserId: otherUserId,
+        )) {
+          continue;
+        }
 
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
+        final AppUser? otherUser =
+            await _userService.getPublicUser(otherUserId);
+        final unreadCounts = Map<String, dynamic>.from(
+          data['unreadCounts'] ?? <String, dynamic>{},
+        );
+        final readStates = Map<String, dynamic>.from(
+          data['readStates'] ?? <String, dynamic>{},
+        );
+        final currentReadState = readStates[currentUserId] is Map
+            ? Map<String, dynamic>.from(readStates[currentUserId] as Map)
+            : <String, dynamic>{};
+        var unreadCount = unreadCounts[currentUserId] is int
+            ? unreadCounts[currentUserId] as int
+            : (currentReadState['unreadCount'] is int
+                ? currentReadState['unreadCount'] as int
+                : 0);
+        bool? lastMessageSeen;
+        var messageType = (data['lastMessageType'] as String?) ?? 'text';
+        var isUnsent = data['lastMessageIsUnsent'] == true ||
+            data['lastMessage'] == 'This message was unsent';
 
-            final participants = List<String>.from(data['participants'] ?? []);
-
-            final otherUserId = participants.firstWhere(
-              (id) => id != currentUserId,
-              orElse: () => '',
-            );
-
-            if (otherUserId.isEmpty) continue;
-
-            final userDoc = await _firestore
-                .collection('users')
-                .doc(otherUserId)
-                .get();
-
-            AppUser? otherUser;
-            if (userDoc.exists && userDoc.data() != null) {
-              otherUser = AppUser.fromMap(userDoc.data()!, userDoc.id);
-            }
-
-            if (otherUser != null &&
-                _userService.areUsersBlockedEitherWay(
-                  currentUser: currentUser,
-                  otherUser: otherUser,
-                )) {
-              continue;
-            }
-
-            final unreadCounts = Map<String, dynamic>.from(
-              data['unreadCounts'] ?? <String, dynamic>{},
-            );
-            final readStates = Map<String, dynamic>.from(
-              data['readStates'] ?? <String, dynamic>{},
-            );
-            final currentReadState = readStates[currentUserId] is Map
-                ? Map<String, dynamic>.from(readStates[currentUserId] as Map)
-                : <String, dynamic>{};
-            var unreadCount = unreadCounts[currentUserId] is int
-                ? unreadCounts[currentUserId] as int
-                : (currentReadState['unreadCount'] is int
-                      ? currentReadState['unreadCount'] as int
-                      : 0);
-            bool? lastMessageSeen;
-            String messageType = (data['lastMessageType'] as String?) ?? 'text';
-            bool isUnsent =
-                data['lastMessageIsUnsent'] == true ||
-                data['lastMessage'] == 'This message was unsent';
-
-            try {
-              final latestMessage = await doc.reference
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .limit(1)
-                  .get();
-              if (latestMessage.docs.isNotEmpty) {
-                final messageData = latestMessage.docs.first.data();
-                messageType = (messageData['type'] as String?) ?? messageType;
-                isUnsent = messageData['isUnsent'] == true || isUnsent;
-                lastMessageSeen = messageData['isSeen'] as bool?;
-              }
-
-              if (unreadCount == 0 && !data.containsKey('unreadCounts')) {
-                final unreadSnapshot = await doc.reference
-                    .collection('messages')
-                    .where('receiverId', isEqualTo: currentUserId)
-                    .where('isSeen', isEqualTo: false)
-                    .limit(100)
-                    .get();
-                unreadCount = unreadSnapshot.size;
-              }
-            } catch (error) {
-              developer.log(
-                'Unable to hydrate chat preview metadata',
-                error: error,
-              );
-            }
-
-            chats.add(
-              ChatPreviewModel(
-                chatId: doc.id,
-                otherUserId: otherUserId,
-                otherUserName: otherUser?.nickname.isNotEmpty == true
-                    ? otherUser!.nickname
-                    : 'Unavailable user',
-                lastMessage: (data['lastMessage'] as String?) ?? '',
-                lastMessageTime: data['lastMessageTime'] is Timestamp
-                    ? (data['lastMessageTime'] as Timestamp).toDate()
-                    : null,
-                messageType: messageType,
-                isUnsent: isUnsent,
-                lastMessageSenderId: data['lastMessageSenderId'] as String?,
-                lastMessageSeen: lastMessageSeen,
-                unreadCount: unreadCount,
-                isOtherUserOnline: otherUser?.isOnline,
-              ),
-            );
+        try {
+          final latestMessage = await doc.reference
+              .collection('messages')
+              .orderBy('timestamp', descending: true)
+              .limit(1)
+              .get();
+          if (latestMessage.docs.isNotEmpty) {
+            final latestData = latestMessage.docs.first.data();
+            messageType = (latestData['type'] as String?) ?? messageType;
+            isUnsent = latestData['isUnsent'] == true || isUnsent;
+            lastMessageSeen = latestData['isSeen'] as bool?;
           }
 
-          chats.sort((a, b) {
-            final aTime =
-                a.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final bTime =
-                b.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final byTime = bTime.compareTo(aTime);
-            return byTime != 0 ? byTime : a.chatId.compareTo(b.chatId);
-          });
-          return chats;
-        });
+          if (unreadCount == 0 && !data.containsKey('unreadCounts')) {
+            final unreadSnapshot = await doc.reference
+                .collection('messages')
+                .where('receiverId', isEqualTo: currentUserId)
+                .where('isSeen', isEqualTo: false)
+                .limit(100)
+                .get();
+            unreadCount = unreadSnapshot.size;
+          }
+        } catch (error, stackTrace) {
+          developer.log(
+            'Unable to hydrate chat preview metadata',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+
+        chats.add(
+          ChatPreviewModel(
+            chatId: doc.id,
+            otherUserId: otherUserId,
+            otherUserName: otherUser?.nickname.isNotEmpty == true
+                ? otherUser!.nickname
+                : 'Unavailable user',
+            lastMessage: (data['lastMessage'] as String?) ?? '',
+            lastMessageTime: data['lastMessageTime'] is Timestamp
+                ? (data['lastMessageTime'] as Timestamp).toDate()
+                : null,
+            messageType: messageType,
+            isUnsent: isUnsent,
+            lastMessageSenderId: data['lastMessageSenderId'] as String?,
+            lastMessageSeen: lastMessageSeen,
+            unreadCount: unreadCount,
+            isOtherUserOnline: otherUser?.isOnline,
+          ),
+        );
+      }
+
+      chats.sort((a, b) {
+        final aTime =
+            a.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime =
+            b.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final byTime = bTime.compareTo(aTime);
+        return byTime != 0 ? byTime : a.chatId.compareTo(b.chatId);
+      });
+      return chats;
+    });
   }
 
   Stream<int> watchPrivateUnreadCount(String currentUserId) {
     return getChatsForUser(currentUserId).map(
-      (chats) => chats.fold<int>(0, (total, chat) => total + chat.unreadCount),
+      (chats) => chats.fold<int>(
+        0,
+        (total, chat) => total + chat.unreadCount,
+      ),
     );
   }
 
-  /// Deletes every chat (and all messages) that the user participates in.
   Future<void> deleteCurrentUserChats(String uid) async {
     final chats = await _firestore
         .collection('chats')
@@ -441,17 +420,20 @@ class ChatService {
         .get();
 
     for (final chat in chats.docs) {
-      final messages = await chat.reference.collection('messages').get();
+      while (true) {
+        final messages = await chat.reference
+            .collection('messages')
+            .limit(_writeBatchSize)
+            .get();
+        if (messages.docs.isEmpty) break;
 
-      final batch = _firestore.batch();
-
-      for (final message in messages.docs) {
-        batch.delete(message.reference);
+        final batch = _firestore.batch();
+        for (final message in messages.docs) {
+          batch.delete(message.reference);
+        }
+        await batch.commit();
       }
-
-      batch.delete(chat.reference);
-
-      await batch.commit();
+      await chat.reference.delete();
     }
   }
 }

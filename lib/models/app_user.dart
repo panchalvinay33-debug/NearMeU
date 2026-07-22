@@ -26,7 +26,6 @@ class AppUser {
   final bool messageNotificationsEnabled;
   final bool nearbyAlertsEnabled;
 
-  // Admin V1
   final bool isAdmin;
   final bool isSuspended;
 
@@ -43,7 +42,7 @@ class AppUser {
     this.state,
     this.country,
     this.photoUrl,
-    this.age = AppConstants.minimumUserAge,
+    this.age,
     this.blockedUsers = const [],
     this.lastSeen,
     this.isOnline = false,
@@ -58,40 +57,57 @@ class AppUser {
     String docId,
   ) {
     return AppUser(
-      uid: data['uid'] ?? docId,
-      email: data['email'] ?? '',
-      nickname: data['nickname'] ?? '',
-      gender: data['gender'] ?? '',
-      lookingFor: data['lookingFor'] ?? '',
-      createdAt: data['createdAt'] is Timestamp
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
+      uid: (data['uid'] as String?) ?? docId,
+      email: (data['email'] as String?) ?? '',
+      nickname: (data['nickname'] as String?) ?? '',
+      gender: (data['gender'] as String?) ?? '',
+      lookingFor: (data['lookingFor'] as String?) ?? '',
+      createdAt: _date(data['createdAt']),
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
-      city: data['city'],
-      state: data['state'],
-      country: data['country'],
-      photoUrl: data['photoUrl'],
-      age: (data['age'] as num?)?.toInt() ?? AppConstants.minimumUserAge,
-      blockedUsers:
-          List<String>.from(data['blockedUsers'] ?? []),
-      lastSeen: data['lastSeen'] is Timestamp
-          ? (data['lastSeen'] as Timestamp).toDate()
-          : null,
-      isOnline: data['isOnline'] ?? false,
+      city: data['city'] as String?,
+      state: data['state'] as String?,
+      country: data['country'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      age: (data['age'] as num?)?.toInt(),
+      blockedUsers: List<String>.from(data['blockedUsers'] ?? const []),
+      lastSeen: _nullableDate(data['lastSeen']),
+      isOnline: data['isOnline'] == true,
       messageNotificationsEnabled:
-          data['messageNotificationsEnabled'] ?? true,
-      nearbyAlertsEnabled:
-          data['nearbyAlertsEnabled'] ?? false,
+          data['messageNotificationsEnabled'] != false,
+      nearbyAlertsEnabled: data['nearbyAlertsEnabled'] == true,
+      isAdmin: data['isAdmin'] == true,
+      isSuspended: data['isSuspended'] == true,
+    );
+  }
 
-      // Admin V1
-      isAdmin: data['isAdmin'] ?? false,
-      isSuspended: data['isSuspended'] ?? false,
+  /// Parses the intentionally limited document exposed to other active users.
+  /// Exact coordinates, email, block lists, notification preferences, and
+  /// administrator flags never exist in this document.
+  factory AppUser.fromPublicMap(
+    Map<String, dynamic> data,
+    String docId,
+  ) {
+    return AppUser(
+      uid: (data['uid'] as String?) ?? docId,
+      email: '',
+      nickname: (data['nickname'] as String?) ?? '',
+      gender: (data['gender'] as String?) ?? '',
+      lookingFor: (data['lookingFor'] as String?) ?? '',
+      createdAt: _date(data['createdAt']),
+      latitude: (data['approxLatitude'] as num?)?.toDouble(),
+      longitude: (data['approxLongitude'] as num?)?.toDouble(),
+      state: data['state'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      age: (data['age'] as num?)?.toInt(),
+      lastSeen: _nullableDate(data['lastSeen']),
+      isOnline: data['isOnline'] == true,
+      isSuspended: data['isSuspended'] == true,
     );
   }
 
   Map<String, dynamic> toMap() {
-    return {
+    return <String, dynamic>{
       'uid': uid,
       'email': email,
       'nickname': nickname,
@@ -106,14 +122,10 @@ class AppUser {
       'photoUrl': photoUrl,
       'age': age,
       'blockedUsers': blockedUsers,
-      'lastSeen':
-          lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
+      'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
       'isOnline': isOnline,
-      'messageNotificationsEnabled':
-          messageNotificationsEnabled,
+      'messageNotificationsEnabled': messageNotificationsEnabled,
       'nearbyAlertsEnabled': nearbyAlertsEnabled,
-
-      // Admin V1
       'isAdmin': isAdmin,
       'isSuspended': isSuspended,
     };
@@ -159,16 +171,25 @@ class AppUser {
       lastSeen: lastSeen ?? this.lastSeen,
       isOnline: isOnline ?? this.isOnline,
       messageNotificationsEnabled:
-          messageNotificationsEnabled ??
-              this.messageNotificationsEnabled,
-      nearbyAlertsEnabled:
-          nearbyAlertsEnabled ?? this.nearbyAlertsEnabled,
+          messageNotificationsEnabled ?? this.messageNotificationsEnabled,
+      nearbyAlertsEnabled: nearbyAlertsEnabled ?? this.nearbyAlertsEnabled,
       isAdmin: isAdmin ?? this.isAdmin,
       isSuspended: isSuspended ?? this.isSuspended,
     );
   }
-  bool get hasLocation =>
-      latitude != null && longitude != null;
 
-  bool get isAdult => age != null && age! >= AppConstants.minimumUserAge;
+  bool get hasLocation => latitude != null && longitude != null;
+
+  bool get isAdult =>
+      age != null &&
+      age! >= AppConstants.minimumUserAge &&
+      age! <= AppConstants.maximumUserAge;
+
+  static DateTime _date(Object? value) {
+    return _nullableDate(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static DateTime? _nullableDate(Object? value) {
+    return value is Timestamp ? value.toDate() : null;
+  }
 }

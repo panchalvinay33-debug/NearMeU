@@ -1,15 +1,22 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+
 import 'screens/auth_gate_screen.dart';
 import 'security/suspension_guard.dart';
 import 'services/notification_service.dart';
+import 'services/presence_coordinator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp();
 
-  await NotificationService.instance.initialize();
+  FirebaseMessaging.onBackgroundMessage(
+    firebaseMessagingBackgroundHandler,
+  );
+
+  await PresenceCoordinator.instance.initialize();
+  await NotificationService.instance.initializeInfrastructure();
 
   runApp(const NearMeUApp());
 }

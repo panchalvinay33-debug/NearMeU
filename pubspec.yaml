@@ -1,5 +1,5 @@
 name: nearmeu
-description: "A new Flutter project."
+description: "NearMeU private nearby social chat app."
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -16,6 +16,7 @@ dependencies:
   firebase_core: ^4.12.1
   firebase_auth: ^6.5.6
   cloud_firestore: ^6.7.1
+  cloud_functions: ^6.3.5
   firebase_storage: ^13.4.5
   firebase_messaging: ^16.4.3
   flutter_local_notifications: ^18.0.1
