@@ -7,6 +7,7 @@ import '../models/app_user.dart';
 import '../services/user_service.dart';
 
 import '../theme/app_colors.dart';
+import '../utils/distance_formatters.dart';
 
 import '../widgets/empty_nearby_widget.dart';
 import '../widgets/nearby_header.dart';
@@ -178,21 +179,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
   Future<String> _distanceText(AppUser user) async {
     if (currentMe == null) {
-      return '';
+      return DistanceFormatters.unavailable;
     }
 
     final distance =
         await _userService.getDistanceBetweenUsers(currentMe!, user);
 
-    if (distance == null) {
-      return '';
-    }
-
-    if (distance < 1) {
-      return '${(distance * 1000).round()} m';
-    }
-
-    return '${distance.toStringAsFixed(1)} km';
+    return DistanceFormatters.wholeKilometers(distance);
   }
 
   Widget _buildBody() {

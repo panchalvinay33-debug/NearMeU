@@ -231,3 +231,71 @@ describe('chat unread/read state rules', () => {
     assert.strictEqual(snap.data().unreadCounts.bob, 0);
   });
 });
+
+
+describe('support announcement read rules', () => {
+  let testEnv;
+
+  before(async () => {
+    testEnv = await initializeTestEnvironment({
+      projectId: 'nearmeu-announcement-rules-test',
+      firestore: {
+        rules: fs.readFileSync('firestore.rules', 'utf8'),
+        host: '127.0.0.1',
+        port: 8080,
+      },
+    });
+  });
+
+  after(async () => {
+    await testEnv.cleanup();
+  });
+
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'users/alice'), {
+        uid: 'alice',
+        age: 21,
+        isSuspended: false,
+      });
+      await setDoc(doc(db, 'supportAnnouncements/expiredActive'), {
+        title: 'Expired but still active',
+        message: 'The client filters this out after reading.',
+        priority: 'normal',
+        type: 'support',
+        targetAudience: 'allActiveUsers',
+        isActive: true,
+        createdByAdminId: 'admin',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        expiresAt: new Date('2026-01-02T00:00:00Z'),
+      });
+      await setDoc(doc(db, 'supportAnnouncements/inactive'), {
+        title: 'Inactive',
+        message: 'Hidden from active users.',
+        priority: 'normal',
+        type: 'support',
+        targetAudience: 'allActiveUsers',
+        isActive: false,
+        createdByAdminId: 'admin',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        expiresAt: new Date('2026-01-02T00:00:00Z'),
+      });
+    });
+  });
+
+  function authedDb(uid) {
+    return testEnv.authenticatedContext(uid).firestore();
+  }
+
+  it('allows active users to read active all-user announcements regardless of expiresAt', async () => {
+    const db = authedDb('alice');
+    await assertSucceeds(getDoc(doc(db, 'supportAnnouncements/expiredActive')));
+  });
+
+  it('still rejects inactive announcements for active users', async () => {
+    const db = authedDb('alice');
+    await assertFails(getDoc(doc(db, 'supportAnnouncements/inactive')));
+  });
+});

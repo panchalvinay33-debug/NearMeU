@@ -12,22 +12,17 @@ class UserInfo extends StatelessWidget {
     this.distanceText,
   });
 
-  String _location() {
-    final parts = <String>[];
+  String _locationSummary() {
+    final safeDistance = (distanceText == null || distanceText!.trim().isEmpty)
+        ? 'Distance unavailable'
+        : distanceText!.trim();
+    final safeState = user.state?.trim();
 
-    if (user.city != null && user.city!.trim().isNotEmpty) {
-      parts.add(user.city!.trim());
+    if (safeState == null || safeState.isEmpty) {
+      return safeDistance;
     }
 
-    if (user.state != null &&
-        user.state!.trim().isNotEmpty &&
-        user.state != user.city) {
-      parts.add(user.state!.trim());
-    }
-
-    if (parts.isEmpty) return "Location unavailable";
-
-    return parts.join(", ");
+    return '$safeDistance • $safeState';
   }
 
   @override
@@ -63,7 +58,7 @@ class UserInfo extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  _location(),
+                  _locationSummary(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -99,26 +94,6 @@ class UserInfo extends StatelessWidget {
                 ),
               ),
 
-              if (distanceText != null) ...[
-                const SizedBox(width: 12),
-
-                const Icon(
-                  Icons.near_me,
-                  size: 14,
-                  color: AppColors.primary,
-                ),
-
-                const SizedBox(width: 4),
-
-                Text(
-                  distanceText!,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
             ],
           ),
         ],

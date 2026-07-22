@@ -273,10 +273,11 @@ service cloud.firestore {
     }
 
     match /supportAnnouncements/{announcementId} {
-      allow read: if (activeUser()
+      allow read: if (
+        activeUser()
         && resource.data.isActive == true
-        && resource.data.targetAudience == 'allActiveUsers')
-        || isAdmin();
+        && resource.data.targetAudience == 'allActiveUsers'
+      ) || isAdmin();
       allow create: if isAdmin() && validAnnouncementCreate();
       allow update: if isAdmin() && validAnnouncementUpdate();
       allow delete: if isAdmin();
