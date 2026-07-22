@@ -38,6 +38,26 @@ class _NearbyScreenState extends State<NearbyScreen> {
   final Map<String, String> _distanceTextByUserId = <String, String>{};
   double? _appliedMaxDistanceKm;
 
+  static final List<PopupMenuEntry<double?>> _distanceFilterItems =
+      <PopupMenuEntry<double?>>[
+    const PopupMenuItem<double?>(
+      value: null,
+      child: Text('Any distance'),
+    ),
+    const PopupMenuItem<double?>(
+      value: 25.0,
+      child: Text('Within 25 km'),
+    ),
+    const PopupMenuItem<double?>(
+      value: 50.0,
+      child: Text('Within 50 km'),
+    ),
+    const PopupMenuItem<double?>(
+      value: 100.0,
+      child: Text('Within 100 km'),
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -240,20 +260,20 @@ class _NearbyScreenState extends State<NearbyScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-  NearbyHeader(
-    nearbyCount: users.length,
-    isRefreshing: isRefreshing,
-    onRefresh: _refreshUsers,
-  ),
+          NearbyHeader(
+            nearbyCount: users.length,
+            isRefreshing: isRefreshing,
+            onRefresh: _refreshUsers,
+          ),
 
-  const SizedBox(height: 24),
+          const SizedBox(height: 24),
 
-  const NearbySectionTitle(
-    title: "People Near You",
-    icon: Icons.people_alt_rounded,
-  ),
+          const NearbySectionTitle(
+            title: "People Near You",
+            icon: Icons.people_alt_rounded,
+          ),
 
-  const SizedBox(height: 16),
+          const SizedBox(height: 16),
 
           ...users.map(
             (user) => Padding(
@@ -290,12 +310,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
             icon: const Icon(Icons.tune),
             initialValue: _appliedMaxDistanceKm,
             onSelected: _applyDistanceFilter,
-            itemBuilder: (context) => const [
-              PopupMenuItem<double?>(value: null, child: Text('Any distance')),
-              PopupMenuItem<double?>(value: 25, child: Text('Within 25 km')),
-              PopupMenuItem<double?>(value: 50, child: Text('Within 50 km')),
-              PopupMenuItem<double?>(value: 100, child: Text('Within 100 km')),
-            ],
+            itemBuilder: (context) => _distanceFilterItems,
           ),
           IconButton(
             tooltip: 'Clear all filters',
