@@ -12,17 +12,8 @@ class UserInfo extends StatelessWidget {
     this.distanceText,
   });
 
-  String _locationSummary() {
-    final safeDistance = (distanceText == null || distanceText!.trim().isEmpty)
-        ? 'Distance unavailable'
-        : distanceText!.trim();
-    final safeState = user.state?.trim();
-
-    if (safeState == null || safeState.isEmpty) {
-      return safeDistance;
-    }
-
-    return '$safeDistance • $safeState';
+  String _location() {
+    return distanceText ?? 'Distance unavailable';
   }
 
   @override
@@ -58,7 +49,7 @@ class UserInfo extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  _locationSummary(),
+                  _location(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

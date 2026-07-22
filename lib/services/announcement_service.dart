@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/support_announcement.dart';
 import '../utils/badge_formatters.dart';
@@ -19,13 +20,29 @@ class AnnouncementService {
     return _announcements
         .where('isActive', isEqualTo: true)
         .where('targetAudience', isEqualTo: 'allActiveUsers')
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-            .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(DateTime.now()))
-            .toList());
+        .handleError(_debugLogFirebaseException)
+        .map((snapshot) {
+      final now = DateTime.now();
+      final items = snapshot.docs
+          .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
+          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
+    });
+  }
+
+  void _debugLogFirebaseException(Object error) {
+    if (!kDebugMode) return;
+    if (error is FirebaseException) {
+      debugPrint(
+        'AnnouncementService FirebaseException: code=${error.code}, message=${error.message}',
+      );
+    } else {
+      debugPrint('AnnouncementService error: $error');
+    }
   }
 
   Stream<int> watchUnreadCount(String uid) {
@@ -37,7 +54,10 @@ class AnnouncementService {
       if (lastReadAt is Timestamp) {
         query = query.where('createdAt', isGreaterThan: lastReadAt);
       }
-      final snapshot = await query.limit(100).get();
+      final snapshot = await query.limit(100).get().catchError((Object error) {
+        _debugLogFirebaseException(error);
+        throw error;
+      });
       return snapshot.docs.length;
     });
   }

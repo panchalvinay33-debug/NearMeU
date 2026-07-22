@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/support_announcement.dart';
@@ -45,9 +46,10 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
   }
 
   void _logAnnouncementError(Object error) {
+    if (!kDebugMode) return;
     if (error is FirebaseException) {
       debugPrint(
-        'Support announcements stream failed: ${error.code} ${error.message ?? ''}',
+        'Support announcements stream failed: code=${error.code}, message=${error.message}',
       );
       return;
     }

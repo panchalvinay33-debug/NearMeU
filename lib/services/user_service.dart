@@ -6,6 +6,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../constants/app_constants.dart';
+import '../utils/nearby_user_presenter.dart';
 import '../models/app_user.dart';
 import '../security/suspension_service.dart';
 import 'validation_service.dart';
@@ -375,8 +376,8 @@ class UserService {
     AppUser currentUser,
     AppUser otherUser,
   ) async {
-    if (!currentUser.hasLocation ||
-        !otherUser.hasLocation) {
+    if (!NearbyUserPresenter.hasValidLocation(currentUser) ||
+        !NearbyUserPresenter.hasValidLocation(otherUser)) {
       return null;
     }
 
@@ -406,7 +407,6 @@ class UserService {
         .collection('users')
         .where('isSuspended', isEqualTo: false)
         .where('age', isGreaterThanOrEqualTo: AppConstants.minimumUserAge)
-        .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
       final List<AppUser> users = [];
