@@ -111,6 +111,32 @@ class NotificationService {
     }
   }
 
+  Future<void> unregisterAllDevicesForCurrentUser() async {
+    if (_auth.currentUser == null) return;
+
+    try {
+      await _functions
+          .httpsCallable('unregisterAllDeviceTokens')
+          .call<void>();
+      _registeredUid = null;
+      _registeredToken = null;
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      developer.log(
+        'All-device unregister failed: ${error.code}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    } catch (error, stackTrace) {
+      developer.log(
+        'All-device unregister failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
   Future<void> _handleAuthState(User? user) async {
     if (user == null) {
       _registeredUid = null;
