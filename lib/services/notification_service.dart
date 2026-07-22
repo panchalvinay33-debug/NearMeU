@@ -84,8 +84,7 @@ class NotificationService {
     final user = _auth.currentUser;
     final token = _registeredToken ?? await _messaging.getToken();
     if (user == null || token == null || token.isEmpty) {
-      _registeredUid = null;
-      _registeredToken = null;
+      await _revokeLocalToken();
       return;
     }
 
@@ -106,20 +105,20 @@ class NotificationService {
         stackTrace: stackTrace,
       );
     } finally {
-      _registeredUid = null;
-      _registeredToken = null;
+      await _revokeLocalToken();
     }
   }
 
   Future<void> unregisterAllDevicesForCurrentUser() async {
-    if (_auth.currentUser == null) return;
+    if (_auth.currentUser == null) {
+      await _revokeLocalToken();
+      return;
+    }
 
     try {
       await _functions
           .httpsCallable('unregisterAllDeviceTokens')
           .call<void>();
-      _registeredUid = null;
-      _registeredToken = null;
     } on FirebaseFunctionsException catch (error, stackTrace) {
       developer.log(
         'All-device unregister failed: ${error.code}',
@@ -134,6 +133,8 @@ class NotificationService {
         stackTrace: stackTrace,
       );
       rethrow;
+    } finally {
+      await _revokeLocalToken();
     }
   }
 
@@ -196,6 +197,21 @@ class NotificationService {
         error: error,
         stackTrace: stackTrace,
       );
+    }
+  }
+
+  Future<void> _revokeLocalToken() async {
+    try {
+      await _messaging.deleteToken();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Local FCM token revocation failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _registeredUid = null;
+      _registeredToken = null;
     }
   }
 
