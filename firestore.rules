@@ -71,11 +71,13 @@ service cloud.firestore {
 
     function canReadPublicUser(userId) {
       return request.auth.uid == userId
-        || (activeUser() && (
-          isDiscoverablePublicUser()
-          || sharesChatWith(userId)
-          || hasBlockRelationshipWith(userId)
-        ))
+        || (activeUser()
+          && resource.data.get('privacyVersion', 0) == 1
+          && (
+            isDiscoverablePublicUser()
+            || sharesChatWith(userId)
+            || hasBlockRelationshipWith(userId)
+          ))
         || isAdmin();
     }
 
