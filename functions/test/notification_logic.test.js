@@ -18,21 +18,24 @@ test("token document ids are deterministic hashes and never expose the raw token
   assert.equal(first.includes(token), false);
 });
 
-test("chat notification never includes private message text", () => {
+test("chat notification hides sender identity and private message text", () => {
   const payload = buildChatNotification({
     chatId: "alice_bob",
     senderId: "alice",
     senderName: "Alice",
     text: "this must never be sent",
   });
+  const serialized = JSON.stringify(payload);
 
-  assert.equal(payload.notification.title, "Alice");
+  assert.equal(payload.notification.title, "NearMeU");
   assert.equal(payload.notification.body, "You received a new private message.");
-  assert.equal(JSON.stringify(payload).includes("this must never be sent"), false);
+  assert.equal(serialized.includes("this must never be sent"), false);
+  assert.equal(serialized.includes("Alice"), false);
+  assert.equal(serialized.includes('"senderId"'), false);
+  assert.equal(payload.android.notification.visibility, "private");
   assert.deepEqual(payload.data, {
     type: "private_chat",
     chatId: "alice_bob",
-    senderId: "alice",
   });
 });
 
