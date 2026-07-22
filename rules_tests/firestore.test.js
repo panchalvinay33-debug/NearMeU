@@ -94,6 +94,11 @@ async function sendMessage(senderId, receiverId, text) {
     }
     transaction.set(messageRef, message);
   });
+  return messageRef.id;
+}
+
+function messageRef(uid, senderId, receiverId, messageId) {
+  return authed(uid).doc(`chats/${chatId(senderId, receiverId)}/messages/${messageId}`);
 }
 
 function announcement(adminId, overrides = {}) {
@@ -161,6 +166,49 @@ describe('firestore rules', () => {
   it('rejects arbitrary unread map replacement with extra participants', async () => {
     await seed('chats/alice_bob', { participants: ['alice', 'bob'], unreadCounts: { alice: 0, bob: 0 }, readStates: { alice: { unreadCount: 0 }, bob: { unreadCount: 0 } } });
     await assertFails(authed('alice').doc('chats/alice_bob').update({ unreadCounts: { alice: 0, bob: 0, mallory: 99 } }));
+  });
+
+  it('allows only the original sender to unsend a message', async () => {
+    const id = await sendMessage('alice', 'bob', 'hello');
+    const unsend = {
+      text: '',
+      isUnsent: true,
+      unsentAt: FieldValue.serverTimestamp(),
+      replyToMessageId: null,
+      replyToText: null,
+      replyToSenderId: null,
+      type: 'text',
+      mediaUrl: null,
+    };
+
+    await assertFails(messageRef('bob', 'alice', 'bob', id).update(unsend));
+    await assertSucceeds(messageRef('alice', 'alice', 'bob', id).update(unsend));
+  });
+
+  it('allows only the receiver to mark a message seen', async () => {
+    const id = await sendMessage('alice', 'bob', 'hello');
+    const seen = {
+      isSeen: true,
+      seenAt: FieldValue.serverTimestamp(),
+    };
+
+    await assertFails(messageRef('alice', 'alice', 'bob', id).update(seen));
+    await assertSucceeds(messageRef('bob', 'alice', 'bob', id).update(seen));
+  });
+
+  it('allows delete-for-me only for the authenticated participant', async () => {
+    const id = await sendMessage('alice', 'bob', 'hello');
+    const ref = messageRef('alice', 'alice', 'bob', id);
+
+    await assertSucceeds(ref.update({ deletedFor: ['alice'] }));
+    await assertFails(ref.update({ deletedFor: ['alice', 'bob'] }));
+  });
+
+  it('rejects arbitrary participant message edits', async () => {
+    const id = await sendMessage('alice', 'bob', 'hello');
+    await assertFails(
+      messageRef('bob', 'alice', 'bob', id).update({ text: 'tampered' }),
+    );
   });
 
   it('allows active user to list active all-user announcements', async () => {
