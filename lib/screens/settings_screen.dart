@@ -18,6 +18,7 @@ import 'privacy_policy_screen.dart';
 import 'terms_screen.dart';
 import 'community_guidelines_screen.dart';
 import 'help_support_screen.dart';
+import '../theme/app_colors.dart';
 
 
 class SettingsScreen extends StatefulWidget {
@@ -225,8 +226,9 @@ final AuthService _authService = AuthService();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xff171717),
-        borderRadius: BorderRadius.circular(18),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
       ),
       child: Row(
         children: [
@@ -310,7 +312,7 @@ final AuthService _authService = AuthService();
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: const Color(0xff171717),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
       ),
       child: ListTile(
@@ -340,10 +342,17 @@ final AuthService _authService = AuthService();
     );
   }
 
+  Widget _section(String title, List<Widget> children) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.fromLTRB(4, 18, 4, 10), child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800))),
+      Container(decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: .08))), child: Column(children: children)),
+    ]);
+  }
+
   Widget _buildLogoutTile() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xff171717),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
       ),
       child: ListTile(
@@ -386,9 +395,9 @@ final AuthService _authService = AuthService();
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xff0B0B0B),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xff0B0B0B),
+        backgroundColor: AppColors.background,
         elevation: 0,
         title: const Text(
           "Settings",
@@ -408,31 +417,15 @@ final AuthService _authService = AuthService();
               padding: const EdgeInsets.all(16),
               children: [
                 _buildProfileCard(),
-
-                const SizedBox(height: 20),
-
-                _settingTile(
-                  icon: Icons.person_outline,
-                  title: "Edit Profile",
-                  subtitle: "Update your profile info",
-                  onTap: _openEditProfile,
-                ),
-
-                _settingTile(
-                  icon: Icons.lock_outline,
-                  title: "Blocked Users",
-                  subtitle:
-                      "Manage blocked users and unblock anytime",
-                  onTap: _openBlockedUsers,
-                ),
-
-                _settingTile(
-                  icon: Icons.notifications_none,
-                  title: "Notifications",
-                  subtitle:
-                      "Manage message and nearby alerts",
-                  onTap: _openNotifications,
-                ),
+                _section('Account', [
+                  _settingTile(icon: Icons.person_outline, title: "Edit Profile", subtitle: "Update your profile info", onTap: _openEditProfile),
+                ]),
+                _section('Privacy & Safety', [
+                  _settingTile(icon: Icons.lock_outline, title: "Blocked Users", subtitle: "Manage blocked users and unblock anytime", onTap: _openBlockedUsers),
+                ]),
+                _section('Notifications', [
+                  _settingTile(icon: Icons.notifications_none, title: "Notifications", subtitle: "Manage message and nearby alerts", onTap: _openNotifications),
+                ]),
 
                 // =====================================
                 // ADMIN PANEL
@@ -440,15 +433,8 @@ final AuthService _authService = AuthService();
                 // =====================================
 
                 if (userData?.isAdmin == true)
-                  _settingTile(
-                    icon: Icons.admin_panel_settings,
-                    title: "Admin Panel",
-                    subtitle:
-                        "Manage users and view app overview",
-                    iconColor: Colors.amber,
-                    onTap: _openAdminPanel,
-                  ),
-
+                  _section('Admin', [_settingTile(icon: Icons.admin_panel_settings, title: "Admin Panel", subtitle: "Manage users and view app overview", iconColor: Colors.amber, onTap: _openAdminPanel)]),
+                _section('Support & Legal', [
                 _settingTile(
                   icon: Icons.info_outline,
                   title: "About NearMeU",
@@ -493,9 +479,8 @@ final AuthService _authService = AuthService();
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen()));
                   },
                 ),
-
-                const SizedBox(height: 20),
-
+                ]),
+                _section('Danger Zone', [
 _settingTile(
   icon: Icons.delete_forever,
   iconColor: Colors.red,
@@ -508,11 +493,12 @@ _settingTile(
 const SizedBox(height: 20),
 
 _buildLogoutTile(),
+]),
               ],
             ),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF1A1A1A),
-        selectedItemColor: Colors.purpleAccent,
+        selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
         currentIndex: 2,
         onTap: (index) {

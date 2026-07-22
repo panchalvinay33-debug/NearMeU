@@ -218,4 +218,9 @@ describe('firestore rules', () => {
     await assertFails(authed('alice').doc('supportAnnouncements/ann').update({ isActive: false, expiresAt: FieldValue.serverTimestamp() }));
     await assertFails(authed('alice').doc('supportAnnouncements/ann').delete());
   });
+
+  it('rejects announcement deletes so admins expire instead', async () => {
+    await seed('supportAnnouncements/ann', announcement('adminA', { createdAt: new Date(0) }));
+    await assertFails(authed('adminA').doc('supportAnnouncements/ann').delete());
+  });
 });

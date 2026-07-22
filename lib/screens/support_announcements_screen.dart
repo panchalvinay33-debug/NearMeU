@@ -74,7 +74,7 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             _logAnnouncementError(snapshot.error!);
-            return _AnnouncementErrorState(onRetry: _retryAnnouncements);
+            return _AnnouncementErrorState(error: snapshot.error!, onRetry: _retryAnnouncements);
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
@@ -126,9 +126,13 @@ class _SupportAnnouncementsScreenState extends State<SupportAnnouncementsScreen>
 }
 
 class _AnnouncementErrorState extends StatelessWidget {
-  const _AnnouncementErrorState({required this.onRetry});
+  const _AnnouncementErrorState({required this.error, required this.onRetry});
 
+  final Object error;
   final VoidCallback onRetry;
+
+  bool get _isPermissionDenied => error is FirebaseException && (error as FirebaseException).code == 'permission-denied';
+  bool get _isNetwork => error is FirebaseException && ['unavailable', 'deadline-exceeded', 'cancelled'].contains((error as FirebaseException).code);
 
   @override
   Widget build(BuildContext context) {
@@ -138,20 +142,20 @@ class _AnnouncementErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.support_agent_rounded,
+            Icon(
+              _isPermissionDenied ? Icons.lock_outline_rounded : (_isNetwork ? Icons.wifi_off_rounded : Icons.support_agent_rounded),
               color: AppColors.primaryLight,
               size: 48,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'We couldn’t load support announcements.',
+            Text(
+              _isPermissionDenied ? 'Announcements are not available for this account.' : (_isNetwork ? 'You appear to be offline.' : 'We couldn’t load support announcements.'),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Please check your connection and try again. NearMeU support updates will appear here when available.',
+            Text(
+              _isPermissionDenied ? 'Active NearMeU accounts can read support announcements. Contact support if this seems wrong.' : (_isNetwork ? 'Please check your connection and try again.' : 'Something unexpected happened. Please try again shortly.'),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70, height: 1.35),
             ),
