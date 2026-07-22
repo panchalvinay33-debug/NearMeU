@@ -1,0 +1,1 @@
+This branch is intentionally focused on unread visibility, safe links, and support read-state behavior. Push delivery while the app is backgrounded or terminated still requires a trusted FCM backend.
