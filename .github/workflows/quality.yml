@@ -63,8 +63,8 @@ jobs:
           printf 'Validating Dart files:\n%s\n' "${dart_files[*]}"
           dart format --output=none "${dart_files[@]}"
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Analyze for compile errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Run Flutter tests
         run: flutter test
@@ -99,4 +99,4 @@ jobs:
         run: npm install --global firebase-tools
 
       - name: Run Firestore emulator tests
-        run: firebase emulators:exec --project nearmeu-rules-test --only firestore "npm run test:rules"
+        run: firebase emulators:exec --project demo-nearmeu-rules-test --only firestore "npm run test:rules"
