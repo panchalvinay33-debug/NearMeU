@@ -17,6 +17,7 @@ const messaging = admin.messaging();
 const REGION = "asia-south1";
 const MAX_TOKEN_LENGTH = 4096;
 const MULTICAST_LIMIT = 500;
+const DELETE_BATCH_LIMIT = 400;
 
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
@@ -32,6 +33,29 @@ function validatedToken(data) {
     throw new HttpsError("invalid-argument", "A valid device token is required.");
   }
   return token;
+}
+
+async function deleteAllDeviceTokensForUid(uid) {
+  const devicesRef = db
+    .collection("privateProfiles")
+    .doc(uid)
+    .collection("devices");
+  let deletedCount = 0;
+
+  while (true) {
+    const devices = await devicesRef.limit(DELETE_BATCH_LIMIT).get();
+    if (devices.empty) break;
+
+    const batch = db.batch();
+    for (const device of devices.docs) {
+      batch.delete(device.ref);
+      batch.delete(db.collection("deviceTokenOwners").doc(device.id));
+    }
+    await batch.commit();
+    deletedCount += devices.size;
+  }
+
+  return deletedCount;
 }
 
 exports.registerDeviceToken = onCall({ region: REGION }, async (request) => {
@@ -110,6 +134,15 @@ exports.unregisterDeviceToken = onCall({ region: REGION }, async (request) => {
 
   return { success: true };
 });
+
+exports.unregisterAllDeviceTokens = onCall(
+  { region: REGION },
+  async (request) => {
+    const uid = requireAuthenticatedUid(request);
+    const deletedCount = await deleteAllDeviceTokensForUid(uid);
+    return { success: true, deletedCount };
+  },
+);
 
 exports.sendPrivateChatNotification = onDocumentCreated(
   {
