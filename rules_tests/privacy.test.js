@@ -158,7 +158,7 @@ describe('profile and location privacy rules', () => {
     await assertSucceeds(getDoc(doc(authed('alice'), 'users/mallory')));
   });
 
-  it('hides legacy sensitive profiles from other users until migration', async () => {
+  it('hides legacy data and permits only a controlled owner migration', async () => {
     await seed('users/legacy', {
       uid: 'legacy',
       email: 'legacy@example.com',
@@ -180,6 +180,30 @@ describe('profile and location privacy rules', () => {
 
     await assertSucceeds(getDoc(doc(authed('legacy'), 'users/legacy')));
     await assertFails(getDoc(doc(authed('alice'), 'users/legacy')));
+
+    await assertSucceeds(
+      setDoc(
+        doc(authed('legacy'), 'privateProfiles/legacy'),
+        {
+          email: 'legacy@example.com',
+          exactLatitude: 23.259912,
+          exactLongitude: 77.412612,
+          city: 'Bhopal',
+          messageNotificationsEnabled: true,
+          nearbyAlertsEnabled: false,
+          privacyVersion: 1,
+          updatedAt: serverTimestamp(),
+        },
+      ),
+    );
+    await assertSucceeds(
+      setDoc(doc(authed('legacy'), 'users/legacy'), publicUser('legacy')),
+    );
+
+    await assertSucceeds(getDoc(doc(authed('alice'), 'users/legacy')));
+    await assertFails(
+      getDoc(doc(authed('alice'), 'privateProfiles/legacy')),
+    );
   });
 
   it('exposes a block record only to the blocker and blocked user', async () => {
