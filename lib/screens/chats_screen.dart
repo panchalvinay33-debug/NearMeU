@@ -129,12 +129,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       children: [
                         _Header(searchController: _searchController, notificationService: _notificationService, currentUserId: currentUser.uid, onNotifications: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()))),
                         const SizedBox(height: 18),
-                        _SummaryCard(
-                          count: chats.length,
-                          isRefreshing: _isRefreshing,
-                          onRefresh: _refresh,
-                        ),
-                        const SizedBox(height: 22),
                         const _SectionTitle(),
                         const SizedBox(height: 14),
                       ],
