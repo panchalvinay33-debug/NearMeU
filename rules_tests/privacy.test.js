@@ -132,6 +132,39 @@ describe('profile and location privacy rules', () => {
     await assertFails(getDoc(doc(authed('bob'), path)));
   });
 
+  it('keeps raw notification tokens and owner indexes server-only', async () => {
+    const devicePath = 'privateProfiles/alice/devices/tokenHash';
+    const ownerPath = 'deviceTokenOwners/tokenHash';
+    await seed(devicePath, {
+      ownerId: 'alice',
+      token: 'secret-token',
+      platform: 'android',
+      updatedAt: new Date(0),
+    });
+    await seed(ownerPath, {
+      ownerId: 'alice',
+      updatedAt: new Date(0),
+    });
+
+    await assertFails(getDoc(doc(authed('alice'), devicePath)));
+    await assertFails(getDoc(doc(authed('bob'), devicePath)));
+    await assertFails(
+      setDoc(doc(authed('alice'), devicePath), {
+        ownerId: 'alice',
+        token: 'forged-token',
+        platform: 'android',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(getDoc(doc(authed('alice'), ownerPath)));
+    await assertFails(
+      setDoc(doc(authed('alice'), ownerPath), {
+        ownerId: 'alice',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
   it('allows bounded discovery-cell queries and rejects a global directory query', async () => {
     const cells = publicUser('alice').discoveryCells;
     const boundedQuery = query(
