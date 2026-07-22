@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
+import '../services/account_deletion_service.dart';
 import '../services/auth_service.dart';
-import '../services/chat_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/unread_nav_icon.dart';
@@ -29,8 +29,9 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
-  final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
+  final AccountDeletionService _accountDeletionService =
+      AccountDeletionService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? userData;
@@ -50,12 +51,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    final user = await _userService.getUser(uid);
-    if (!mounted) return;
-    setState(() {
-      userData = user;
-      isLoading = false;
-    });
+    try {
+      final user = await _userService.getUser(uid);
+      if (!mounted) return;
+      setState(() {
+        userData = user;
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> _open(Widget screen, {bool reloadUser = false}) async {
@@ -70,21 +76,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _logout() async {
     await _authService.logout();
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
+    _goToLogin();
   }
 
   Future<void> _deleteAccount() async {
     if (isDeletingAccount) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
         content: const Text(
-          'This permanently deletes your profile and chats. This action cannot be undone.',
+          'You will be asked to verify your Google account first. After verification, NearMeU will permanently delete your profile, private account data, and your copy of shared conversations. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -93,35 +96,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Verify & Delete',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() => isDeletingAccount = true);
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-      await _chatService.deleteCurrentUserChats(uid);
-      await _userService.deleteCurrentUserData(uid);
-      await _authService.deleteFirebaseAuthAccount();
+      await _accountDeletionService.deleteCurrentAccount();
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
+      _goToLogin();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => isDeletingAccount = false);
+      final message = error.code == 'reauthentication-cancelled'
+          ? 'Account deletion was cancelled. No account data was removed.'
+          : 'Could not verify and delete the account. Please retry.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
       );
     } catch (_) {
       if (!mounted) return;
       setState(() => isDeletingAccount = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not delete account. Please sign in again and retry.'),
+          content: Text(
+            'Could not finish account deletion. Please retry or contact support.',
+          ),
         ),
       );
     }
+  }
+
+  void _goToLogin() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 
   @override
@@ -254,13 +271,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Sign Out',
                       subtitle: 'Sign out from this device',
                       titleColor: Colors.orangeAccent,
-                      onTap: _logout,
+                      onTap: isDeletingAccount ? null : _logout,
                     ),
                     _SettingsTile(
                       icon: Icons.delete_forever_rounded,
                       iconColor: Colors.redAccent,
-                      title: isDeletingAccount ? 'Deleting…' : 'Delete Account',
-                      subtitle: 'Permanently delete your account',
+                      title: isDeletingAccount
+                          ? 'Verifying & deleting…'
+                          : 'Delete Account',
+                      subtitle: 'Verify first, then permanently delete',
                       titleColor: Colors.redAccent,
                       onTap: isDeletingAccount ? null : _deleteAccount,
                     ),
@@ -273,19 +292,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
         currentIndex: 2,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const NearbyScreen()),
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const ChatsScreen()),
-            );
-          }
-        },
+        onTap: isDeletingAccount
+            ? null
+            : (index) {
+                if (index == 0) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NearbyScreen()),
+                  );
+                } else if (index == 1) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ChatsScreen()),
+                  );
+                }
+              },
         items: [
           const BottomNavigationBarItem(
             icon: Icon(Icons.location_on),
@@ -318,7 +339,9 @@ class _ProfileCard extends StatelessWidget {
     final nickname = user?.nickname.trim().isNotEmpty == true
         ? user!.nickname.trim()
         : 'NearMeU User';
-    final gender = user?.gender.trim().isNotEmpty == true ? user!.gender : 'Not set';
+    final gender = user?.gender.trim().isNotEmpty == true
+        ? user!.gender
+        : 'Not set';
     final lookingFor = user?.lookingFor.trim().isNotEmpty == true
         ? user!.lookingFor
         : 'Not set';
@@ -476,7 +499,10 @@ class _SettingsTile extends StatelessWidget {
             height: 1.35,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Colors.white54,
+        ),
         onTap: onTap,
       ),
     );
