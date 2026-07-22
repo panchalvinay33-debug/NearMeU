@@ -158,6 +158,30 @@ describe('profile and location privacy rules', () => {
     await assertSucceeds(getDoc(doc(authed('alice'), 'users/mallory')));
   });
 
+  it('hides legacy sensitive profiles from other users until migration', async () => {
+    await seed('users/legacy', {
+      uid: 'legacy',
+      email: 'legacy@example.com',
+      nickname: 'legacy',
+      gender: 'Female',
+      lookingFor: 'Male',
+      createdAt: new Date(0),
+      latitude: 23.259912,
+      longitude: 77.412612,
+      city: 'Bhopal',
+      blockedUsers: [],
+      age: 25,
+      isOnline: false,
+      isSuspended: false,
+    });
+    await seed('chats/alice_legacy', {
+      participants: ['alice', 'legacy'],
+    });
+
+    await assertSucceeds(getDoc(doc(authed('legacy'), 'users/legacy')));
+    await assertFails(getDoc(doc(authed('alice'), 'users/legacy')));
+  });
+
   it('exposes a block record only to the blocker and blocked user', async () => {
     const path = 'users/alice/blocks/bob';
     await assertSucceeds(
