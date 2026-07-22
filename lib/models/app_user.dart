@@ -101,6 +101,10 @@ class AppUser {
     final approxLatitude = LocationPrivacy.approximateLatitude(latitude);
     final approxLongitude = LocationPrivacy.approximateLongitude(longitude);
     final discoveryCell = LocationPrivacy.discoveryCellFor(latitude, longitude);
+    final discoveryCells = LocationPrivacy.neighboringDiscoveryCells(
+      latitude,
+      longitude,
+    );
 
     return <String, dynamic>{
       'uid': uid,
@@ -111,6 +115,7 @@ class AppUser {
       'approxLatitude': approxLatitude,
       'approxLongitude': approxLongitude,
       'locationCell': discoveryCell,
+      'discoveryCells': discoveryCells,
       'state': state,
       'country': country,
       'photoUrl': photoUrl,
