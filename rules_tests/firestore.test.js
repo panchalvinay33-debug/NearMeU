@@ -7,7 +7,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const { FieldValue } = require('firebase/firestore');
 
-const PROJECT_ID = 'nearmeu-rules-test';
+const PROJECT_ID = 'demo-nearmeu-rules-test';
 let env;
 
 function authed(uid) {
