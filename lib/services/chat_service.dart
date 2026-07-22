@@ -190,7 +190,7 @@ class ChatService {
       await _firestore.collection('chats').doc(chatId).set({
         'lastMessage': 'This message was unsent',
         'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageSenderId': currentUserId,
+        'lastMessageIsUnsent': true,
       }, SetOptions(merge: true));
     }
   }
@@ -262,16 +262,22 @@ class ChatService {
 
     if (snapshot.docs.isEmpty) return;
 
-    final batch = _firestore.batch();
+    const batchSize = 400;
+    for (var start = 0; start < snapshot.docs.length; start += batchSize) {
+      final end = start + batchSize < snapshot.docs.length
+          ? start + batchSize
+          : snapshot.docs.length;
+      final batch = _firestore.batch();
 
-    for (final doc in snapshot.docs) {
-      batch.update(doc.reference, {
-        'isSeen': true,
-        'seenAt': FieldValue.serverTimestamp(),
-      });
+      for (final messageDoc in snapshot.docs.sublist(start, end)) {
+        batch.update(messageDoc.reference, {
+          'isSeen': true,
+          'seenAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
     }
-
-    await batch.commit();
   }
 
   Stream<List<MessageModel>> getMessages({
@@ -286,17 +292,16 @@ class ChatService {
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .orderBy('timestamp', descending: false)
+        .orderBy('timestamp', descending: true)
         .limit(200)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
-          final allMessages = snapshot.docs
+          final latestMessages = snapshot.docs
               .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
+              .where((message) => !message.deletedFor.contains(user1))
               .toList();
 
-          return allMessages
-              .where((m) => !m.deletedFor.contains(user1))
-              .toList();
+          return latestMessages.reversed.toList();
         });
   }
 
@@ -433,25 +438,38 @@ class ChatService {
     );
   }
 
-  /// Deletes every chat (and all messages) that the user participates in.
+  /// Hides every shared message for the deleting user without destroying the
+  /// other participant's copy of the conversation.
   Future<void> deleteCurrentUserChats(String uid) async {
     final chats = await _firestore
         .collection('chats')
         .where('participants', arrayContains: uid)
         .get();
 
+    const batchSize = 400;
     for (final chat in chats.docs) {
       final messages = await chat.reference.collection('messages').get();
+      final visibleMessages = messages.docs.where((message) {
+        final deletedFor = List<String>.from(
+          message.data()['deletedFor'] ?? <String>[],
+        );
+        return !deletedFor.contains(uid);
+      }).toList();
 
-      final batch = _firestore.batch();
+      for (var start = 0; start < visibleMessages.length; start += batchSize) {
+        final end = start + batchSize < visibleMessages.length
+            ? start + batchSize
+            : visibleMessages.length;
+        final batch = _firestore.batch();
 
-      for (final message in messages.docs) {
-        batch.delete(message.reference);
+        for (final message in visibleMessages.sublist(start, end)) {
+          batch.update(message.reference, {
+            'deletedFor': FieldValue.arrayUnion([uid]),
+          });
+        }
+
+        await batch.commit();
       }
-
-      batch.delete(chat.reference);
-
-      await batch.commit();
     }
   }
 }

@@ -196,6 +196,17 @@ service cloud.firestore {
         && request.resource.data.readStates[readerId].lastReadAt == request.time;
     }
 
+    function validChatUnsendUpdate() {
+      return request.resource.data.participants == resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastMessage', 'lastMessageTime', 'lastMessageIsUnsent'])
+        && resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.lastMessageSenderId == resource.data.lastMessageSenderId
+        && request.resource.data.lastMessage == 'This message was unsent'
+        && request.resource.data.lastMessageTime == request.time
+        && request.resource.data.lastMessageIsUnsent == true;
+    }
+
     function validAnnouncement(data) {
       return data.keys().hasOnly(['title', 'message', 'priority', 'type', 'targetAudience', 'isActive', 'createdByAdminId', 'createdAt', 'expiresAt', 'actionLabel', 'actionRoute', 'imageUrl'])
         && data.title is string && data.title.size() > 0 && data.title.size() <= 80
@@ -258,6 +269,47 @@ service cloud.firestore {
         && canSendMessage(chatId);
     }
 
+    function validMessageUnsend() {
+      return request.auth.uid == resource.data.senderId
+        && resource.data.isUnsent == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'text', 'isUnsent', 'unsentAt', 'replyToMessageId', 'replyToText',
+          'replyToSenderId', 'type', 'mediaUrl'
+        ])
+        && request.resource.data.text == ''
+        && request.resource.data.isUnsent == true
+        && request.resource.data.unsentAt == request.time
+        && request.resource.data.replyToMessageId == null
+        && request.resource.data.replyToText == null
+        && request.resource.data.replyToSenderId == null
+        && request.resource.data.type == 'text'
+        && request.resource.data.mediaUrl == null;
+    }
+
+    function validMessageSeen() {
+      return request.auth.uid == resource.data.receiverId
+        && resource.data.isSeen == false
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['isSeen', 'seenAt'])
+        && request.resource.data.isSeen == true
+        && request.resource.data.seenAt == request.time;
+    }
+
+    function validMessageDeleteForMe(chatId) {
+      let participants = chatDoc(chatId).data.get('participants', []);
+      let oldDeleted = resource.data.get('deletedFor', []);
+      let newDeleted = request.resource.data.get('deletedFor', []);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedFor'])
+        && oldDeleted is list
+        && newDeleted is list
+        && request.auth.uid in participants
+        && !(request.auth.uid in oldDeleted)
+        && request.auth.uid in newDeleted
+        && newDeleted.size() == oldDeleted.size() + 1
+        && newDeleted.toSet().hasAll(oldDeleted)
+        && newDeleted.toSet().hasOnly(participants);
+    }
+
     match /users/{userId} {
       allow get: if signedIn() && (request.auth.uid == userId || activeUser() || isAdmin());
       allow list: if activeUser() || isAdmin();
@@ -283,13 +335,17 @@ service cloud.firestore {
       allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
       allow update: if (activeUser() && isCurrentChatParticipant() && validChatUpdate(chatId))
         || (activeUser() && isCurrentChatParticipant() && validReadStateUpdate())
+        || (activeUser() && isCurrentChatParticipant() && validChatUnsendUpdate())
         || isAdmin();
       allow delete: if (activeUser() && isCurrentChatParticipant()) || isAdmin();
 
       match /messages/{messageId} {
         allow read: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
         allow create: if activeUser() && validMessageCreate(chatId, messageId);
-        allow update, delete: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
+        allow update: if activeUser()
+          && isChatParticipant(chatId)
+          && (validMessageUnsend() || validMessageSeen() || validMessageDeleteForMe(chatId));
+        allow delete: if false;
       }
     }
 
