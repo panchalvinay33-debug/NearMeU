@@ -30,27 +30,33 @@ jobs:
         run: dart format --output=none .
       - name: Analyze
         id: analyze
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
-          flutter analyze 2>&1 | tee analyze.log
+          set +e
+          flutter analyze --no-fatal-infos 2>&1 | tee analyze.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
       - name: Test
         id: tests
         if: always()
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           flutter test 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
       - name: Build debug APK
         id: build
         if: always()
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           flutter build apk --debug 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
       - name: Upload Flutter diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -65,12 +71,12 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "Analyze: ${{ steps.analyze.outcome }}"
-          echo "Tests: ${{ steps.tests.outcome }}"
-          echo "Build: ${{ steps.build.outcome }}"
-          test "${{ steps.analyze.outcome }}" = "success"
-          test "${{ steps.tests.outcome }}" = "success"
-          test "${{ steps.build.outcome }}" = "success"
+          echo "Analyze status: ${{ steps.analyze.outputs.status }}"
+          echo "Test status: ${{ steps.tests.outputs.status }}"
+          echo "Build status: ${{ steps.build.outputs.status }}"
+          test "${{ steps.analyze.outputs.status }}" = "0"
+          test "${{ steps.tests.outputs.status }}" = "0"
+          test "${{ steps.build.outputs.status }}" = "0"
 
   firestore-rules:
     name: Firestore rules tests
