@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: 20
       - name: Install rule-test dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
       - name: Install Firebase CLI
         run: npm install --global firebase-tools
       - name: Run emulator rule tests
