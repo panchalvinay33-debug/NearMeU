@@ -10,11 +10,20 @@ class AnnouncementService {
 
   final FirebaseFirestore _firestore;
 
+  static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
+
   CollectionReference<Map<String, dynamic>> get _announcements =>
       _firestore.collection('supportAnnouncements');
 
   DocumentReference<Map<String, dynamic>> _readStateRef(String uid) =>
-      _firestore.collection('users').doc(uid).collection('privateState').doc('supportAnnouncements');
+      _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('privateState')
+          .doc('supportAnnouncements');
+
+  DateTime effectiveCreatedAt(SupportAnnouncement item) =>
+      item.createdAt ?? _legacyDate;
 
   Stream<List<SupportAnnouncement>> watchActiveAnnouncements({int limit = 50}) {
     return _announcements
@@ -29,9 +38,24 @@ class AnnouncementService {
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
           .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
           .toList();
-      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      items.sort(
+        (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
+      );
       return items;
     });
+  }
+
+  Stream<DateTime?> watchLastReadAt(String uid) {
+    return _readStateRef(uid).snapshots().map((snapshot) {
+      final value = snapshot.data()?['lastReadAt'];
+      return value is Timestamp ? value.toDate() : null;
+    });
+  }
+
+  bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
+    final createdAt = item.createdAt;
+    if (createdAt == null) return false;
+    return lastReadAt == null || createdAt.isAfter(lastReadAt);
   }
 
   void _debugLogFirebaseException(Object error) {
@@ -46,19 +70,23 @@ class AnnouncementService {
   }
 
   Stream<int> watchUnreadCount(String uid) {
-    return _readStateRef(uid).snapshots().asyncMap((readDoc) async {
-      final lastReadAt = readDoc.data()?['lastReadAt'];
-      Query<Map<String, dynamic>> query = _announcements
+    return watchLastReadAt(uid).asyncMap((lastReadAt) async {
+      final snapshot = await _announcements
           .where('isActive', isEqualTo: true)
-          .where('targetAudience', isEqualTo: 'allActiveUsers');
-      if (lastReadAt is Timestamp) {
-        query = query.where('createdAt', isGreaterThan: lastReadAt);
-      }
-      final snapshot = await query.limit(100).get().catchError((Object error) {
+          .where('targetAudience', isEqualTo: 'allActiveUsers')
+          .limit(100)
+          .get()
+          .catchError((Object error) {
         _debugLogFirebaseException(error);
         throw error;
       });
-      return snapshot.docs.length;
+
+      final now = DateTime.now();
+      return snapshot.docs
+          .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
+          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .where((item) => isUnread(item, lastReadAt))
+          .length;
     });
   }
 

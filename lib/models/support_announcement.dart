@@ -16,7 +16,7 @@ class SupportAnnouncement {
   final String title;
   final String message;
   final String priority;
-  final DateTime? createdAt;
+  final DateTime createdAt;
   final bool isActive;
   final String? createdByAdminId;
   final DateTime? expiresAt;
@@ -29,7 +29,7 @@ class SupportAnnouncement {
       priority: (data['priority'] as String?) ?? 'normal',
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
-          : null,
+          : DateTime.fromMillisecondsSinceEpoch(0),
       isActive: data['isActive'] != false,
       createdByAdminId: data['createdByAdminId'] as String?,
       expiresAt: data['expiresAt'] is Timestamp

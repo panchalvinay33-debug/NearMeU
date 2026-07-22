@@ -5,7 +5,7 @@ import 'package:nearmeu/widgets/user_info.dart';
 
 void main() {
   testWidgets(
-    'nearby user info shows distance and state without city or pinpoint data',
+    'nearby user info shows privacy-safe distance and state without city or pinpoint data',
     (tester) async {
       final user = AppUser(
         uid: 'nearby-user',
@@ -26,7 +26,7 @@ void main() {
           home: Scaffold(
             body: Row(
               children: [
-                UserInfo(user: user, distanceText: '1 km'),
+                UserInfo(user: user, distanceText: '1 km • CA'),
               ],
             ),
           ),
