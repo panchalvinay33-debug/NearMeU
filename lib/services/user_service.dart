@@ -122,6 +122,10 @@ class UserService {
       'approxLatitude': LocationPrivacy.approximateLatitude(latitude),
       'approxLongitude': LocationPrivacy.approximateLongitude(longitude),
       'locationCell': LocationPrivacy.discoveryCellFor(latitude, longitude),
+      'discoveryCells': LocationPrivacy.neighboringDiscoveryCells(
+        latitude,
+        longitude,
+      ),
       'privacyVersion': LocationPrivacy.privacyVersion,
       for (final key in legacyKeys) key: FieldValue.delete(),
     };
@@ -147,7 +151,7 @@ class UserService {
         .toList();
     for (var start = 0; start < validIds.length; start += 400) {
       final batch = _firestore.batch();
-      final end = (start + 400).clamp(0, validIds.length);
+      final end = (start + 400).clamp(0, validIds.length).toInt();
       for (final blockedUid in validIds.sublist(start, end)) {
         batch.set(_blocksRef(uid).doc(blockedUid), <String, dynamic>{
           'blockerId': uid,
@@ -260,6 +264,10 @@ class UserService {
       'approxLatitude': LocationPrivacy.approximateLatitude(safeLatitude),
       'approxLongitude': LocationPrivacy.approximateLongitude(safeLongitude),
       'locationCell': LocationPrivacy.discoveryCellFor(
+        safeLatitude,
+        safeLongitude,
+      ),
+      'discoveryCells': LocationPrivacy.neighboringDiscoveryCells(
         safeLatitude,
         safeLongitude,
       ),
@@ -403,7 +411,10 @@ class UserService {
     required String currentUserId,
     required String otherUserId,
   }) async {
-    final results = await Future.wait(<Future<DocumentSnapshot>>[
+    final results = await Future.wait<
+        DocumentSnapshot<Map<String, dynamic>>>(<
+      Future<DocumentSnapshot<Map<String, dynamic>>>
+    >[
       _blocksRef(currentUserId).doc(otherUserId).get(),
       _blocksRef(otherUserId).doc(currentUserId).get(),
     ]);
@@ -470,6 +481,7 @@ class UserService {
     yield* _firestore
         .collection('users')
         .where('locationCell', whereIn: cells)
+        .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
       final candidates = <AppUser>[];
@@ -583,7 +595,7 @@ class UserService {
     final blocks = await _blocksRef(uid).get();
     for (var start = 0; start < blocks.docs.length; start += 400) {
       final batch = _firestore.batch();
-      final end = (start + 400).clamp(0, blocks.docs.length);
+      final end = (start + 400).clamp(0, blocks.docs.length).toInt();
       for (final document in blocks.docs.sublist(start, end)) {
         batch.delete(document.reference);
       }
