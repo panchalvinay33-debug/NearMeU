@@ -113,9 +113,11 @@ class ObservabilityService {
 
     final trace = _performance.newTrace(TelemetryPolicy.traceName(name));
     for (final entry in attributes.entries) {
-      final key = TelemetryPolicy.traceName(entry.key);
-      final value = _safeAttributeValue(entry.value);
-      trace.putAttribute(key, value);
+      if (!TelemetryPolicy.allowsField(entry.key, entry.value)) continue;
+      trace.putAttribute(
+        TelemetryPolicy.traceName(entry.key),
+        TelemetryPolicy.safeAttributeValue(entry.value),
+      );
     }
 
     await trace.start();
@@ -140,8 +142,9 @@ class ObservabilityService {
     if (!_collectionEnabled) return;
 
     final safeParameters = <String, Object>{};
-    for (final entry in parameters?.entries ?? const Iterable.empty()) {
-      if (_isAllowedParameter(entry.key, entry.value)) {
+    final entries = parameters?.entries ?? const <MapEntry<String, Object>>[];
+    for (final entry in entries) {
+      if (TelemetryPolicy.allowsField(entry.key, entry.value)) {
         safeParameters[TelemetryPolicy.eventName(entry.key)] = entry.value;
       }
     }
@@ -183,32 +186,5 @@ class ObservabilityService {
         stackTrace: recordingStack,
       );
     }
-  }
-
-  String _safeAttributeValue(String value) {
-    final trimmed = value.trim();
-    return trimmed.length <= 100 ? trimmed : trimmed.substring(0, 100);
-  }
-
-  bool _isAllowedParameter(String key, Object value) {
-    final normalizedKey = key.toLowerCase();
-    const sensitiveFragments = <String>{
-      'email',
-      'message',
-      'text',
-      'latitude',
-      'longitude',
-      'location',
-      'address',
-      'phone',
-      'uid',
-      'user_id',
-      'token',
-      'photo',
-      'name',
-    };
-
-    if (sensitiveFragments.any(normalizedKey.contains)) return false;
-    return value is String || value is num;
   }
 }
