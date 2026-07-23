@@ -40,6 +40,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Upload resolved Flutter lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Validate changed Dart files with formatter
         shell: bash
         run: |
@@ -90,6 +98,31 @@ jobs:
             echo "Release build failed for an unexpected reason."
             exit 1
           fi
+
+  functions:
+    name: Cloud Functions checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install function dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+
+      - name: Run function unit tests
+        run: npm test --prefix functions
+
+      - name: Load function definitions
+        run: node -e "require('./functions/index.js')"
 
   firestore-rules:
     name: Firestore rules tests

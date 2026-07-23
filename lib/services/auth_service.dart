@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'notification_service.dart';
 import 'presence_service.dart';
 
 class AuthService {
@@ -65,6 +66,7 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    await NotificationService.instance.unregisterCurrentDevice();
     await PresenceService.instance.goOfflineBeforeSignOut();
     await _googleSignIn.signOut();
     await _auth.signOut();
