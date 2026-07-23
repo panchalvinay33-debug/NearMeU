@@ -43,6 +43,9 @@ jobs:
       - name: Validate production release configuration
         run: bash tool/validate_release_config.sh
 
+      - name: Validate Play launch pack
+        run: python3 tool/validate_play_launch_pack.py
+
       - name: Upload resolved Flutter lockfile
         uses: actions/upload-artifact@v4
         with:
