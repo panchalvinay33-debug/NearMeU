@@ -1,23 +1,19 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'auth_service.dart';
-import 'chat_service.dart';
-import 'notification_service.dart';
 import 'presence_service.dart';
-import 'user_service.dart';
 
 class AccountDeletionService {
   AccountDeletionService({
     AuthService? authService,
-    ChatService? chatService,
-    UserService? userService,
+    FirebaseFunctions? functions,
   }) : _authService = authService ?? AuthService(),
-       _chatService = chatService ?? ChatService(),
-       _userService = userService ?? UserService();
+       _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   final AuthService _authService;
-  final ChatService _chatService;
-  final UserService _userService;
+  final FirebaseFunctions _functions;
   bool _deletionInProgress = false;
 
   Future<void> deleteCurrentAccount() async {
@@ -35,13 +31,15 @@ class AccountDeletionService {
 
     _deletionInProgress = true;
     try {
-      // Verify the sensitive operation before removing any account data.
+      // Reauthentication refreshes auth_time; the backend independently
+      // verifies that timestamp before any destructive cleanup starts.
       await _authService.reauthenticateCurrentUser();
-      await NotificationService.instance.unregisterAllDevicesForCurrentUser();
       await PresenceService.instance.goOfflineBeforeSignOut();
-      await _chatService.deleteCurrentUserChats(uid);
-      await _userService.deleteCurrentUserData(uid);
-      await _authService.deleteFirebaseAuthAccount();
+      await _functions.httpsCallable('deleteCurrentAccount').call<void>();
+      await _authService.clearLocalSessionAfterServerDeletion();
+    } catch (_) {
+      await PresenceService.instance.restoreCurrentState();
+      rethrow;
     } finally {
       _deletionInProgress = false;
     }
