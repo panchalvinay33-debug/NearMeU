@@ -1,9 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
-import '../services/auth_service.dart';
-import '../services/user_service.dart';
 import '../security/suspension_service.dart';
+import '../services/auth_service.dart';
+import '../services/notification_navigation_service.dart';
+import '../services/user_service.dart';
 import 'gender_screen.dart';
 import 'nearby_screen.dart';
 
@@ -19,6 +21,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final UserService _userService = UserService();
 
   bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationNavigationService.instance.setAppShellReady(false);
+  }
 
   Future<void> _handleGoogleLogin() async {
     if (isLoading) return;
@@ -45,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (savedUser != null && savedUser.isSuspended) {
+        NotificationNavigationService.instance.setAppShellReady(false);
         await SuspensionService().signOutSuspendedUser();
 
         if (!mounted) return;
@@ -63,11 +72,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (savedUser != null && _userService.isProfileComplete(savedUser)) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => NearbyScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const NearbyScreen()),
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          NotificationNavigationService.instance.setAppShellReady(true);
+        });
       } else {
+        NotificationNavigationService.instance.setAppShellReady(false);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -79,6 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      NotificationNavigationService.instance.setAppShellReady(false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

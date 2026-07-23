@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
+import '../services/notification_navigation_service.dart';
 import '../services/presence_service.dart';
 import '../services/user_service.dart';
 import 'gender_screen.dart';
@@ -23,6 +24,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationNavigationService.instance.setAppShellReady(false);
     _handleStartup();
   }
 
@@ -35,6 +37,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     if (!mounted) return;
 
     if (firebaseUser == null) {
+      NotificationNavigationService.instance.setAppShellReady(false);
       _goTo(const LoginScreen());
       return;
     }
@@ -50,10 +53,11 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
       }
 
       if (savedUser != null && _userService.isProfileComplete(savedUser)) {
-        _goTo(const NearbyScreen());
+        _goToAppShell();
         return;
       }
 
+      NotificationNavigationService.instance.setAppShellReady(false);
       _goTo(
         GenderScreen(
           uid: firebaseUser.uid,
@@ -61,6 +65,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
         ),
       );
     } catch (_) {
+      NotificationNavigationService.instance.setAppShellReady(false);
       await _safeSignOut();
 
       if (!mounted) return;
@@ -71,6 +76,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   }
 
   Future<void> _handleSuspendedAccount() async {
+    NotificationNavigationService.instance.setAppShellReady(false);
     await _safeSignOut();
 
     if (!mounted) return;
@@ -113,6 +119,17 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    });
+  }
+
+  void _goToAppShell() {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const NearbyScreen()),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationNavigationService.instance.setAppShellReady(true);
     });
   }
 

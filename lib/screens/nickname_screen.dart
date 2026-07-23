@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../models/app_user.dart';
+import '../services/notification_navigation_service.dart';
 import '../services/user_service.dart';
 import '../services/validation_service.dart';
 import 'nearby_screen.dart';
@@ -59,15 +61,18 @@ class _NicknameScreenState extends State<NicknameScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => NearbyScreen(),
-        ),
-            (route) => false,
+        MaterialPageRoute(builder: (_) => const NearbyScreen()),
+        (route) => false,
       );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        NotificationNavigationService.instance.setAppShellReady(true);
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save your profile. Please try again.')),
+        const SnackBar(
+          content: Text('Could not save your profile. Please try again.'),
+        ),
       );
     }
 
@@ -94,7 +99,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          "Complete Profile",
+          'Complete Profile',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -109,26 +114,21 @@ class _NicknameScreenState extends State<NicknameScreen> {
           padding: const EdgeInsets.all(20),
           children: [
             const SizedBox(height: 40),
-
             const Icon(
               Icons.account_circle_rounded,
               size: 100,
               color: Colors.purpleAccent,
             ),
-
             const SizedBox(height: 25),
-
             const Text(
-              "Choose a nickname and enter your age",
+              'Choose a nickname and enter your age',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey,
                 fontSize: 16,
               ),
             ),
-
             const SizedBox(height: 30),
-
             TextFormField(
               controller: nicknameController,
               textInputAction: TextInputAction.next,
@@ -140,14 +140,10 @@ class _NicknameScreenState extends State<NicknameScreen> {
                   return e.message;
                 }
               },
-              style: const TextStyle(
-                color: Colors.white,
-              ),
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: "Nickname",
-                hintStyle: const TextStyle(
-                  color: Colors.grey,
-                ),
+                hintText: 'Nickname',
+                hintStyle: const TextStyle(color: Colors.grey),
                 filled: true,
                 fillColor: const Color(0xff171717),
                 border: OutlineInputBorder(
@@ -156,9 +152,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
             TextFormField(
               controller: ageController,
               keyboardType: TextInputType.number,
@@ -172,14 +166,10 @@ class _NicknameScreenState extends State<NicknameScreen> {
                   return e.message;
                 }
               },
-              style: const TextStyle(
-                color: Colors.white,
-              ),
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: "Age",
-                hintStyle: const TextStyle(
-                  color: Colors.grey,
-                ),
+                hintText: 'Age',
+                hintStyle: const TextStyle(color: Colors.grey),
                 filled: true,
                 fillColor: const Color(0xff171717),
                 border: OutlineInputBorder(
@@ -188,9 +178,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 40),
-
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -204,19 +192,16 @@ class _NicknameScreenState extends State<NicknameScreen> {
                   ),
                 ),
                 child: isLoading
-                    ? const CircularProgressIndicator(
-                  color: Colors.white,
-                )
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
-                  "Continue",
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                        'Continue',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
-
             const SizedBox(height: 20),
           ],
         ),
