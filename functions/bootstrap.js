@@ -10,4 +10,5 @@ setGlobalOptions({ enforceAppCheck: true });
 module.exports = {
   ...require("./index.js"),
   ...require("./anti_abuse_functions.js"),
+  ...require("./deletion_cleanup_functions.js"),
 };
