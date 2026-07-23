@@ -66,8 +66,16 @@ class AuthService {
   }
 
   Future<void> clearLocalSessionAfterServerDeletion() async {
-    await _googleSignIn.signOut();
-    await _auth.signOut();
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {
+      // The trusted backend has already deleted the account.
+    }
+    try {
+      await _auth.signOut();
+    } catch (_) {
+      // Firebase will invalidate this local session on its next token refresh.
+    }
   }
 
   Future<void> logout() async {
