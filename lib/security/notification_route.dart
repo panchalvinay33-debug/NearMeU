@@ -1,10 +1,11 @@
 class NotificationRoute {
   const NotificationRoute._();
 
+  static const String privateChatType = 'private_chat';
   static const int maximumChatIdLength = 256;
 
   static String? chatIdFromData(Map<String, dynamic> data) {
-    if (data['type'] != 'chat') return null;
+    if (data['type'] != privateChatType) return null;
     final value = data['chatId'];
     if (value is! String) return null;
 
