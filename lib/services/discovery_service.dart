@@ -12,7 +12,7 @@ class DiscoveryService {
   final FirebaseFirestore _firestore;
 
   Stream<List<AppUser>> watchDiscoveryPool({int limit = 100}) {
-    final boundedLimit = limit.clamp(25, 150);
+    final boundedLimit = limit.clamp(25, 150).toInt();
     return _firestore
         .collection('users')
         .limit(boundedLimit)
