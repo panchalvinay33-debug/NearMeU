@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate production release configuration
+        run: bash tool/validate_release_config.sh
+
       - name: Upload resolved Flutter lockfile
         uses: actions/upload-artifact@v4
         with:
