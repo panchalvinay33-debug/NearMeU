@@ -72,8 +72,11 @@ class NotificationNavigationService {
       if (blocked) return;
 
       final currentNavigator = _navigatorKey?.currentState;
-      if (!_appShellReady || currentNavigator == null) {
-        _pendingChatId = chatId;
+      final authenticatedUid = _auth.currentUser?.uid;
+      if (!_appShellReady ||
+          currentNavigator == null ||
+          authenticatedUid != currentUser.uid) {
+        if (authenticatedUid == currentUser.uid) _pendingChatId = chatId;
         return;
       }
 
@@ -87,16 +90,18 @@ class NotificationNavigationService {
       _lastOpenedAt = now;
 
       unawaited(
-        currentNavigator.push(
-          MaterialPageRoute<void>(
-            builder: (_) => ChatScreen(
-              otherUserId: otherUserId,
-              otherUserName: otherUser.nickname.trim().isEmpty
-                  ? 'NearMeU User'
-                  : otherUser.nickname.trim(),
-            ),
-          ),
-        ),
+        currentNavigator
+            .push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => ChatScreen(
+                  otherUserId: otherUserId,
+                  otherUserName: otherUser.nickname.trim().isEmpty
+                      ? 'NearMeU User'
+                      : otherUser.nickname.trim(),
+                ),
+              ),
+            )
+            .then<void>((_) {}),
       );
     } on FirebaseException catch (error, stackTrace) {
       if (_isTransient(error.code)) _pendingChatId = chatId;
