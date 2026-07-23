@@ -1,18 +1,23 @@
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
 import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
-import 'user_service.dart';
 import '../security/chat_security.dart';
 import '../security/suspension_service.dart';
+import 'user_service.dart';
 
 class ChatService {
   ChatService({ChatSecurity? chatSecurity})
     : _chatSecurity = chatSecurity ?? ChatSecurity();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'asia-south1',
+  );
   final ChatSecurity _chatSecurity;
   final UserService _userService = UserService();
   final Set<String> _pendingMessageKeys = <String>{};
@@ -45,107 +50,48 @@ class ChatService {
       throw Exception('blocked');
     }
 
-    final chatId = getChatId(senderId, receiverId);
-    final participants = <String>[senderId, receiverId]..sort();
     final pendingKey = '$senderId|$receiverId|$safeText';
-
     if (!_pendingMessageKeys.add(pendingKey)) {
       throw const ChatSecurityException('Message is already sending.');
     }
 
-    final messageData = {
-      'senderId': senderId,
-      'receiverId': receiverId,
-      'text': safeText,
-      'timestamp': FieldValue.serverTimestamp(),
-      'isUnsent': false,
-      'unsentAt': null,
-      'replyToMessageId': replyTo?.id,
-      'replyToText': replyTo?.text,
-      'replyToSenderId': replyTo?.senderId,
-      'type': 'text',
-      'mediaUrl': null,
-      'isSeen': false,
-      'seenAt': null,
-      'deletedFor': <String>[],
-    };
-
-    final chatRef = _firestore.collection('chats').doc(chatId);
-    final messageRef = chatRef.collection('messages').doc();
-
     try {
-      await _firestore.runTransaction((transaction) async {
-        final chatSnapshot = await transaction.get(chatRef);
-        final existingUnread = chatSnapshot.exists
-            ? Map<String, dynamic>.from(
-                chatSnapshot.data()?['unreadCounts'] ?? <String, dynamic>{},
-              )
-            : <String, dynamic>{};
-        final receiverUnread = existingUnread[receiverId] is int
-            ? existingUnread[receiverId] as int
-            : 0;
-        final nextReceiverUnread = receiverUnread + 1;
-
-        if (chatSnapshot.exists) {
-          final existingParticipants = List<String>.from(
-            chatSnapshot.data()?['participants'] ?? <String>[],
-          );
-          existingParticipants.sort();
-          if (existingParticipants.length != participants.length ||
-              existingParticipants.first != participants.first ||
-              existingParticipants.last != participants.last) {
-            throw const ChatSecurityException('Invalid chat room.');
-          }
-
-          transaction.update(chatRef, <Object, Object?>{
-            'lastMessage': safeText,
-            'lastMessageTime': FieldValue.serverTimestamp(),
-            'latestMessageAt': FieldValue.serverTimestamp(),
-            'lastMessageSenderId': senderId,
-            'latestSenderId': senderId,
-            'lastMessageType': 'text',
-            'lastMessageIsUnsent': false,
-            FieldPath(<String>['unreadCounts', senderId]): 0,
-            FieldPath(<String>['unreadCounts', receiverId]): nextReceiverUnread,
-            FieldPath(<String>['readStates', senderId, 'lastReadAt']):
-                FieldValue.serverTimestamp(),
-            FieldPath(<String>['readStates', senderId, 'lastReadMessageId']):
-                messageRef.id,
-            FieldPath(<String>['readStates', senderId, 'unreadCount']): 0,
-            FieldPath(<String>['readStates', receiverId, 'unreadCount']):
-                nextReceiverUnread,
-          });
-        } else {
-          transaction.set(chatRef, <String, dynamic>{
-            'participants': participants,
-            'lastMessage': safeText,
-            'lastMessageTime': FieldValue.serverTimestamp(),
-            'latestMessageAt': FieldValue.serverTimestamp(),
-            'lastMessageSenderId': senderId,
-            'latestSenderId': senderId,
-            'lastMessageType': 'text',
-            'lastMessageIsUnsent': false,
-            'createdAt': FieldValue.serverTimestamp(),
-            'unreadCounts': <String, dynamic>{
-              senderId: 0,
-              receiverId: nextReceiverUnread,
-            },
-            'readStates': <String, dynamic>{
-              senderId: <String, dynamic>{
-                'lastReadAt': FieldValue.serverTimestamp(),
-                'lastReadMessageId': messageRef.id,
-                'unreadCount': 0,
-              },
-              receiverId: <String, dynamic>{'unreadCount': nextReceiverUnread},
-            },
-          });
-        }
-
-        transaction.set(messageRef, messageData);
-      });
+      await _functions.httpsCallable('sendPrivateMessage').call<void>(
+        <String, dynamic>{
+          'receiverId': receiverId,
+          'text': safeText,
+          'replyTo': replyTo == null
+              ? null
+              : <String, dynamic>{
+                  'messageId': replyTo.id,
+                  'text': replyTo.text,
+                  'senderId': replyTo.senderId,
+                },
+        },
+      );
       _chatSecurity.recordMessageSent(senderId);
+    } on FirebaseFunctionsException catch (error) {
+      throw ChatSecurityException(_functionsErrorMessage(error));
     } finally {
       _pendingMessageKeys.remove(pendingKey);
+    }
+  }
+
+  String _functionsErrorMessage(FirebaseFunctionsException error) {
+    final serverMessage = error.message?.trim();
+    if (serverMessage != null && serverMessage.isNotEmpty) return serverMessage;
+
+    switch (error.code) {
+      case 'resource-exhausted':
+        return 'Please slow down before sending more messages.';
+      case 'permission-denied':
+        return 'Messaging is unavailable for this chat.';
+      case 'failed-precondition':
+        return 'This chat is not available right now.';
+      case 'unauthenticated':
+        return 'Please sign in again.';
+      default:
+        return 'Unable to send this message. Please try again.';
     }
   }
 

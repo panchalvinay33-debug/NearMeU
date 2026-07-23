@@ -1,5 +1,5 @@
-const assert = require('assert');
 const fs = require('fs');
+const assert = require('assert');
 const {
   initializeTestEnvironment,
   assertSucceeds,
@@ -32,14 +32,6 @@ async function seed(path, data) {
   });
 }
 
-async function readWithoutRules(path) {
-  let snapshot;
-  await env.withSecurityRulesDisabled(async (ctx) => {
-    snapshot = await getDoc(doc(ctx.firestore(), path));
-  });
-  return snapshot;
-}
-
 async function seedUser(uid, extra = {}) {
   await seed(`users/${uid}`, {
     uid,
@@ -53,7 +45,7 @@ function chatId(a, b) {
   return [a, b].sort().join('_');
 }
 
-async function sendMessage(senderId, receiverId, text) {
+async function sendMessageDirectly(senderId, receiverId, text) {
   const db = authed(senderId);
   const id = chatId(senderId, receiverId);
   const chatRef = doc(db, `chats/${id}`);
@@ -161,26 +153,11 @@ describe('firestore rules', () => {
     await env.cleanup();
   });
 
-  it('allows two consecutive messages before receiver ever reads', async () => {
-    await assertSucceeds(sendMessage('alice', 'bob', 'first'));
-    await assertSucceeds(sendMessage('alice', 'bob', 'second'));
-
-    const internalSnap = await readWithoutRules('chats/alice_bob');
-    assert.strictEqual(internalSnap.exists(), true, 'chat document must exist');
-    assert.deepStrictEqual(
-      internalSnap.data().participants,
-      ['alice', 'bob'],
-      'chat participants must be preserved',
-    );
-
-    const snap = await assertSucceeds(
-      getDoc(doc(authed('alice'), 'chats/alice_bob')),
-    );
-    assert.strictEqual(snap.data().unreadCounts.bob, 2);
-    assert.strictEqual(snap.data().readStates.bob.unreadCount, 2);
+  it('rejects direct client creation of a chat and its first message', async () => {
+    await assertFails(sendMessageDirectly('alice', 'bob', 'first'));
   });
 
-  it('safely initializes unread maps for a legacy chat during valid delivery', async () => {
+  it('rejects direct client delivery into an existing chat', async () => {
     await seed('chats/alice_bob', {
       participants: ['alice', 'bob'],
       lastMessage: 'legacy',
@@ -191,16 +168,14 @@ describe('firestore rules', () => {
       lastMessageType: 'text',
       lastMessageIsUnsent: false,
       createdAt: new Date(0),
+      unreadCounts: { alice: 0, bob: 0 },
+      readStates: {
+        alice: { unreadCount: 0 },
+        bob: { unreadCount: 0 },
+      },
     });
 
-    await assertSucceeds(sendMessage('alice', 'bob', 'after upgrade'));
-    const snap = await getDoc(doc(authed('alice'), 'chats/alice_bob'));
-    assert.deepStrictEqual(
-      Object.keys(snap.data().unreadCounts).sort(),
-      ['alice', 'bob'],
-    );
-    assert.strictEqual(snap.data().unreadCounts.bob, 1);
-    assert.strictEqual(snap.data().readStates.bob.unreadCount, 1);
+    await assertFails(sendMessageDirectly('alice', 'bob', 'after upgrade'));
   });
 
   it('rejects arbitrary unread map replacement with extra participants', async () => {

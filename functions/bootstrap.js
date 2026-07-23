@@ -7,4 +7,7 @@ const { setGlobalOptions } = require("firebase-functions/v2");
 // client-invoked, so the SDK does not apply this option to those triggers.
 setGlobalOptions({ enforceAppCheck: true });
 
-module.exports = require("./index.js");
+module.exports = {
+  ...require("./index.js"),
+  ...require("./anti_abuse_functions.js"),
+};
