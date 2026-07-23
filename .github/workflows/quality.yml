@@ -43,6 +43,9 @@ jobs:
       - name: Validate production release configuration
         run: bash tool/validate_release_config.sh
 
+      - name: Validate Play Store launch package
+        run: bash tool/validate_store_launch_package.sh
+
       - name: Upload resolved Flutter lockfile
         uses: actions/upload-artifact@v4
         with:
