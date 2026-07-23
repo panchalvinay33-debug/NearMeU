@@ -5,10 +5,15 @@ const {
   assertSucceeds,
 } = require('@firebase/rules-unit-testing');
 const {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  query,
   serverTimestamp,
   setDoc,
+  where,
 } = require('firebase/firestore');
 
 const PROJECT_ID = 'demo-nearmeu-anti-abuse-rules';
@@ -73,6 +78,25 @@ describe('anti-abuse Firestore rules', () => {
     await assertSucceeds(
       setDoc(doc(authed('alice'), 'reports/report-1'), reportPayload()),
     );
+  });
+
+  it('lets a reporter check only their own pending submissions', async () => {
+    await seed('reports/report-1', {
+      ...reportPayload(),
+      createdAt: new Date(),
+    });
+
+    const ownReports = query(
+      collection(authed('alice'), 'reports'),
+      where('reporterId', '==', 'alice'),
+      where('reportedUserId', '==', 'bob'),
+      where('status', '==', 'pending'),
+      limit(1),
+    );
+    const snapshot = await assertSucceeds(getDocs(ownReports));
+    if (snapshot.size !== 1) throw new Error('Expected one own report.');
+
+    await assertFails(getDoc(doc(authed('bob'), 'reports/report-1')));
   });
 
   it('rejects report creation while the trusted backend restriction is active', async () => {
