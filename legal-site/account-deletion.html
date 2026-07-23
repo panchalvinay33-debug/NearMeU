@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Request deletion of a NearMeU account and associated data.">
+  <title>Delete Your NearMeU Account</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <nav aria-label="Legal pages">
+      <a class="secondary" href="index.html">Home</a>
+      <a class="secondary" href="privacy.html">Privacy Policy</a>
+      <a href="account-deletion.html" aria-current="page">Delete Your Account</a>
+    </nav>
+    <article>
+      <h1>Delete your NearMeU account</h1>
+      <p>You can delete your NearMeU account directly inside the app. Open <strong>Settings → Delete Account</strong>, complete Google re-authentication, and confirm deletion.</p>
+
+      <h2>Request deletion without the app</h2>
+      <p>If you no longer have access to the app, send an account deletion request from the Google email address used for NearMeU.</p>
+      <p><a class="button" href="mailto:{{SUPPORT_EMAIL}}?subject=NearMeU%20account%20deletion%20request&body=Please%20delete%20my%20NearMeU%20account.%0A%0AGoogle%20account%20email%3A%20%0ANearMeU%20nickname%20(optional)%3A%20%0A%0AI%20understand%20that%20identity%20verification%20may%20be%20required.">Email an account deletion request</a></p>
+      <p class="notice">Send the request to <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a>. Never send your password, sign-in token, verification code, or private message content.</p>
+
+      <h2>What to include</h2>
+      <ul>
+        <li>The Google account email used to sign in to NearMeU.</li>
+        <li>Your NearMeU nickname, if remembered.</li>
+        <li>A clear statement that you want the NearMeU account and associated data deleted.</li>
+      </ul>
+      <p>We may ask you to complete a reasonable ownership-verification step before processing the request. This protects accounts from unauthorized deletion.</p>
+
+      <h2>What deletion removes</h2>
+      <ul>
+        <li>Your Firebase Authentication account.</li>
+        <li>Your public and private NearMeU profile.</li>
+        <li>Your NearMeU profile photo stored in Firebase Storage.</li>
+        <li>Exact and approximate location records stored with the profile.</li>
+        <li>Device notification tokens and notification preferences.</li>
+        <li>Block relationships and reports involving your account.</li>
+        <li>User-linked anti-abuse counters, report locks, and moderation audit records.</li>
+      </ul>
+
+      <h2>What may remain</h2>
+      <p>Messages are hidden from the deleted account, but copies of messages may remain visible to the other participant in their conversation. Limited diagnostics or analytics records may remain for a period determined by Firebase product settings, and narrowly required records may be retained for legal, security, or fraud-prevention reasons.</p>
+
+      <h2>Need help?</h2>
+      <p>Contact <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a> and mention “NearMeU account deletion” in the subject line.</p>
+    </article>
+    <footer>NearMeU · Account deletion resource</footer>
+  </main>
+</body>
+</html>
