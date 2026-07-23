@@ -62,4 +62,32 @@ void main() {
       expect(TelemetryPolicy.eventName('event ${'x' * 100}'), hasLength(40));
     });
   });
+
+  group('TelemetryPolicy privacy', () {
+    test('allows low-cardinality operational fields', () {
+      expect(TelemetryPolicy.allowsField('result', 'success'), isTrue);
+      expect(TelemetryPolicy.allowsField('duration_bucket', 3), isTrue);
+    });
+
+    test('rejects sensitive identifiers and content fields', () {
+      expect(TelemetryPolicy.allowsField('email', 'a@example.com'), isFalse);
+      expect(TelemetryPolicy.allowsField('message_text', 'hello'), isFalse);
+      expect(TelemetryPolicy.allowsField('exact_location', 'x'), isFalse);
+      expect(TelemetryPolicy.allowsField('firebase_uid', 'secret'), isFalse);
+      expect(TelemetryPolicy.allowsField('device_token', 'secret'), isFalse);
+    });
+
+    test('rejects unsupported parameter types', () {
+      expect(TelemetryPolicy.allowsField('result', true), isFalse);
+      expect(TelemetryPolicy.allowsField('result', <String>[]), isFalse);
+    });
+
+    test('trims and bounds performance attribute values', () {
+      expect(TelemetryPolicy.safeAttributeValue('  success  '), 'success');
+      expect(
+        TelemetryPolicy.safeAttributeValue('x' * 150),
+        hasLength(100),
+      );
+    });
+  });
 }
