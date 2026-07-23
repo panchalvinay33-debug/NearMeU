@@ -67,21 +67,54 @@ class UserService {
     String uid,
     Map<String, dynamic> publicData,
   ) async {
-    if (FirebaseAuth.instance.currentUser?.uid == uid) {
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      return AppUser.fromMap(publicData, uid);
+    }
+
+    var merged = Map<String, dynamic>.from(publicData);
+
+    try {
       await _migrateLegacyPrivateData(uid, publicData);
       final refreshedPublic = await _userRef(uid).get();
-      final merged = Map<String, dynamic>.from(
-        refreshedPublic.data() ?? publicData,
+      merged = Map<String, dynamic>.from(refreshedPublic.data() ?? publicData);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Profile privacy repair deferred',
+        error: error,
+        stackTrace: stackTrace,
       );
+    }
+
+    try {
       final privateDocument = await _privateProfileRef(uid).get();
       if (privateDocument.exists && privateDocument.data() != null) {
         merged.addAll(privateDocument.data()!);
       }
-      final blocks = await _blocksRef(uid).get();
-      merged['blockedUsers'] = blocks.docs.map((document) => document.id).toList();
-      return AppUser.fromMap(merged, uid);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Private profile hydration deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
-    return AppUser.fromMap(publicData, uid);
+
+    try {
+      final blocks = await _blocksRef(uid).get();
+      merged['blockedUsers'] = blocks.docs
+          .map((document) => document.id)
+          .toList();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Block-list hydration deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      merged['blockedUsers'] = List<String>.from(
+        merged['blockedUsers'] ?? const <String>[],
+      );
+    }
+
+    return AppUser.fromMap(merged, uid);
   }
 
   Future<void> _migrateLegacyPrivateData(
@@ -103,14 +136,17 @@ class UserService {
         legacyKeys.any(publicData.containsKey);
     if (!needsMigration) return;
 
-    final latitude = (publicData['latitude'] as num?)?.toDouble() ??
+    final latitude =
+        (publicData['latitude'] as num?)?.toDouble() ??
         (publicData['approxLatitude'] as num?)?.toDouble();
-    final longitude = (publicData['longitude'] as num?)?.toDouble() ??
+    final longitude =
+        (publicData['longitude'] as num?)?.toDouble() ??
         (publicData['approxLongitude'] as num?)?.toDouble();
     final blockedUsers = List<String>.from(
       publicData['blockedUsers'] ?? const <String>[],
     );
-    final nickname = publicData['nickname'] is String &&
+    final nickname =
+        publicData['nickname'] is String &&
             (publicData['nickname'] as String).trim().isNotEmpty
         ? (publicData['nickname'] as String).trim()
         : 'User';
@@ -155,7 +191,9 @@ class UserService {
       ),
       'state': publicData['state'] is String ? publicData['state'] : null,
       'country': publicData['country'] is String ? publicData['country'] : null,
-      'photoUrl': publicData['photoUrl'] is String ? publicData['photoUrl'] : null,
+      'photoUrl': publicData['photoUrl'] is String
+          ? publicData['photoUrl']
+          : null,
       'age': age,
       'lastSeen': publicData['lastSeen'] is Timestamp
           ? publicData['lastSeen']
@@ -179,7 +217,13 @@ class UserService {
 
   String _allowedGender(dynamic value) {
     return value is String &&
-            const <String>{'Male', 'Female', 'Other', 'Both', ''}.contains(value)
+            const <String>{
+              'Male',
+              'Female',
+              'Other',
+              'Both',
+              '',
+            }.contains(value)
         ? value
         : '';
   }
@@ -252,9 +296,9 @@ class UserService {
 
   Future<void> updateNickname(String uid, String nickname) async {
     await _suspensionService.ensureUserAllowed(uid);
-    await _userRef(uid).update({
-      'nickname': ValidationService.nickname(nickname),
-    });
+    await _userRef(
+      uid,
+    ).update({'nickname': ValidationService.nickname(nickname)});
   }
 
   Future<void> updateAge(String uid, int age) async {
@@ -264,18 +308,15 @@ class UserService {
 
   Future<void> updateGender(String uid, String gender) async {
     await _suspensionService.ensureUserAllowed(uid);
-    await _userRef(uid).update({
-      'gender': ValidationService.profileChoice(gender, 'gender'),
-    });
+    await _userRef(
+      uid,
+    ).update({'gender': ValidationService.profileChoice(gender, 'gender')});
   }
 
   Future<void> updateLookingFor(String uid, String lookingFor) async {
     await _suspensionService.ensureUserAllowed(uid);
     await _userRef(uid).update({
-      'lookingFor': ValidationService.profileChoice(
-        lookingFor,
-        'preference',
-      ),
+      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
     });
   }
 
@@ -291,10 +332,7 @@ class UserService {
       'nickname': ValidationService.nickname(nickname),
       'age': ValidationService.age(age),
       'gender': ValidationService.profileChoice(gender, 'gender'),
-      'lookingFor': ValidationService.profileChoice(
-        lookingFor,
-        'preference',
-      ),
+      'lookingFor': ValidationService.profileChoice(lookingFor, 'preference'),
     }, SetOptions(merge: true));
   }
 
@@ -427,7 +465,8 @@ class UserService {
     required String targetUserId,
   }) async {
     await _suspensionService.ensureUserAllowed(currentUserId);
-    if (currentUserId == targetUserId) throw Exception('Cannot block yourself.');
+    if (currentUserId == targetUserId)
+      throw Exception('Cannot block yourself.');
     await _blocksRef(currentUserId).doc(targetUserId).set(<String, dynamic>{
       'blockerId': currentUserId,
       'blockedUserId': targetUserId,
@@ -461,13 +500,12 @@ class UserService {
     required String currentUserId,
     required String otherUserId,
   }) async {
-    final results = await Future.wait<
-        DocumentSnapshot<Map<String, dynamic>>>(<
-      Future<DocumentSnapshot<Map<String, dynamic>>>
-    >[
-      _blocksRef(currentUserId).doc(otherUserId).get(),
-      _blocksRef(otherUserId).doc(currentUserId).get(),
-    ]);
+    final results = await Future.wait<DocumentSnapshot<Map<String, dynamic>>>(
+      <Future<DocumentSnapshot<Map<String, dynamic>>>>[
+        _blocksRef(currentUserId).doc(otherUserId).get(),
+        _blocksRef(otherUserId).doc(currentUserId).get(),
+      ],
+    );
     return results.any((document) => document.exists);
   }
 
@@ -534,24 +572,26 @@ class UserService {
         .limit(AppConstants.nearbyPageSize)
         .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
-      final candidates = <AppUser>[];
-      for (final document in snapshot.docs) {
-        if (document.id == currentUserId) continue;
-        final user = AppUser.fromMap(document.data(), document.id);
-        if (user.isSuspended || !user.isAdult) continue;
-        if (!areUsersMutuallyCompatible(
-          currentUser: currentUser,
-          otherUser: user,
-        )) {
-          continue;
-        }
-        if (blockedByMe.contains(user.uid)) continue;
-        final blockedMe = await _blocksRef(user.uid).doc(currentUserId).get();
-        if (blockedMe.exists) continue;
-        candidates.add(user);
-      }
-      return candidates;
-    });
+          final candidates = <AppUser>[];
+          for (final document in snapshot.docs) {
+            if (document.id == currentUserId) continue;
+            final user = AppUser.fromMap(document.data(), document.id);
+            if (user.isSuspended || !user.isAdult) continue;
+            if (!areUsersMutuallyCompatible(
+              currentUser: currentUser,
+              otherUser: user,
+            )) {
+              continue;
+            }
+            if (blockedByMe.contains(user.uid)) continue;
+            final blockedMe = await _blocksRef(
+              user.uid,
+            ).doc(currentUserId).get();
+            if (blockedMe.exists) continue;
+            candidates.add(user);
+          }
+          return candidates;
+        });
   }
 
   String getLastSeenText(AppUser user) {

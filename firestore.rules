@@ -162,11 +162,18 @@ service cloud.firestore {
         && validApproxLocation(data);
     }
 
+    function needsPrivacyRepair(data) {
+      return data.get('privacyVersion', 0) != 1
+        || data.keys().hasAny([
+          'email', 'latitude', 'longitude', 'city', 'blockedUsers',
+          'messageNotificationsEnabled', 'nearbyAlertsEnabled'
+        ]);
+    }
     function validLegacyPrivacyMigration(userId) {
       let oldCreatedAt = resource.data.get('createdAt', null);
       return signedIn()
         && request.auth.uid == userId
-        && resource.data.get('privacyVersion', 0) != 1
+        && needsPrivacyRepair(resource.data)
         && validPublicUserData(request.resource.data, userId)
         && request.resource.data.uid == resource.data.get('uid', userId)
         && request.resource.data.isAdmin == resource.data.get('isAdmin', false)
@@ -451,10 +458,10 @@ service cloud.firestore {
       allow delete: if false;
 
       match /blocks/{blockedUserId} {
-        allow get: if activeUser()
-          && (request.auth.uid == userId || request.auth.uid == blockedUserId)
+        allow get: if (signedIn()
+          && (request.auth.uid == userId || request.auth.uid == blockedUserId))
           || isAdmin();
-        allow list: if activeUser() && request.auth.uid == userId || isAdmin();
+        allow list: if (signedIn() && request.auth.uid == userId) || isAdmin();
         allow create: if activeUser()
           && request.auth.uid == userId
           && validBlockData(userId, blockedUserId);
