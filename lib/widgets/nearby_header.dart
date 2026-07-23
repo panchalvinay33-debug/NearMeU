@@ -16,79 +16,72 @@ class NearbyHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: .22),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            height: 58,
-            width: 58,
+            height: 42,
+            width: 42,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(18),
+              color: Colors.white.withValues(alpha: .14),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: .14)),
             ),
-            child: const Icon(
-              Icons.location_on,
-              color: Colors.white,
-              size: 30,
-            ),
+            child: const Icon(Icons.near_me_rounded, color: Colors.white, size: 22),
           ),
-
-          const SizedBox(width: 16),
-
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "People Near You",
+                  'People near you',
                   style: TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
                   ),
                 ),
-
-                const SizedBox(height: 6),
-
+                const SizedBox(height: 2),
                 Text(
-                  "$nearbyCount nearby users",
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 15,
+                  '$nearbyCount people available',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .76),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-
-          InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: isRefreshing ? null : onRefresh,
-            child: Container(
-              height: 50,
-              width: 50,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: isRefreshing
-                  ? const Padding(
-                      padding: EdgeInsets.all(13),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.refresh_rounded,
+          IconButton.filledTonal(
+            tooltip: 'Refresh people',
+            onPressed: isRefreshing ? null : onRefresh,
+            style: IconButton.styleFrom(
+              minimumSize: const Size(40, 40),
+              backgroundColor: Colors.white.withValues(alpha: .14),
+              foregroundColor: Colors.white,
+            ),
+            icon: isRefreshing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
                       color: Colors.white,
                     ),
-            ),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 21),
           ),
         ],
       ),
