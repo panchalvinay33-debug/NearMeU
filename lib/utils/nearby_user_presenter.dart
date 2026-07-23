@@ -1,10 +1,11 @@
 import 'dart:math' as math;
 
-import '../constants/app_constants.dart';
 import '../models/app_user.dart';
 
 class NearbyUserPresenter {
   const NearbyUserPresenter._();
+
+  static const int defaultMinimumResults = 25;
 
   static bool hasValidLocation(AppUser user) {
     final latitude = user.latitude;
@@ -25,12 +26,8 @@ class NearbyUserPresenter {
     const earthRadiusKm = 6371.0;
     final lat1 = _degreesToRadians(currentUser.latitude!);
     final lat2 = _degreesToRadians(otherUser.latitude!);
-    final deltaLat = _degreesToRadians(
-      otherUser.latitude! - currentUser.latitude!,
-    );
-    final deltaLon = _degreesToRadians(
-      otherUser.longitude! - currentUser.longitude!,
-    );
+    final deltaLat = _degreesToRadians(otherUser.latitude! - currentUser.latitude!);
+    final deltaLon = _degreesToRadians(otherUser.longitude! - currentUser.longitude!);
 
     final a = math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
         math.cos(lat1) *
@@ -63,25 +60,53 @@ class NearbyUserPresenter {
         _preferenceMatches(otherUser.lookingFor, currentUser.gender);
   }
 
+  static bool isEligible({
+    required AppUser currentUser,
+    required AppUser user,
+  }) {
+    if (user.uid == currentUser.uid) return false;
+    if (user.isSuspended || !user.isAdult) return false;
+    if (!areMutuallyCompatible(currentUser, user)) return false;
+    if (currentUser.blockedUsers.contains(user.uid)) return false;
+    if (user.blockedUsers.contains(currentUser.uid)) return false;
+    return true;
+  }
+
   static List<AppUser> filterEligibleUsers({
     required AppUser currentUser,
     required Iterable<AppUser> candidates,
-    double maxDistanceKm = AppConstants.defaultNearbyRadiusKm,
+    double? maxDistanceKm,
   }) {
-    final boundedRadius = maxDistanceKm.clamp(
-      1,
-      AppConstants.maximumNearbyRadiusKm,
-    );
     return candidates.where((user) {
-      if (user.uid == currentUser.uid) return false;
-      if (user.isSuspended || !user.isAdult) return false;
-      if (!areMutuallyCompatible(currentUser, user)) return false;
-      if (currentUser.blockedUsers.contains(user.uid)) return false;
-      if (user.blockedUsers.contains(currentUser.uid)) return false;
+      if (!isEligible(currentUser: currentUser, user: user)) return false;
+      if (maxDistanceKm == null) return true;
       final distance = distanceKm(currentUser, user);
-      if (distance == null || distance > boundedRadius) return false;
-      return true;
+      return distance != null && distance <= maxDistanceKm;
     }).toList();
+  }
+
+  static List<AppUser> selectVisibleUsers({
+    required AppUser currentUser,
+    required Iterable<AppUser> candidates,
+    double? maxDistanceKm,
+    int minimumResults = defaultMinimumResults,
+  }) {
+    final allEligible = filterEligibleUsers(
+      currentUser: currentUser,
+      candidates: candidates,
+    );
+    sortUsers(currentUser: currentUser, users: allEligible);
+
+    if (maxDistanceKm == null) return allEligible;
+
+    final withinDistance = allEligible.where((user) {
+      final distance = distanceKm(currentUser, user);
+      return distance != null && distance <= maxDistanceKm;
+    }).toList();
+
+    // A chosen distance is respected. The fallback only fills the default
+    // discovery feed; explicit distance filters remain strict.
+    return withinDistance;
   }
 
   static void sortUsers({
