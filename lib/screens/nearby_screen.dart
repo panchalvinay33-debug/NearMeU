@@ -3,8 +3,8 @@ import 'dart:developer' as developer;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../constants/app_constants.dart';
 import '../models/app_user.dart';
+import '../services/discovery_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/nearby_user_presenter.dart';
@@ -24,34 +24,51 @@ class NearbyScreen extends StatefulWidget {
 }
 
 class _DistanceFilterOption {
-  const _DistanceFilterOption({required this.label, required this.value});
+  const _DistanceFilterOption({required this.label, this.value});
 
   final String label;
-  final double value;
+  final double? value;
 }
 
 class _NearbyScreenState extends State<NearbyScreen> {
   final UserService _userService = UserService();
+  final DiscoveryService _discoveryService = DiscoveryService();
+  final TextEditingController _searchController = TextEditingController();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? currentMe;
-  List<AppUser> users = [];
+  List<AppUser> users = <AppUser>[];
   bool isLoading = true;
   bool isRefreshing = false;
   bool _loadInProgress = false;
+  double? _appliedMaxDistanceKm;
   final Map<String, String> _distanceTextByUserId = <String, String>{};
-  double _appliedMaxDistanceKm = AppConstants.defaultNearbyRadiusKm;
 
-  final List<_DistanceFilterOption> _distanceFilterOptions = const [
-    _DistanceFilterOption(label: 'Within 10 km', value: 10),
+  static const int _minimumDiscoveryTarget = 25;
+  static const List<_DistanceFilterOption> _distanceFilterOptions = [
+    _DistanceFilterOption(label: 'Any distance'),
     _DistanceFilterOption(label: 'Within 25 km', value: 25),
     _DistanceFilterOption(label: 'Within 50 km', value: 50),
+    _DistanceFilterOption(label: 'Within 100 km', value: 100),
   ];
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_onSearchChanged);
     _loadNearbyUsers();
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadNearbyUsers({bool showLoader = true}) async {
@@ -59,8 +76,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
     _loadInProgress = true;
 
     if (currentUser == null) {
-      if (!mounted) return;
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
       _loadInProgress = false;
       return;
     }
@@ -69,87 +85,46 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
     try {
       await _userService.updateUserLocation(currentUser!.uid);
-      final result = await _userService.getNearbyUsers(currentUser!.uid).first;
       currentMe = await _userService.getUser(currentUser!.uid);
-
       if (currentMe == null) {
-        result.clear();
-      } else {
-        final filtered = NearbyUserPresenter.filterEligibleUsers(
-          currentUser: currentMe!,
-          candidates: result,
-          maxDistanceKm: _appliedMaxDistanceKm,
-        );
-        result
-          ..clear()
-          ..addAll(filtered);
-        await _cacheDistances(result);
-        NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
-      }
-
-      if (!mounted) {
-        _loadInProgress = false;
+        _applyUsers(const <AppUser>[]);
         return;
       }
 
-      setState(() {
-        users = result;
-        isLoading = false;
-        isRefreshing = false;
-      });
-    } catch (error) {
-      developer.log(
-        'Location refresh failed; loading cached nearby users',
-        error: error,
-      );
-      try {
-        final result = await _userService.getNearbyUsers(currentUser!.uid).first;
-        currentMe = await _userService.getUser(currentUser!.uid);
+      final localUsers = await _userService.getNearbyUsers(currentUser!.uid).first;
+      final pool = <String, AppUser>{for (final user in localUsers) user.uid: user};
 
-        if (currentMe == null) {
-          result.clear();
-        } else {
-          final filtered = NearbyUserPresenter.filterEligibleUsers(
-            currentUser: currentMe!,
-            candidates: result,
-            maxDistanceKm: _appliedMaxDistanceKm,
-          );
-          result
-            ..clear()
-            ..addAll(filtered);
-          await _cacheDistances(result);
-          NearbyUserPresenter.sortUsers(currentUser: currentMe!, users: result);
+      if (_appliedMaxDistanceKm == null && pool.length < _minimumDiscoveryTarget) {
+        final broadUsers = await _discoveryService
+            .watchDiscoveryPool(limit: 100)
+            .first;
+        for (final user in broadUsers) {
+          pool.putIfAbsent(user.uid, () => user);
         }
-
-        if (!mounted) {
-          _loadInProgress = false;
-          return;
-        }
-
-        setState(() {
-          users = result;
-          isLoading = false;
-          isRefreshing = false;
-        });
-      } catch (fallbackError) {
-        developer.log('Nearby fallback load failed', error: fallbackError);
-        if (!mounted) {
-          _loadInProgress = false;
-          return;
-        }
-        setState(() {
-          users = [];
-          isLoading = false;
-          isRefreshing = false;
-        });
       }
 
+      final visible = NearbyUserPresenter.selectVisibleUsers(
+        currentUser: currentMe!,
+        candidates: pool.values,
+        maxDistanceKm: _appliedMaxDistanceKm,
+        minimumResults: _minimumDiscoveryTarget,
+      );
+      await _cacheDistances(visible);
+      _applyUsers(visible);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Nearby discovery refresh failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
+        setState(() {
+          isLoading = false;
+          isRefreshing = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Location update not available right now. Showing cached nearby users only.',
-            ),
+            content: Text('Could not refresh people right now. Please try again.'),
           ),
         );
       }
@@ -158,90 +133,138 @@ class _NearbyScreenState extends State<NearbyScreen> {
     }
   }
 
+  void _applyUsers(List<AppUser> value) {
+    if (!mounted) return;
+    setState(() {
+      users = value;
+      isLoading = false;
+      isRefreshing = false;
+    });
+  }
+
   Future<void> _showDistanceFilterSheet() async {
     final selectedOption = await showModalBottomSheet<_DistanceFilterOption>(
       context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
         return SafeArea(
-          child: Padding(
+          top: false,
+          child: Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            decoration: const BoxDecoration(
+              color: Color(0xff151515),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
-                    width: 44,
-                    height: 5,
+                    width: 42,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Colors.white24,
                       borderRadius: BorderRadius.circular(99),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Nearby filters',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'For privacy, discovery is limited to people within 50 km.',
-                  style: TextStyle(color: AppColors.textSecondary),
+                const SizedBox(height: 18),
+                const Row(
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color(0x292B0B63),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(9),
+                        child: Icon(Icons.tune_rounded, color: AppColors.primary),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nearby filters',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Text(
+                            'Choose a distance. Any distance keeps the full discovery feed.',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 18),
                 ..._distanceFilterOptions.map((option) {
                   final isSelected = option.value == _appliedMaxDistanceKm;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () => Navigator.pop(context, option),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary.withValues(alpha: .18)
-                              : const Color(0xff171717),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.cardBorder,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => Navigator.pop(sheetContext, option),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 15,
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isSelected
-                                  ? Icons.radio_button_checked
-                                  : Icons.radio_button_unchecked,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primary.withValues(alpha: .18)
+                                : const Color(0xff1b1b1b),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
                               color: isSelected
                                   ? AppColors.primary
-                                  : AppColors.textSecondary,
+                                  : Colors.white.withValues(alpha: .09),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                option.label,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.radio_button_checked_rounded
+                                    : Icons.radio_button_off_rounded,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  option.label,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              if (option.value == null)
+                                const Icon(
+                                  Icons.public_rounded,
+                                  color: AppColors.textSecondary,
+                                  size: 19,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -255,16 +278,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
 
     if (!mounted || selectedOption == null) return;
-    await _applyDistanceFilter(selectedOption.value);
-  }
-
-  Future<void> _applyDistanceFilter(double maxDistanceKm) async {
-    setState(() {
-      _appliedMaxDistanceKm = maxDistanceKm.clamp(
-        1,
-        AppConstants.maximumNearbyRadiusKm,
-      );
-    });
+    setState(() => _appliedMaxDistanceKm = selectedOption.value);
     await _loadNearbyUsers(showLoader: false);
   }
 
@@ -277,22 +291,59 @@ class _NearbyScreenState extends State<NearbyScreen> {
   Future<void> _cacheDistances(List<AppUser> nearbyUsers) async {
     _distanceTextByUserId.clear();
     for (final user in nearbyUsers) {
-      _distanceTextByUserId[user.uid] = await _distanceText(user);
-    }
-  }
-
-  Future<String> _distanceText(AppUser user) async {
-    if (currentMe == null) {
-      return NearbyUserPresenter.privacySafeLocationText(
-        distanceText: 'Distance unavailable',
+      final distance = currentMe == null
+          ? null
+          : await _userService.getDistanceBetweenUsers(currentMe!, user);
+      _distanceTextByUserId[user.uid] =
+          NearbyUserPresenter.privacySafeLocationText(
+        distanceText: NearbyUserPresenter.distanceText(distance),
         state: user.state,
       );
     }
+  }
 
-    final distance = await _userService.getDistanceBetweenUsers(currentMe!, user);
-    return NearbyUserPresenter.privacySafeLocationText(
-      distanceText: NearbyUserPresenter.distanceText(distance),
-      state: user.state,
+  List<AppUser> get _visibleUsers {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return users;
+    return users.where((user) {
+      return user.nickname.toLowerCase().contains(query) ||
+          user.state?.toLowerCase().contains(query) == true ||
+          user.gender.toLowerCase().contains(query);
+    }).toList(growable: false);
+  }
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      textInputAction: TextInputAction.search,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: 'Search nearby people',
+        hintStyle: const TextStyle(color: AppColors.textSecondary),
+        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+        suffixIcon: _searchController.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: _searchController.clear,
+                icon: const Icon(Icons.close_rounded),
+              ),
+        filled: true,
+        fillColor: AppColors.surface,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: .08)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: .08)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+      ),
     );
   }
 
@@ -302,28 +353,18 @@ class _NearbyScreenState extends State<NearbyScreen> {
         child: Text('User not logged in', style: TextStyle(color: Colors.white)),
       );
     }
-
     if (isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
-    if (users.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refreshUsers,
-        color: AppColors.primary,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: const [SizedBox(height: 100), EmptyNearbyWidget()],
-        ),
-      );
-    }
-
+    final visibleUsers = _visibleUsers;
     return RefreshIndicator(
       onRefresh: _refreshUsers,
       color: AppColors.primary,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           NearbyHeader(
@@ -331,21 +372,28 @@ class _NearbyScreenState extends State<NearbyScreen> {
             isRefreshing: isRefreshing,
             onRefresh: _refreshUsers,
           ),
-          const SizedBox(height: 24),
-          const NearbySectionTitle(
-            title: 'People Near You',
+          const SizedBox(height: 14),
+          _buildSearchBar(),
+          const SizedBox(height: 20),
+          NearbySectionTitle(
+            title: _appliedMaxDistanceKm == null
+                ? 'People Near You'
+                : 'Within ${_appliedMaxDistanceKm!.round()} km',
             icon: Icons.people_alt_rounded,
           ),
-          const SizedBox(height: 16),
-          ...users.map(
-            (user) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: NearbyUserCard(
-                user: user,
-                distanceText: _distanceTextByUserId[user.uid] ?? '',
+          const SizedBox(height: 12),
+          if (visibleUsers.isEmpty)
+            const EmptyNearbyWidget()
+          else
+            ...visibleUsers.map(
+              (user) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: NearbyUserCard(
+                  user: user,
+                  distanceText: _distanceTextByUserId[user.uid],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -354,7 +402,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = currentUser?.uid ?? '';
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -367,22 +414,14 @@ class _NearbyScreenState extends State<NearbyScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Distance filter',
+            tooltip: 'Nearby filters',
             onPressed: isRefreshing ? null : _showDistanceFilterSheet,
-            icon: const Icon(Icons.tune),
+            icon: const Icon(Icons.tune_rounded),
           ),
           IconButton(
-            tooltip: 'Reset to 25 km',
-            onPressed: isRefreshing
-                ? null
-                : () => _applyDistanceFilter(
-                    AppConstants.defaultNearbyRadiusKm,
-                  ),
-            icon: const Icon(Icons.filter_alt_off),
-          ),
-          IconButton(
+            tooltip: 'Refresh',
             onPressed: isRefreshing ? null : _refreshUsers,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
