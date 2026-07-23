@@ -139,8 +139,8 @@ jobs:
       - name: Run function unit tests
         run: npm test --prefix functions
 
-      - name: Load function definitions
-        run: node -e "require('./functions/index.js')"
+      - name: Load secure function definitions
+        run: node -e "require('./functions')"
 
   firestore-rules:
     name: Firestore rules tests
