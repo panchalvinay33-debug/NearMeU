@@ -24,6 +24,17 @@ const MULTICAST_LIMIT = 500;
 const DELETE_BATCH_LIMIT = 400;
 const DELETION_JOB_LIMIT = 20;
 
+function appCheckedCall(options, handler) {
+  return onCall(
+    {
+      region: REGION,
+      enforceAppCheck: true,
+      ...options,
+    },
+    handler,
+  );
+}
+
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
   if (!uid) {
@@ -200,7 +211,7 @@ async function completeAccountDeletionJob(uid) {
   return cleanup;
 }
 
-exports.registerDeviceToken = onCall({ region: REGION }, async (request) => {
+exports.registerDeviceToken = appCheckedCall({}, async (request) => {
   const uid = requireAuthenticatedUid(request);
   const token = validatedToken(request.data);
   const platform = sanitizePlatform(request.data && request.data.platform);
@@ -255,7 +266,7 @@ exports.registerDeviceToken = onCall({ region: REGION }, async (request) => {
   return { success: true };
 });
 
-exports.unregisterDeviceToken = onCall({ region: REGION }, async (request) => {
+exports.unregisterDeviceToken = appCheckedCall({}, async (request) => {
   const uid = requireAuthenticatedUid(request);
   const token = validatedToken(request.data);
   const tokenId = tokenDocumentId(token);
@@ -277,8 +288,8 @@ exports.unregisterDeviceToken = onCall({ region: REGION }, async (request) => {
   return { success: true };
 });
 
-exports.unregisterAllDeviceTokens = onCall(
-  { region: REGION },
+exports.unregisterAllDeviceTokens = appCheckedCall(
+  {},
   async (request) => {
     const uid = requireAuthenticatedUid(request);
     const deletedCount = await deleteAllDeviceTokensForUid(uid);
@@ -286,8 +297,8 @@ exports.unregisterAllDeviceTokens = onCall(
   },
 );
 
-exports.deleteCurrentAccount = onCall(
-  { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+exports.deleteCurrentAccount = appCheckedCall(
+  { timeoutSeconds: 540, memory: "512MiB" },
   async (request) => {
     const uid = requireRecentAuthentication(request);
     const jobRef = deletionJobRef(uid);
