@@ -3,31 +3,31 @@ import 'package:nearmeu/security/notification_route.dart';
 
 void main() {
   group('notification chat route validation', () {
-    test('accepts only bounded chat payloads', () {
+    test('accepts only bounded private-chat payloads', () {
       expect(
         NotificationRoute.chatIdFromData(const {
-          'type': 'chat',
+          'type': NotificationRoute.privateChatType,
           'chatId': 'alice_bob',
         }),
         'alice_bob',
       );
       expect(
         NotificationRoute.chatIdFromData(const {
-          'type': 'nearby',
+          'type': 'chat',
           'chatId': 'alice_bob',
         }),
         isNull,
       );
       expect(
         NotificationRoute.chatIdFromData(const {
-          'type': 'chat',
+          'type': NotificationRoute.privateChatType,
           'chatId': '',
         }),
         isNull,
       );
       expect(
         NotificationRoute.chatIdFromData({
-          'type': 'chat',
+          'type': NotificationRoute.privateChatType,
           'chatId': 'x' * (NotificationRoute.maximumChatIdLength + 1),
         }),
         isNull,
