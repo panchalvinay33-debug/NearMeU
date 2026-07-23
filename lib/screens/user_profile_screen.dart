@@ -2,15 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/user_service.dart';
+import '../theme/app_colors.dart';
+import '../widgets/user_avatar.dart';
 import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final AppUser user;
 
-  const UserProfileScreen({
-    super.key,
-    required this.user,
-  });
+  const UserProfileScreen({super.key, required this.user});
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
@@ -88,21 +87,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Widget _buildAvatar() {
-    final firstLetter =
-        user.nickname.isNotEmpty ? user.nickname[0].toUpperCase() : '?';
-
-    return CircleAvatar(
-      radius: 70,
-      backgroundColor: Colors.purpleAccent,
-      child: Text(
-        firstLetter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 58,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+    return UserAvatar(user: user, radius: 70);
   }
 
   Widget _infoCard({
@@ -114,17 +99,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF171717),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: Colors.purpleAccent,
-            size: 28,
-          ),
+          Icon(icon, color: AppColors.primary, size: 28),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -133,7 +115,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Colors.white54,
+                    color: AppColors.textHint,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -142,7 +124,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 Text(
                   value,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 19,
                     fontWeight: FontWeight.w700,
                   ),
@@ -170,10 +152,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          otherUserId: user.uid,
-          otherUserName: displayName,
-        ),
+        builder: (_) =>
+            ChatScreen(otherUserId: user.uid, otherUserName: displayName),
       ),
     );
   }
@@ -185,36 +165,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF171717),
+          backgroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
           title: const Text(
             'Block user?',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
           content: const Text(
             'Blocked user nearby list aur chat access se hide ho jayega.',
-            style: TextStyle(
-              color: Colors.white70,
-            ),
+            style: TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text(
                 'Cancel',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: AppColors.textSecondary),
               ),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.textPrimary,
               ),
               child: const Text('Block'),
             ),
@@ -243,11 +221,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _actionLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User blocked'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User blocked')));
 
       Navigator.pop(context, true);
     } catch (_) {
@@ -257,11 +233,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _actionLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to block user'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to block user')));
     }
   }
 
@@ -286,11 +260,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _actionLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User unblocked'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User unblocked')));
     } catch (_) {
       if (!mounted) return;
 
@@ -298,11 +270,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         _actionLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to unblock user'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to unblock user')));
     }
   }
 
@@ -310,9 +280,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (_isLoadingBlockState) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: CircularProgressIndicator(
-          color: Colors.purpleAccent,
-        ),
+        child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
@@ -325,10 +293,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           child: ElevatedButton.icon(
             onPressed: chatEnabled ? () => _openChat(displayName) : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  chatEnabled ? Colors.purpleAccent : Colors.grey.shade800,
-              foregroundColor: Colors.white,
-              disabledForegroundColor: Colors.white70,
+              backgroundColor: chatEnabled
+                  ? AppColors.primary
+                  : Colors.grey.shade800,
+              foregroundColor: AppColors.textPrimary,
+              disabledForegroundColor: AppColors.textSecondary,
               disabledBackgroundColor: Colors.grey.shade800,
               minimumSize: const Size.fromHeight(64),
               shape: RoundedRectangleBorder(
@@ -338,10 +307,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             icon: const Icon(Icons.chat_bubble_outline),
             label: Text(
               chatEnabled ? 'Chat Now' : 'Chat unavailable',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -352,11 +318,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             onPressed: _actionLoading
                 ? null
                 : _blockedByMe
-                    ? _unblockUser
-                    : _blockUser,
+                ? _unblockUser
+                : _blockUser,
             style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  _blockedByMe ? Colors.greenAccent : Colors.redAccent,
+              foregroundColor: _blockedByMe
+                  ? Colors.greenAccent
+                  : Colors.redAccent,
               side: BorderSide(
                 color: _blockedByMe ? Colors.greenAccent : Colors.redAccent,
               ),
@@ -371,18 +338,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   )
-                : Icon(
-                    _blockedByMe ? Icons.lock_open : Icons.block,
-                  ),
+                : Icon(_blockedByMe ? Icons.lock_open : Icons.block),
             label: Text(
               _blockedByMe ? 'Unblock User' : 'Block User',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -392,7 +354,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF171717),
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Text(
@@ -401,7 +363,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   : 'This user is unavailable for chat.',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Colors.white70,
+                color: AppColors.textSecondary,
                 fontSize: 14,
               ),
             ),
@@ -413,22 +375,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        user.nickname.trim().isEmpty ? 'Unknown User' : user.nickname.trim();
+    final displayName = user.nickname.trim().isEmpty
+        ? 'Unknown User'
+        : user.nickname.trim();
 
-    final displayAge =
-        user.age != null && user.age! > 0 ? ', ${user.age}' : '';
+    final displayAge = user.age != null && user.age! > 0 ? ', ${user.age}' : '';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0B),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B0B0B),
+        backgroundColor: AppColors.background,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: const Text(
           'Profile',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -446,7 +408,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 '$displayName$displayAge',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
@@ -456,7 +418,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 _locationText(),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white54,
+                  color: AppColors.textHint,
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                 ),
@@ -476,8 +438,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               _infoCard(
                 icon: Icons.favorite_border,
                 title: 'Looking For',
-                value:
-                    user.lookingFor.trim().isEmpty ? 'Not set' : user.lookingFor,
+                value: user.lookingFor.trim().isEmpty
+                    ? 'Not set'
+                    : user.lookingFor,
               ),
               _infoCard(
                 icon: Icons.location_on_outlined,

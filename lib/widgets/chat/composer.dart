@@ -24,18 +24,13 @@ class ChatComposer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-
-        if (replyPreview != null)
-          replyPreview!,
+        if (replyPreview != null) replyPreview!,
 
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          decoration: const BoxDecoration(
-            color: Color(0xff0B0B0B),
-          ),
+          decoration: const BoxDecoration(color: Color(0xff0B0B0B)),
           child: Row(
             children: [
-
               InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: onEmojiTap,
@@ -66,19 +61,14 @@ class ChatComposer extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     focusNode: focusNode,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                    cursorColor: Colors.purpleAccent,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    cursorColor: const Color(0xFF8B5CF6),
                     minLines: 1,
                     maxLines: 5,
                     onTap: onTextFieldTap,
                     decoration: const InputDecoration(
                       hintText: "Type a message...",
-                      hintStyle: TextStyle(
-                        color: Colors.white38,
-                      ),
+                      hintStyle: TextStyle(color: Colors.white38),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.symmetric(
                         horizontal: 18,

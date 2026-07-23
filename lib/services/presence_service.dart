@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
+import '../constants/app_constants.dart';
 import 'user_service.dart';
 
 class PresenceService {
@@ -18,7 +19,9 @@ class PresenceService {
 
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _profileSubscription;
+  _profileSubscription;
+  Timer? _heartbeatTimer;
+
   String? _activeUid;
   bool? _lastPublishedOnline;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
@@ -37,6 +40,7 @@ class PresenceService {
   }
 
   Future<void> goOfflineBeforeSignOut() async {
+    _stopHeartbeat();
     final uid = _auth.currentUser?.uid ?? _activeUid;
     if (uid == null) return;
     await _publish(online: false, uid: uid, force: true);
@@ -46,6 +50,7 @@ class PresenceService {
   Future<void> restoreCurrentState() => _publishDesiredState();
 
   Future<void> _handleAuthChange(User? user) async {
+    _stopHeartbeat();
     await _profileSubscription?.cancel();
     _profileSubscription = null;
     _activeUid = user?.uid;
@@ -57,26 +62,53 @@ class PresenceService {
         .collection('users')
         .doc(user.uid)
         .snapshots()
-        .listen((profile) {
-          if (profile.exists) unawaited(_publishDesiredState());
-        }, onError: (Object error, StackTrace stackTrace) {
-          developer.log(
-            'Presence profile listener failed',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        });
+        .listen(
+          (profile) {
+            if (profile.exists) unawaited(_publishDesiredState());
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            developer.log(
+              'Presence profile listener failed',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          },
+        );
 
     await _publishDesiredState();
   }
 
   Future<void> _publishDesiredState() async {
     final uid = _activeUid ?? _auth.currentUser?.uid;
-    if (uid == null) return;
-    await _publish(
-      online: _lifecycleState == AppLifecycleState.resumed,
-      uid: uid,
+    if (uid == null) {
+      _stopHeartbeat();
+      return;
+    }
+
+    final online = _lifecycleState == AppLifecycleState.resumed;
+    await _publish(online: online, uid: uid);
+    _configureHeartbeat(uid: uid, online: online);
+  }
+
+  void _configureHeartbeat({required String uid, required bool online}) {
+    if (!online) {
+      _stopHeartbeat();
+      return;
+    }
+
+    if (_heartbeatTimer != null) return;
+
+    _heartbeatTimer = Timer.periodic(
+      const Duration(minutes: AppConstants.presenceHeartbeatMinutes),
+      (_) {
+        unawaited(_publish(online: true, uid: uid, force: true));
+      },
     );
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   Future<void> _publish({
@@ -101,6 +133,7 @@ class PresenceService {
   }
 
   Future<void> dispose() async {
+    _stopHeartbeat();
     await _profileSubscription?.cancel();
     await _authSubscription?.cancel();
     _profileSubscription = null;

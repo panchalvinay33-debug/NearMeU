@@ -26,20 +26,16 @@ class QuotedReply extends StatelessWidget {
         color: Colors.black.withValues(alpha: .20),
         borderRadius: BorderRadius.circular(12),
         border: Border(
-          left: BorderSide(
-            color: Colors.purpleAccent,
-            width: 4,
-          ),
+          left: BorderSide(color: const Color(0xFF8B5CF6), width: 4),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           Text(
             repliedToMe ? "You" : otherUserName,
             style: const TextStyle(
-              color: Colors.purpleAccent,
+              color: const Color(0xFF8B5CF6),
               fontWeight: FontWeight.bold,
               fontSize: 12,
             ),
@@ -51,10 +47,7 @@ class QuotedReply extends StatelessWidget {
             message.replyToText ?? "",
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ],
       ),

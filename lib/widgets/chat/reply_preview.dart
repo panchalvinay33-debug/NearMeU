@@ -22,24 +22,20 @@ class ReplyPreview extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xff1E1E1E),
-            Color(0xff141414),
-          ],
+          colors: [Color(0xff1E1E1E), Color(0xff141414)],
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: Colors.purpleAccent.withValues(alpha: .45),
+          color: const Color(0xFF8B5CF6).withValues(alpha: .45),
         ),
       ),
       child: Row(
         children: [
-
           Container(
             width: 5,
             height: 45,
             decoration: BoxDecoration(
-              color: Colors.purpleAccent,
+              color: const Color(0xFF8B5CF6),
               borderRadius: BorderRadius.circular(10),
             ),
           ),
@@ -50,11 +46,10 @@ class ReplyPreview extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
                   "Replying to $senderName",
                   style: const TextStyle(
-                    color: Colors.purpleAccent,
+                    color: const Color(0xFF8B5CF6),
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -66,10 +61,7 @@ class ReplyPreview extends StatelessWidget {
                   previewText,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -84,11 +76,7 @@ class ReplyPreview extends StatelessWidget {
                 color: Colors.white10,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
-                Icons.close,
-                color: Colors.white70,
-                size: 18,
-              ),
+              child: const Icon(Icons.close, color: Colors.white70, size: 18),
             ),
           ),
         ],

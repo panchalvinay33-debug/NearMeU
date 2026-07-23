@@ -17,6 +17,32 @@ class NearbyUserPresenter {
         longitude <= 180;
   }
 
+  static bool isEffectivelyOnline(AppUser user, {DateTime? now}) {
+    if (!user.isOnline || user.lastSeen == null) return false;
+
+    final referenceTime = now ?? DateTime.now();
+    final difference = referenceTime.difference(user.lastSeen!);
+
+    if (difference.isNegative) {
+      return difference.inMinutes.abs() <= 1;
+    }
+
+    return difference.inMinutes <= AppConstants.presenceFreshnessMinutes;
+  }
+
+  static bool wasRecentlyActive(
+    AppUser user, {
+    DateTime? now,
+    Duration window = const Duration(hours: 24),
+  }) {
+    if (isEffectivelyOnline(user, now: now)) return true;
+    if (user.lastSeen == null) return false;
+
+    final referenceTime = now ?? DateTime.now();
+    final difference = referenceTime.difference(user.lastSeen!);
+    return !difference.isNegative && difference <= window;
+  }
+
   static double? distanceKm(AppUser currentUser, AppUser otherUser) {
     if (!hasValidLocation(currentUser) || !hasValidLocation(otherUser)) {
       return null;
@@ -32,7 +58,8 @@ class NearbyUserPresenter {
       otherUser.longitude! - currentUser.longitude!,
     );
 
-    final a = math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
+    final a =
+        math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
         math.cos(lat1) *
             math.cos(lat2) *
             math.sin(deltaLon / 2) *
@@ -45,8 +72,9 @@ class NearbyUserPresenter {
     if (distanceKm == null || distanceKm.isNaN || distanceKm.isInfinite) {
       return 'Distance unavailable';
     }
-    final roundedKm = math.max(1, distanceKm.round());
-    return '$roundedKm km';
+
+    if (distanceKm < 1) return 'Less than 1 km';
+    return '${distanceKm.round()} km';
   }
 
   static String privacySafeLocationText({
@@ -55,7 +83,31 @@ class NearbyUserPresenter {
   }) {
     final safeState = state?.trim();
     if (safeState == null || safeState.isEmpty) return distanceText;
-    return '$distanceText • $safeState';
+    return '$distanceText \u2022 $safeState';
+  }
+
+  static String lastSeenText(AppUser user, {DateTime? now}) {
+    if (isEffectivelyOnline(user, now: now)) return 'Online now';
+    if (user.lastSeen == null) return 'Offline';
+
+    final referenceTime = now ?? DateTime.now();
+    final difference = referenceTime.difference(user.lastSeen!);
+
+    if (difference.isNegative || difference.inMinutes < 1) {
+      return 'Active just now';
+    }
+    if (difference.inMinutes < 60) {
+      return 'Active ${difference.inMinutes} min ago';
+    }
+    if (difference.inHours < 24) {
+      return 'Active ${difference.inHours} hr ago';
+    }
+    if (difference.inDays == 1) return 'Active yesterday';
+    if (difference.inDays < 7) {
+      return 'Active ${difference.inDays} days ago';
+    }
+
+    return 'Offline';
   }
 
   static bool areMutuallyCompatible(AppUser currentUser, AppUser otherUser) {
@@ -66,20 +118,25 @@ class NearbyUserPresenter {
   static List<AppUser> filterEligibleUsers({
     required AppUser currentUser,
     required Iterable<AppUser> candidates,
-    double maxDistanceKm = AppConstants.defaultNearbyRadiusKm,
+    double? maxDistanceKm,
   }) {
-    final boundedRadius = maxDistanceKm.clamp(
+    final boundedRadius = maxDistanceKm?.clamp(
       1,
       AppConstants.maximumNearbyRadiusKm,
     );
+
     return candidates.where((user) {
       if (user.uid == currentUser.uid) return false;
       if (user.isSuspended || !user.isAdult) return false;
       if (!areMutuallyCompatible(currentUser, user)) return false;
       if (currentUser.blockedUsers.contains(user.uid)) return false;
       if (user.blockedUsers.contains(currentUser.uid)) return false;
-      final distance = distanceKm(currentUser, user);
-      if (distance == null || distance > boundedRadius) return false;
+
+      if (boundedRadius != null) {
+        final distance = distanceKm(currentUser, user);
+        if (distance == null || distance > boundedRadius) return false;
+      }
+
       return true;
     }).toList();
   }
@@ -89,21 +146,31 @@ class NearbyUserPresenter {
     required List<AppUser> users,
   }) {
     users.sort((a, b) {
-      if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
+      final aOnline = isEffectivelyOnline(a);
+      final bOnline = isEffectivelyOnline(b);
 
+      // Online users always come first.
+      if (aOnline != bOnline) return aOnline ? -1 : 1;
+
+      // Within each group, nearest users come first.
       final aDistance = distanceKm(currentUser, a);
       final bDistance = distanceKm(currentUser, b);
       final aHasDistance = aDistance != null;
       final bHasDistance = bDistance != null;
+
       if (aHasDistance != bHasDistance) return aHasDistance ? -1 : 1;
       if (aHasDistance && bHasDistance) {
-        final compared = aDistance.compareTo(bDistance);
-        if (compared != 0) return compared;
+        final distanceComparison = aDistance.compareTo(bDistance);
+        if (distanceComparison != 0) return distanceComparison;
       }
 
+      // For equally near users, the most recently active person comes first.
       final aSeen = a.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
       final bSeen = b.lastSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bSeen.compareTo(aSeen);
+      final activityComparison = bSeen.compareTo(aSeen);
+      if (activityComparison != 0) return activityComparison;
+
+      return a.nickname.toLowerCase().compareTo(b.nickname.toLowerCase());
     });
   }
 

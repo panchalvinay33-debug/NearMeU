@@ -89,24 +89,20 @@ class LinkifiedMessageText extends StatelessWidget {
   Future<void> _copy(BuildContext context, Uri uri) async {
     await Clipboard.setData(ClipboardData(text: uri.toString()));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Link copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Link copied')));
   }
 
   @override
   Widget build(BuildContext context) {
-    final normalStyle = baseStyle ??
-        const TextStyle(
-          color: Colors.white,
-          fontSize: 15.5,
-          height: 1.4,
-        );
+    final normalStyle =
+        baseStyle ??
+        const TextStyle(color: Colors.white, fontSize: 15.5, height: 1.4);
     final linkStyle = normalStyle.copyWith(
-      color: isMe ? const Color(0xFFE7D4FF) : Colors.purpleAccent,
+      color: isMe ? const Color(0xFFE7D4FF) : const Color(0xFF8B5CF6),
       decoration: TextDecoration.underline,
-      decorationColor:
-          isMe ? const Color(0xFFE7D4FF) : Colors.purpleAccent,
+      decorationColor: isMe ? const Color(0xFFE7D4FF) : const Color(0xFF8B5CF6),
       fontWeight: FontWeight.w700,
     );
     final segments = ChatLinkParser.parse(text);

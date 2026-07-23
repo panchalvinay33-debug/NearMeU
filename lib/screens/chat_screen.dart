@@ -1,18 +1,21 @@
-
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/app_user.dart';
 import '../models/message_model.dart';
 import '../services/chat_service.dart';
 import '../services/user_service.dart';
+import '../theme/app_colors.dart';
+import '../utils/nearby_user_presenter.dart';
 
 import '../widgets/chat/chat_app_bar.dart';
 import '../widgets/chat/composer.dart';
 import '../widgets/chat/date_chip.dart';
 import '../widgets/chat/message_bubble.dart';
 import '../widgets/chat/reply_preview.dart';
+import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String otherUserId;
@@ -32,13 +35,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final UserService _userService = UserService();
 
-  final TextEditingController _messageController =
-      TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
 
   final FocusNode _messageFocusNode = FocusNode();
 
-  final ScrollController _scrollController =
-      ScrollController();
+  final ScrollController _scrollController = ScrollController();
 
   MessageModel? _replyingTo;
 
@@ -49,8 +50,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _checkingBlock = true;
 
-  User? get currentUser =>
-      FirebaseAuth.instance.currentUser;
+  User? get currentUser => FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
@@ -66,8 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _checkBlockStatus() async {
     if (currentUser == null) return;
 
-    final blocked =
-        await _userService.isBlockedEitherWay(
+    final blocked = await _userService.isBlockedEitherWay(
       currentUserId: currentUser!.uid,
       otherUserId: widget.otherUserId,
     );
@@ -85,9 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_isBlocked) return;
 
-    await _userService.updateLastSeen(
-      currentUser!.uid,
-    );
+    await _userService.updateLastSeen(currentUser!.uid);
 
     await _chatService.markMessagesAsSeen(
       currentUserId: currentUser!.uid,
@@ -98,9 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     if (currentUser != null) {
-      _userService.updateLastSeen(
-        currentUser!.uid,
-      );
+      _userService.updateLastSeen(currentUser!.uid);
     }
 
     _messageController.dispose();
@@ -111,8 +106,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    final text =
-        _messageController.text.trim();
+    final text = _messageController.text.trim();
 
     if (text.isEmpty) return;
 
@@ -146,12 +140,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(error.toString()),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) {
         setState(() {
@@ -162,25 +153,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) {
         return;
       }
 
       _scrollController.animateTo(
-        _scrollController.position
-                .maxScrollExtent +
-            120,
-        duration:
-            const Duration(milliseconds: 250),
+        _scrollController.position.maxScrollExtent + 120,
+        duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
     });
   }
-  String _replyPreviewText(
-    MessageModel message,
-  ) {
+
+  String _replyPreviewText(MessageModel message) {
     if (message.isUnsent) {
       return "This message was unsent";
     }
@@ -198,21 +184,15 @@ class _ChatScreenState extends State<ChatScreen> {
     return text;
   }
 
-  String _replySenderLabel(
-    MessageModel message,
-  ) {
-    if (currentUser != null &&
-        message.senderId ==
-            currentUser!.uid) {
+  String _replySenderLabel(MessageModel message) {
+    if (currentUser != null && message.senderId == currentUser!.uid) {
       return "You";
     }
 
     return widget.otherUserName;
   }
 
-  void _startReply(
-    MessageModel message,
-  ) {
+  void _startReply(MessageModel message) {
     if (_isBlocked) return;
 
     setState(() {
@@ -238,36 +218,23 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _copyMessage(
-    MessageModel message,
-  ) async {
+  Future<void> _copyMessage(MessageModel message) async {
     if (message.isUnsent) return;
 
     if (message.text.trim().isEmpty) {
       return;
     }
 
-    await Clipboard.setData(
-      ClipboardData(
-        text: message.text.trim(),
-      ),
-    );
+    await Clipboard.setData(ClipboardData(text: message.text.trim()));
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Message copied",
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Message copied")));
   }
 
-  Future<void> _deleteForMe(
-    MessageModel message,
-  ) async {
+  Future<void> _deleteForMe(MessageModel message) async {
     if (currentUser == null) return;
 
     await _chatService.deleteMessageForMe(
@@ -278,48 +245,30 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Message deleted for you",
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Message deleted for you")));
   }
 
-  Future<void> _showMessageOptions(
-    MessageModel message,
-  ) async {
+  Future<void> _showMessageOptions(MessageModel message) async {
     if (currentUser == null) return;
 
-    final canUnsend =
-        message.canUnsend(currentUser!.uid);
+    final canUnsend = message.canUnsend(currentUser!.uid);
 
-    final isMe =
-        message.senderId ==
-            currentUser!.uid;
+    final isMe = message.senderId == currentUser!.uid;
 
     await showModalBottomSheet(
       context: context,
-      backgroundColor:
-          const Color(0xff171717),
-      shape:
-          const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(
-          top: Radius.circular(22),
-        ),
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Wrap(
               children: [
-
                 if (!_isBlocked)
                   ListTile(
                     leading: const Icon(
@@ -328,9 +277,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     title: const Text(
                       "Reply",
-                      style: TextStyle(
-                        color: Colors.white,
-                      ),
+                      style: TextStyle(color: Colors.white),
                     ),
                     onTap: () {
                       Navigator.pop(context);
@@ -338,10 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
 
-                if (!message.isUnsent &&
-                    message.text
-                        .trim()
-                        .isNotEmpty)
+                if (!message.isUnsent && message.text.trim().isNotEmpty)
                   ListTile(
                     leading: const Icon(
                       Icons.copy_rounded,
@@ -349,36 +293,27 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     title: const Text(
                       "Copy",
-                      style: TextStyle(
-                        color: Colors.white,
-                      ),
+                      style: TextStyle(color: Colors.white),
                     ),
                     onTap: () async {
                       Navigator.pop(context);
-                      await _copyMessage(
-                        message,
-                      );
+                      await _copyMessage(message);
                     },
                   ),
 
                 ListTile(
                   leading: const Icon(
-                    Icons
-                        .delete_outline_rounded,
+                    Icons.delete_outline_rounded,
                     color: Colors.white,
                   ),
                   title: const Text(
                     "Delete for me",
-                    style: TextStyle(
-                      color: Colors.white,
-                    ),
+                    style: TextStyle(color: Colors.white),
                   ),
                   onTap: () async {
                     Navigator.pop(context);
 
-                    await _deleteForMe(
-                      message,
-                    );
+                    await _deleteForMe(message);
                   },
                 ),
 
@@ -390,30 +325,19 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     title: const Text(
                       "Unsend",
-                      style: TextStyle(
-                        color: Colors.white,
-                      ),
+                      style: TextStyle(color: Colors.white),
                     ),
                     subtitle: const Text(
                       "Remove for both users",
-                      style: TextStyle(
-                        color:
-                            Colors.white54,
-                      ),
+                      style: TextStyle(color: Colors.white54),
                     ),
                     onTap: () async {
-                      Navigator.pop(
-                        context,
-                      );
+                      Navigator.pop(context);
 
-                      await _chatService
-                          .unsendMessage(
-                        currentUserId:
-                            currentUser!.uid,
-                        otherUserId:
-                            widget.otherUserId,
-                        message:
-                            message,
+                      await _chatService.unsendMessage(
+                        currentUserId: currentUser!.uid,
+                        otherUserId: widget.otherUserId,
+                        message: message,
                       );
                     },
                   ),
@@ -425,9 +349,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  String _formatLastSeen(
-    DateTime? dt,
-  ) {
+  String _formatLastSeen(DateTime? dt) {
     if (_isBlocked) {
       return "Unavailable";
     }
@@ -440,7 +362,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final diff = now.difference(dt);
 
     if (diff.inSeconds < 60) {
-      return "Online";
+      return "Last seen just now";
     }
 
     if (diff.inMinutes < 60) {
@@ -454,47 +376,24 @@ class _ChatScreenState extends State<ChatScreen> {
     return "Last seen ${dt.day}/${dt.month}/${dt.year}";
   }
 
-  String _formatMessageTime(
-    DateTime dt,
-  ) {
-    final hour =
-        dt.hour % 12 == 0
-            ? 12
-            : dt.hour % 12;
+  String _formatMessageTime(DateTime dt) {
+    final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
 
-    final minute =
-        dt.minute
-            .toString()
-            .padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
 
-    final period =
-        dt.hour >= 12
-            ? "PM"
-            : "AM";
+    final period = dt.hour >= 12 ? "PM" : "AM";
 
     return "$hour:$minute $period";
   }
-  String _formatDateHeader(
-    DateTime dt,
-  ) {
+
+  String _formatDateHeader(DateTime dt) {
     final now = DateTime.now();
 
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
-    final messageDay = DateTime(
-      dt.year,
-      dt.month,
-      dt.day,
-    );
+    final messageDay = DateTime(dt.year, dt.month, dt.day);
 
-    final difference =
-        today
-            .difference(messageDay)
-            .inDays;
+    final difference = today.difference(messageDay).inDays;
 
     if (difference == 0) {
       return "Today";
@@ -522,44 +421,29 @@ class _ChatScreenState extends State<ChatScreen> {
     return "${dt.day} ${months[dt.month - 1]} ${dt.year}";
   }
 
-  bool _shouldShowDateHeader(
-    List<MessageModel> messages,
-    int index,
-  ) {
+  bool _shouldShowDateHeader(List<MessageModel> messages, int index) {
     if (index == 0) {
       return true;
     }
 
-    final current =
-        messages[index].timestamp;
+    final current = messages[index].timestamp;
 
-    final previous =
-        messages[index - 1].timestamp;
+    final previous = messages[index - 1].timestamp;
 
-    return current.year !=
-            previous.year ||
-        current.month !=
-            previous.month ||
-        current.day !=
-            previous.day;
+    return current.year != previous.year ||
+        current.month != previous.month ||
+        current.day != previous.day;
   }
 
   Widget _buildReplyPreview() {
-    if (_replyingTo == null ||
-        _isBlocked) {
+    if (_replyingTo == null || _isBlocked) {
       return const SizedBox.shrink();
     }
 
     return ReplyPreview(
       replyingTo: _replyingTo!,
-      senderName:
-          _replySenderLabel(
-        _replyingTo!,
-      ),
-      previewText:
-          _replyPreviewText(
-        _replyingTo!,
-      ),
+      senderName: _replySenderLabel(_replyingTo!),
+      previewText: _replyPreviewText(_replyingTo!),
       onClose: () {
         setState(() {
           _replyingTo = null;
@@ -569,87 +453,55 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildEmojiPicker() {
-    if (!_showEmojiPicker ||
-        _isBlocked) {
+    if (!_showEmojiPicker || _isBlocked) {
       return const SizedBox.shrink();
     }
 
     return SizedBox(
       height: 280,
       child: EmojiPicker(
-        textEditingController:
-            _messageController,
+        textEditingController: _messageController,
         config: Config(
           height: 280,
-          checkPlatformCompatibility:
-              true,
-          emojiViewConfig:
-              const EmojiViewConfig(
+          checkPlatformCompatibility: true,
+          emojiViewConfig: const EmojiViewConfig(
             emojiSizeMax: 28,
             columns: 8,
-            backgroundColor:
-                Color(0xff0B0B0B),
+            backgroundColor: Color(0xff0B0B0B),
           ),
-          categoryViewConfig:
-              const CategoryViewConfig(
-            backgroundColor:
-                Color(0xff171717),
-            iconColorSelected:
-                Colors.purpleAccent,
-            iconColor:
-                Colors.white54,
-            indicatorColor:
-                Colors.purpleAccent,
+          categoryViewConfig: const CategoryViewConfig(
+            backgroundColor: Color(0xff171717),
+            iconColorSelected: AppColors.primary,
+            iconColor: Colors.white54,
+            indicatorColor: AppColors.primary,
           ),
-          bottomActionBarConfig:
-              const BottomActionBarConfig(
-            backgroundColor:
-                Color(0xff171717),
-            buttonColor:
-                Colors.purpleAccent,
+          bottomActionBarConfig: const BottomActionBarConfig(
+            backgroundColor: Color(0xff171717),
+            buttonColor: AppColors.primary,
           ),
-          searchViewConfig:
-              const SearchViewConfig(
-            backgroundColor:
-                Color(0xff171717),
-            buttonIconColor:
-                Colors.white,
-            hintTextStyle:
-                TextStyle(
-              color:
-                  Colors.white54,
-            ),
-            inputTextStyle:
-                TextStyle(
-              color:
-                  Colors.white,
-            ),
+          searchViewConfig: const SearchViewConfig(
+            backgroundColor: Color(0xff171717),
+            buttonIconColor: Colors.white,
+            hintTextStyle: TextStyle(color: Colors.white54),
+            inputTextStyle: TextStyle(color: Colors.white),
           ),
         ),
       ),
     );
   }
+
   Widget _buildBlockedBar() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(
-        12,
-        0,
-        12,
-        12,
-      ),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xff171717),
-        borderRadius:
-            BorderRadius.circular(18),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: const Text(
         "You cannot send messages in this chat.",
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: 14,
-        ),
+        style: TextStyle(color: Colors.white70, fontSize: 14),
       ),
     );
   }
@@ -661,235 +513,230 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Column(
       children: [
-
         ChatComposer(
-          controller:
-              _messageController,
-          focusNode:
-              _messageFocusNode,
-          showEmojiPicker:
-              _showEmojiPicker,
-          onEmojiTap:
-              _toggleEmojiPicker,
+          controller: _messageController,
+          focusNode: _messageFocusNode,
+          showEmojiPicker: _showEmojiPicker,
+          onEmojiTap: _toggleEmojiPicker,
           onSend: _isSending ? null : _sendMessage,
           onTextFieldTap: () {
             if (_showEmojiPicker) {
               setState(() {
-                _showEmojiPicker =
-                    false;
+                _showEmojiPicker = false;
               });
             }
           },
-          replyPreview:
-              _replyingTo == null
-                  ? null
-                  : _buildReplyPreview(),
+          replyPreview: _replyingTo == null ? null : _buildReplyPreview(),
         ),
 
         _buildEmojiPicker(),
       ],
     );
   }
-Future<void> _showReportDialog() async {
-  if (currentUser == null) return;
 
-  String selectedReason = "Spam";
-  final descriptionController = TextEditingController();
+  Future<void> _showReportDialog() async {
+    if (currentUser == null) return;
 
-  final reasons = [
-    "Spam",
-    "Fake Profile",
-    "Harassment",
-    "Hate Speech",
-    "Scam/Fraud",
-    "Inappropriate Content",
-    "Other",
-  ];
+    String selectedReason = "Spam";
+    final descriptionController = TextEditingController();
 
-  await showDialog(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            backgroundColor: const Color(0xff171717),
-            title: const Text(
-              "Report User",
-              style: TextStyle(color: Colors.white),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+    final reasons = [
+      "Spam",
+      "Fake Profile",
+      "Harassment",
+      "Hate Speech",
+      "Scam/Fraud",
+      "Inappropriate Content",
+      "Other",
+    ];
 
-                  DropdownButton<String>(
-                    value: selectedReason,
-                    dropdownColor: const Color(0xff171717),
-                    isExpanded: true,
-                    style: const TextStyle(color: Colors.white),
-                    items: reasons.map((e) {
-                      return DropdownMenuItem(
-                        value: e,
-                        child: Text(e),
-                      );
-                    }).toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        selectedReason = v;
-                      });
-                    },
-                  ),
-
-                  if (selectedReason == "Other")
-                    const SizedBox(height: 16),
-
-                  if (selectedReason == "Other")
-                    TextField(
-                      controller: descriptionController,
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: const Text(
+                "Report User",
+                style: TextStyle(color: Colors.white),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButton<String>(
+                      value: selectedReason,
+                      dropdownColor: AppColors.surface,
+                      isExpanded: true,
                       style: const TextStyle(color: Colors.white),
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: "Describe the problem",
-                      ),
+                      items: reasons.map((e) {
+                        return DropdownMenuItem(value: e, child: Text(e));
+                      }).toList(),
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          selectedReason = v;
+                        });
+                      },
                     ),
-                ],
-              ),
-            ),
-            actions: [
 
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text("Cancel"),
-              ),
+                    if (selectedReason == "Other") const SizedBox(height: 16),
 
-              ElevatedButton(
-                onPressed: () async {
-
-                  Navigator.pop(context);
-
-                  try {
-
-                    await _userService.reportUser(
-
-                      reporterId: currentUser!.uid,
-
-                      reportedUserId: widget.otherUserId,
-
-                      reason: selectedReason,
-
-                      description:
-                          descriptionController.text.trim(),
-                    );
-
-                    if (!mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          "User reported successfully.",
+                    if (selectedReason == "Other")
+                      TextField(
+                        controller: descriptionController,
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          hintText: "Describe the problem",
                         ),
                       ),
-                    );
-                  } catch (e) {
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Cancel"),
+                ),
 
-                    if (!mounted) return;
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          e.toString(),
+                    try {
+                      await _userService.reportUser(
+                        reporterId: currentUser!.uid,
+
+                        reportedUserId: widget.otherUserId,
+
+                        reason: selectedReason,
+
+                        description: descriptionController.text.trim(),
+                      );
+
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("User reported successfully."),
                         ),
-                      ),
-                    );
-                  }
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  },
+                  child: const Text("Report"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openOtherUserProfile() async {
+    try {
+      final profile = await _userService.getUser(widget.otherUserId);
+
+      if (!mounted) return;
+
+      if (profile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profile is not available right now.")),
+        );
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => UserProfileScreen(user: profile)),
+      );
+
+      await _checkBlockStatus();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not open this profile.")),
+      );
+    }
+  }
+
+  Future<void> _showChatMenu() async {
+    await showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.flag_rounded, color: Colors.red),
+                title: const Text(
+                  "Report User",
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+
+                  _showReportDialog();
                 },
-                child: const Text("Report"),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person, color: Colors.white),
+                title: const Text(
+                  "View Profile",
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _openOtherUserProfile();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.block, color: Colors.white),
+                title: const Text(
+                  "Block User",
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+
+                  if (currentUser == null) return;
+
+                  await _userService.blockUser(
+                    currentUserId: currentUser!.uid,
+                    targetUserId: widget.otherUserId,
+                  );
+
+                  await _checkBlockStatus();
+                },
               ),
             ],
-          );
-        },
-      );
-    },
-  );
-}
-Future<void> _showChatMenu() async {
-  await showModalBottomSheet(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    backgroundColor: const Color(0xFF171717),
-    builder: (context) {
-      return SafeArea(
-        child: Wrap(
-          children: [
-           ListTile(
-  leading: const Icon(
-    Icons.flag_rounded,
-    color: Colors.red,
-  ),
-  title: const Text(
-    "Report User",
-    style: TextStyle(
-      color: Colors.white,
-    ),
-  ),
-  onTap: () {
+          ),
+        );
+      },
+    );
+  }
 
-    Navigator.pop(context);
-
-    _showReportDialog();
-  },
-),
- ListTile(
-              leading: const Icon(Icons.person, color: Colors.white),
-              title: const Text(
-                "View Profile",
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.block, color: Colors.white),
-              title: const Text(
-                "Block User",
-                style: TextStyle(color: Colors.white),
-              ),
-              onTap: () async {
-                Navigator.pop(context);
-
-                if (currentUser == null) return;
-
-                await _userService.blockUser(
-                  currentUserId: currentUser!.uid,
-                  targetUserId: widget.otherUserId,
-                );
-
-                await _checkBlockStatus();
-              },
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     if (currentUser == null) {
       return const Scaffold(
-        backgroundColor:
-            Colors.black,
+        backgroundColor: Colors.black,
         body: Center(
           child: Text(
             "User not logged in",
-            style: TextStyle(
-              color: Colors.white,
-            ),
+            style: TextStyle(color: Colors.white),
           ),
         ),
       );
@@ -899,104 +746,78 @@ Future<void> _showChatMenu() async {
       onTap: () {
         if (_showEmojiPicker) {
           setState(() {
-            _showEmojiPicker =
-                false;
+            _showEmojiPicker = false;
           });
         }
       },
       child: Scaffold(
-        backgroundColor:
-            const Color(
-          0xff0B0B0B,
+        backgroundColor: const Color(0xff0B0B0B),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: StreamBuilder<AppUser?>(
+            stream: _userService.streamUser(widget.otherUserId),
+            builder: (context, snapshot) {
+              final otherUser = snapshot.data;
+              final isOnline =
+                  !_isBlocked &&
+                  otherUser != null &&
+                  NearbyUserPresenter.isEffectivelyOnline(otherUser);
+
+              return ChatAppBar(
+                userName: widget.otherUserName,
+                lastSeen: isOnline
+                    ? "Online"
+                    : _formatLastSeen(otherUser?.lastSeen),
+                isOnline: isOnline,
+                onBack: () => Navigator.pop(context),
+                onMenu: _showChatMenu,
+              );
+            },
+          ),
         ),
-      appBar: PreferredSize(
-  preferredSize: const Size.fromHeight(kToolbarHeight),
-  child: StreamBuilder<DateTime?>(
-    stream: _userService.watchLastSeen(widget.otherUserId),
-    builder: (context, snapshot) {
-      return ChatAppBar(
-        userName: widget.otherUserName,
-        lastSeen: _formatLastSeen(snapshot.data),
-        onBack: () => Navigator.pop(context),
-        onMenu: _showChatMenu,
-      );
-    },
-  ),
-),
         body: _checkingBlock
             ? const Center(
-                child:
-                    CircularProgressIndicator(
-                  color:
-                      Colors.purpleAccent,
-                ),
+                child: CircularProgressIndicator(color: AppColors.primary),
               )
             : Column(
                 children: [
-
                   Expanded(
-                    child: StreamBuilder<
-                        List<MessageModel>>(
-                      stream:
-                          _chatService
-                              .getMessages(
-                        user1:
-                            currentUser!
-                                .uid,
-                        user2: widget
-                            .otherUserId,
+                    child: StreamBuilder<List<MessageModel>>(
+                      stream: _chatService.getMessages(
+                        user1: currentUser!.uid,
+                        user2: widget.otherUserId,
                       ),
-                      builder: (
-                        context,
-                        snapshot,
-                      ) {
-                        if (snapshot
-                                .connectionState ==
-                            ConnectionState
-                                .waiting) {
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Center(
-                            child:
-                                CircularProgressIndicator(
-                              color: Colors
-                                  .purpleAccent,
+                            child: CircularProgressIndicator(
+                              color: Colors.purpleAccent,
                             ),
                           );
                         }
 
-                        if (snapshot
-                            .hasError) {
+                        if (snapshot.hasError) {
                           return Center(
                             child: Text(
                               "Error : ${snapshot.error}",
-                              style:
-                                  const TextStyle(
-                                color: Colors
-                                    .white,
-                              ),
+                              style: const TextStyle(color: Colors.white),
                             ),
                           );
                         }
 
-                        final messages =
-                            snapshot.data ??
-                                [];
+                        final messages = snapshot.data ?? [];
 
-                        WidgetsBinding
-                            .instance
-                            .addPostFrameCallback(
-                                (_) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
                           _scrollToBottom();
                         });
 
-                        if (messages
-                            .isEmpty) {
+                        if (messages.isEmpty) {
                           return const Center(
                             child: Text(
                               "No messages yet 👋",
-                              style:
-                                  TextStyle(
-                                color: Colors
-                                    .white70,
+                              style: TextStyle(
+                                color: Colors.white70,
                                 fontSize: 16,
                               ),
                             ),
@@ -1004,66 +825,32 @@ Future<void> _showChatMenu() async {
                         }
 
                         return ListView.builder(
-                          controller:
-                              _scrollController,
-                          padding:
-                              const EdgeInsets
-                                  .all(16),
-                          itemCount:
-                              messages.length,
-                          itemBuilder:
-                              (
-                            context,
-                            index,
-                          ) {
-                            final message =
-                                messages[
-                                    index];
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
 
-                            final isMe =
-                                message.senderId ==
-                                    currentUser!
-                                        .uid;
+                            final isMe = message.senderId == currentUser!.uid;
 
                             final repliedToMe =
-                                message.replyToSenderId ==
-                                    currentUser!
-                                        .uid;
+                                message.replyToSenderId == currentUser!.uid;
 
                             return Column(
                               children: [
-
-                                if (_shouldShowDateHeader(
-                                    messages,
-                                    index))
+                                if (_shouldShowDateHeader(messages, index))
                                   DateChip(
-                                    text:
-                                        _formatDateHeader(
-                                      message
-                                          .timestamp,
-                                    ),
+                                    text: _formatDateHeader(message.timestamp),
                                   ),
 
                                 MessageBubble(
-                                  message:
-                                      message,
-                                  isMe:
-                                      isMe,
-                                  repliedToMe:
-                                      repliedToMe,
-                                  otherUserName:
-                                      widget
-                                          .otherUserName,
-                                  time:
-                                      _formatMessageTime(
-                                    message
-                                        .timestamp,
-                                  ),
-                                  onLongPress:
-                                      () =>
-                                          _showMessageOptions(
-                                    message,
-                                  ),
+                                  message: message,
+                                  isMe: isMe,
+                                  repliedToMe: repliedToMe,
+                                  otherUserName: widget.otherUserName,
+                                  time: _formatMessageTime(message.timestamp),
+                                  onLongPress: () =>
+                                      _showMessageOptions(message),
                                 ),
                               ],
                             );
@@ -1072,10 +859,7 @@ Future<void> _showChatMenu() async {
                       },
                     ),
                   ),
-                  SafeArea(
-                    top: false,
-                    child: _buildComposer(),
-                  ),
+                  SafeArea(top: false, child: _buildComposer()),
                 ],
               ),
       ),
