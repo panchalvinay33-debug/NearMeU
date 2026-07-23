@@ -43,6 +43,8 @@ class PresenceService {
     _lastPublishedOnline = null;
   }
 
+  Future<void> restoreCurrentState() => _publishDesiredState();
+
   Future<void> _handleAuthChange(User? user) async {
     await _profileSubscription?.cancel();
     _profileSubscription = null;

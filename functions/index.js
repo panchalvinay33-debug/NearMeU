@@ -1,7 +1,10 @@
+"use strict";
+
 const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const {
   buildChatNotification,
@@ -9,6 +12,7 @@ const {
   sanitizePlatform,
   tokenDocumentId,
 } = require("./notification_logic");
+const { isRecentAuthentication } = require("./account_deletion_logic");
 
 admin.initializeApp();
 
@@ -18,11 +22,23 @@ const REGION = "asia-south1";
 const MAX_TOKEN_LENGTH = 4096;
 const MULTICAST_LIMIT = 500;
 const DELETE_BATCH_LIMIT = 400;
+const DELETION_JOB_LIMIT = 20;
 
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "Sign in is required.");
+  }
+  return uid;
+}
+
+function requireRecentAuthentication(request) {
+  const uid = requireAuthenticatedUid(request);
+  if (!isRecentAuthentication(request.auth)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Please sign in again before deleting your account.",
+    );
   }
   return uid;
 }
@@ -33,6 +49,28 @@ function validatedToken(data) {
     throw new HttpsError("invalid-argument", "A valid device token is required.");
   }
   return token;
+}
+
+function deletionJobRef(uid) {
+  return db.collection("accountDeletionJobs").doc(uid);
+}
+
+async function deleteQueryDocuments(query) {
+  let deletedCount = 0;
+
+  while (true) {
+    const snapshot = await query.limit(DELETE_BATCH_LIMIT).get();
+    if (snapshot.empty) break;
+
+    const batch = db.batch();
+    for (const document of snapshot.docs) {
+      batch.delete(document.ref);
+    }
+    await batch.commit();
+    deletedCount += snapshot.size;
+  }
+
+  return deletedCount;
 }
 
 async function deleteAllDeviceTokensForUid(uid) {
@@ -66,7 +104,100 @@ async function deleteAllDeviceTokensForUid(uid) {
     deletedCount += devices.size;
   }
 
+  deletedCount += await deleteQueryDocuments(
+    db.collection("deviceTokenOwners").where("ownerId", "==", uid),
+  );
   return deletedCount;
+}
+
+async function hideMessagesForDeletedUser(chatRef, uid) {
+  let hiddenCount = 0;
+  let cursor = null;
+
+  while (true) {
+    let query = chatRef
+      .collection("messages")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(DELETE_BATCH_LIMIT);
+    if (cursor) query = query.startAfter(cursor);
+
+    const messages = await query.get();
+    if (messages.empty) break;
+
+    const batch = db.batch();
+    let writeCount = 0;
+    for (const message of messages.docs) {
+      const deletedFor = message.get("deletedFor");
+      if (Array.isArray(deletedFor) && deletedFor.includes(uid)) continue;
+      batch.update(message.ref, {
+        deletedFor: admin.firestore.FieldValue.arrayUnion(uid),
+      });
+      writeCount += 1;
+    }
+
+    if (writeCount > 0) {
+      await batch.commit();
+      hiddenCount += writeCount;
+    }
+    cursor = messages.docs[messages.docs.length - 1];
+  }
+
+  return hiddenCount;
+}
+
+async function hideAllChatsForDeletedUser(uid) {
+  const chats = await db
+    .collection("chats")
+    .where("participants", "array-contains", uid)
+    .get();
+  let hiddenMessageCount = 0;
+
+  for (const chat of chats.docs) {
+    hiddenMessageCount += await hideMessagesForDeletedUser(chat.ref, uid);
+  }
+
+  return {
+    chatCount: chats.size,
+    hiddenMessageCount,
+  };
+}
+
+async function deleteAccountFirestoreData(uid) {
+  const chatCleanup = await hideAllChatsForDeletedUser(uid);
+  const deviceCount = await deleteAllDeviceTokensForUid(uid);
+  const ownBlockCount = await deleteQueryDocuments(
+    db.collection("users").doc(uid).collection("blocks"),
+  );
+  const incomingBlockCount = await deleteQueryDocuments(
+    db.collectionGroup("blocks").where("blockedUserId", "==", uid),
+  );
+  const reportsByUserCount = await deleteQueryDocuments(
+    db.collection("reports").where("reporterId", "==", uid),
+  );
+  const reportsAboutUserCount = await deleteQueryDocuments(
+    db.collection("reports").where("reportedUserId", "==", uid),
+  );
+
+  const finalBatch = db.batch();
+  finalBatch.delete(db.collection("privateProfiles").doc(uid));
+  finalBatch.delete(db.collection("users").doc(uid));
+  await finalBatch.commit();
+
+  return {
+    ...chatCleanup,
+    deviceCount,
+    ownBlockCount,
+    incomingBlockCount,
+    reportsByUserCount,
+    reportsAboutUserCount,
+  };
+}
+
+async function completeAccountDeletionJob(uid) {
+  const cleanup = await deleteAccountFirestoreData(uid);
+  await deletionJobRef(uid).delete();
+  logger.info("Account data cleanup completed", { uid, ...cleanup });
+  return cleanup;
 }
 
 exports.registerDeviceToken = onCall({ region: REGION }, async (request) => {
@@ -152,6 +283,96 @@ exports.unregisterAllDeviceTokens = onCall(
     const uid = requireAuthenticatedUid(request);
     const deletedCount = await deleteAllDeviceTokensForUid(uid);
     return { success: true, deletedCount };
+  },
+);
+
+exports.deleteCurrentAccount = onCall(
+  { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+  async (request) => {
+    const uid = requireRecentAuthentication(request);
+    const jobRef = deletionJobRef(uid);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    await jobRef.set(
+      {
+        uid,
+        status: "pending",
+        requestedAt: now,
+        updatedAt: now,
+        attempts: admin.firestore.FieldValue.increment(1),
+      },
+      { merge: true },
+    );
+
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (!error || error.code !== "auth/user-not-found") {
+        await jobRef.delete();
+        throw error;
+      }
+    }
+
+    try {
+      const cleanup = await completeAccountDeletionJob(uid);
+      return { success: true, cleanupPending: false, ...cleanup };
+    } catch (error) {
+      logger.error("Account cleanup deferred for scheduled retry", {
+        uid,
+        error,
+      });
+      await jobRef.set(
+        {
+          status: "retryPending",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastError: String(error && error.message ? error.message : error).slice(
+            0,
+            500,
+          ),
+        },
+        { merge: true },
+      );
+      return { success: true, cleanupPending: true };
+    }
+  },
+);
+
+exports.retryPendingAccountDeletions = onSchedule(
+  {
+    schedule: "every 30 minutes",
+    region: REGION,
+    timeZone: "UTC",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async () => {
+    const jobs = await db
+      .collection("accountDeletionJobs")
+      .orderBy("requestedAt", "asc")
+      .limit(DELETION_JOB_LIMIT)
+      .get();
+
+    for (const job of jobs.docs) {
+      try {
+        await completeAccountDeletionJob(job.id);
+      } catch (error) {
+        logger.error("Scheduled account cleanup failed", {
+          uid: job.id,
+          error,
+        });
+        await job.ref.set(
+          {
+            status: "retryPending",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            attempts: admin.firestore.FieldValue.increment(1),
+            lastError: String(
+              error && error.message ? error.message : error,
+            ).slice(0, 500),
+          },
+          { merge: true },
+        );
+      }
+    }
   },
 );
 
