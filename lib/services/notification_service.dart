@@ -4,9 +4,18 @@ import 'dart:developer' as developer;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../security/notification_route.dart';
+import 'notification_navigation_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 class NotificationService {
   NotificationService._();
@@ -25,6 +34,7 @@ class NotificationService {
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
+  StreamSubscription<RemoteMessage>? _openedMessageSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _profileSubscription;
   String? _registeredUid;
@@ -43,7 +53,10 @@ class NotificationService {
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
-    await _localNotifications.initialize(settings);
+    await _localNotifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
+    );
 
     const channel = AndroidNotificationChannel(
       'nearmeu_notifications',
@@ -59,6 +72,16 @@ class NotificationService {
 
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
       _showForegroundNotification,
+    );
+    _openedMessageSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _handleOpenedRemoteMessage,
+      onError: (Object error, StackTrace stackTrace) {
+        developer.log(
+          'Notification-open listener failed',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
     );
     _tokenSubscription = _messaging.onTokenRefresh.listen(
       _handleTokenRefresh,
@@ -81,6 +104,7 @@ class NotificationService {
       },
     );
 
+    await _queueInitialNotificationRoute();
     await _handleAuthState(_auth.currentUser);
   }
 
@@ -142,13 +166,41 @@ class NotificationService {
     }
   }
 
+  Future<void> _queueInitialNotificationRoute() async {
+    final launchDetails = await _localNotifications
+        .getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true) {
+      NotificationNavigationService.instance.queueChatId(
+        launchDetails?.notificationResponse?.payload,
+      );
+    }
+
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _handleOpenedRemoteMessage(initialMessage);
+    }
+  }
+
+  void _handleLocalNotificationResponse(NotificationResponse response) {
+    NotificationNavigationService.instance.queueChatId(response.payload);
+  }
+
+  void _handleOpenedRemoteMessage(RemoteMessage message) {
+    NotificationNavigationService.instance.queueChatId(
+      NotificationRoute.chatIdFromData(message.data),
+    );
+  }
+
   Future<void> _handleAuthState(User? user) async {
     await _profileSubscription?.cancel();
     _profileSubscription = null;
     _registeredUid = null;
     _registeredToken = null;
 
-    if (user == null) return;
+    if (user == null) {
+      NotificationNavigationService.instance.setAppShellReady(false);
+      return;
+    }
 
     _profileSubscription = _firestore
         .collection('users')
@@ -245,7 +297,8 @@ class NotificationService {
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
     final notification = message.notification;
-    if (notification == null) return;
+    final chatId = NotificationRoute.chatIdFromData(message.data);
+    if (notification == null || chatId == null) return;
 
     await _localNotifications.show(
       notification.hashCode,
@@ -260,7 +313,7 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
-      payload: message.data['chatId'] as String?,
+      payload: chatId,
     );
   }
 
@@ -269,10 +322,12 @@ class NotificationService {
     await _authSubscription?.cancel();
     await _tokenSubscription?.cancel();
     await _foregroundSubscription?.cancel();
+    await _openedMessageSubscription?.cancel();
     _profileSubscription = null;
     _authSubscription = null;
     _tokenSubscription = null;
     _foregroundSubscription = null;
+    _openedMessageSubscription = null;
     _initialized = false;
   }
 }
