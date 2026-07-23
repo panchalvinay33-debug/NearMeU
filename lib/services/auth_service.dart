@@ -65,6 +65,11 @@ class AuthService {
     await deleteFirebaseAuthAccount();
   }
 
+  Future<void> clearLocalSessionAfterServerDeletion() async {
+    await _googleSignIn.signOut();
+    await _auth.signOut();
+  }
+
   Future<void> logout() async {
     await NotificationService.instance.unregisterCurrentDevice();
     await PresenceService.instance.goOfflineBeforeSignOut();
