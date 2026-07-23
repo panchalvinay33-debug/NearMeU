@@ -44,6 +44,12 @@ service cloud.firestore {
         && !isSuspended(request.auth.uid);
     }
 
+    function reportSubmissionAllowed() {
+      let statePath = /databases/$(database)/documents/antiAbuseUsers/$(request.auth.uid);
+      return !exists(statePath)
+        || get(statePath).data.get('reportRestrictedUntil', request.time) <= request.time;
+    }
+
     function deterministicChatId(firstId, secondId) {
       return firstId < secondId
         ? firstId + '_' + secondId
@@ -469,16 +475,15 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow get: if (activeUser() && (!chatExists(chatId) || isCurrentChatParticipant())) || isAdmin();
       allow list: if (activeUser() && isCurrentChatParticipant()) || isAdmin();
-      allow create: if activeUser() && isRequestedParticipant() && validChatCreate(chatId);
-      allow update: if (activeUser() && isCurrentChatParticipant() && validChatUpdate(chatId))
-        || (activeUser() && isCurrentChatParticipant() && validReadStateUpdate())
+      allow create: if false;
+      allow update: if (activeUser() && isCurrentChatParticipant() && validReadStateUpdate())
         || (activeUser() && isCurrentChatParticipant() && validChatUnsendUpdate())
         || isAdmin();
       allow delete: if false;
 
       match /messages/{messageId} {
         allow read: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
-        allow create: if activeUser() && validMessageCreate(chatId, messageId);
+        allow create: if false;
         allow update: if activeUser()
           && isChatParticipant(chatId)
           && (validMessageUnsend() || validMessageSeen() || validMessageDeleteForMe(chatId));
@@ -515,6 +520,7 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow read, update, delete: if isAdmin();
       allow create: if activeUser()
+        && reportSubmissionAllowed()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.reportedUserId != request.auth.uid
         && request.resource.data.keys().hasOnly(['reporterId', 'reportedUserId', 'reporterName', 'reporterPhoto', 'reportedUserName', 'reportedUserPhoto', 'reason', 'description', 'status', 'createdAt', 'reviewedAt', 'reviewedBy', 'action'])
@@ -523,6 +529,18 @@ service cloud.firestore {
         && request.resource.data.description.size() <= 500
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time;
+    }
+
+    match /antiAbuseUsers/{userId} {
+      allow read, write: if false;
+    }
+
+    match /reportLocks/{lockId} {
+      allow read, write: if false;
+    }
+
+    match /moderationAuditLogs/{logId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
