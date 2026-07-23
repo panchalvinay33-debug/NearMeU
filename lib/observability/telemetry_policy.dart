@@ -6,6 +6,22 @@ class TelemetryPolicy {
     defaultValue: false,
   );
 
+  static const Set<String> _sensitiveFragments = <String>{
+    'email',
+    'message',
+    'text',
+    'latitude',
+    'longitude',
+    'location',
+    'address',
+    'phone',
+    'uid',
+    'user_id',
+    'token',
+    'photo',
+    'name',
+  };
+
   static bool shouldCollect({
     required bool isReleaseMode,
     bool? explicitOverride,
@@ -31,5 +47,17 @@ class TelemetryPolicy {
         ? normalized
         : 'event_$normalized';
     return prefixed.length <= 40 ? prefixed : prefixed.substring(0, 40);
+  }
+
+  static bool allowsField(String key, Object value) {
+    final normalizedKey = key.trim().toLowerCase();
+    if (normalizedKey.isEmpty) return false;
+    if (_sensitiveFragments.any(normalizedKey.contains)) return false;
+    return value is String || value is num;
+  }
+
+  static String safeAttributeValue(String value) {
+    final trimmed = value.trim();
+    return trimmed.length <= 100 ? trimmed : trimmed.substring(0, 100);
   }
 }
