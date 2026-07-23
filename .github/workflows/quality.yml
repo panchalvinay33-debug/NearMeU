@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Validate production release configuration
+        run: bash tool/validate_release_config.sh
+
       - name: Upload resolved Flutter lockfile
         uses: actions/upload-artifact@v4
         with:
@@ -136,8 +139,8 @@ jobs:
       - name: Run function unit tests
         run: npm test --prefix functions
 
-      - name: Load function definitions
-        run: node -e "require('./functions/index.js')"
+      - name: Load secure function definitions
+        run: node -e "require('./functions')"
 
   firestore-rules:
     name: Firestore rules tests

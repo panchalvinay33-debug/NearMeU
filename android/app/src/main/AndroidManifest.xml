@@ -2,21 +2,26 @@
     package="com.nearmeu.nearmeu">
 
     <uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
-        android:label="NearMeU"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="NearMeU"
+        android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
+            android:hardwareAccelerated="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
             <meta-data
@@ -30,12 +35,12 @@
         </activity>
 
         <meta-data
-    android:name="com.google.firebase.messaging.default_notification_channel_id"
-    android:value="nearmeu_notifications" />
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="nearmeu_notifications" />
 
-<meta-data
-    android:name="flutterEmbedding"
-    android:value="2" />
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
     </application>
 
     <queries>
