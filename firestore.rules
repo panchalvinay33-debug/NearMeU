@@ -518,7 +518,9 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin()
+        || (activeUser() && resource.data.reporterId == request.auth.uid);
+      allow update, delete: if isAdmin();
       allow create: if activeUser()
         && reportSubmissionAllowed()
         && request.resource.data.reporterId == request.auth.uid
