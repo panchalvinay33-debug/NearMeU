@@ -184,9 +184,9 @@ describe('chat unread/read state rules', () => {
     );
   });
 
-  it('accepts exactly recipient unread +1 during delivery', async () => {
+  it('rejects a correctly shaped direct client delivery update', async () => {
     const db = authedDb('alice');
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db, 'chats/alice_bob'), deliveryUpdate()),
     );
   });
