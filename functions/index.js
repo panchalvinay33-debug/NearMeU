@@ -1,3 +1,5 @@
+"use strict";
+
 const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
@@ -9,6 +11,9 @@ const {
   sanitizePlatform,
   tokenDocumentId,
 } = require("./notification_logic");
+const {
+  isRecentAuthentication,
+} = require("./account_deletion_logic");
 
 admin.initializeApp();
 
@@ -27,12 +32,41 @@ function requireAuthenticatedUid(request) {
   return uid;
 }
 
+function requireRecentAuthentication(request) {
+  const uid = requireAuthenticatedUid(request);
+  if (!isRecentAuthentication(request.auth)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Please sign in again before deleting your account.",
+    );
+  }
+  return uid;
+}
+
 function validatedToken(data) {
   const token = data && typeof data.token === "string" ? data.token.trim() : "";
   if (!token || token.length > MAX_TOKEN_LENGTH) {
     throw new HttpsError("invalid-argument", "A valid device token is required.");
   }
   return token;
+}
+
+async function deleteQueryDocuments(query) {
+  let deletedCount = 0;
+
+  while (true) {
+    const snapshot = await query.limit(DELETE_BATCH_LIMIT).get();
+    if (snapshot.empty) break;
+
+    const batch = db.batch();
+    for (const document of snapshot.docs) {
+      batch.delete(document.ref);
+    }
+    await batch.commit();
+    deletedCount += snapshot.size;
+  }
+
+  return deletedCount;
 }
 
 async function deleteAllDeviceTokensForUid(uid) {
@@ -66,7 +100,93 @@ async function deleteAllDeviceTokensForUid(uid) {
     deletedCount += devices.size;
   }
 
+  deletedCount += await deleteQueryDocuments(
+    db.collection("deviceTokenOwners").where("ownerId", "==", uid),
+  );
   return deletedCount;
+}
+
+async function hideMessagesForDeletedUser(chatRef, uid) {
+  let hiddenCount = 0;
+  let cursor = null;
+
+  while (true) {
+    let query = chatRef
+      .collection("messages")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(DELETE_BATCH_LIMIT);
+    if (cursor) query = query.startAfter(cursor);
+
+    const messages = await query.get();
+    if (messages.empty) break;
+
+    const batch = db.batch();
+    let writeCount = 0;
+    for (const message of messages.docs) {
+      const deletedFor = message.get("deletedFor");
+      if (Array.isArray(deletedFor) && deletedFor.includes(uid)) continue;
+      batch.update(message.ref, {
+        deletedFor: admin.firestore.FieldValue.arrayUnion(uid),
+      });
+      writeCount += 1;
+    }
+
+    if (writeCount > 0) {
+      await batch.commit();
+      hiddenCount += writeCount;
+    }
+    cursor = messages.docs[messages.docs.length - 1];
+  }
+
+  return hiddenCount;
+}
+
+async function hideAllChatsForDeletedUser(uid) {
+  const chats = await db
+    .collection("chats")
+    .where("participants", "array-contains", uid)
+    .get();
+  let hiddenMessageCount = 0;
+
+  for (const chat of chats.docs) {
+    hiddenMessageCount += await hideMessagesForDeletedUser(chat.ref, uid);
+  }
+
+  return {
+    chatCount: chats.size,
+    hiddenMessageCount,
+  };
+}
+
+async function deleteAccountFirestoreData(uid) {
+  const chatCleanup = await hideAllChatsForDeletedUser(uid);
+  const deviceCount = await deleteAllDeviceTokensForUid(uid);
+  const ownBlockCount = await deleteQueryDocuments(
+    db.collection("users").doc(uid).collection("blocks"),
+  );
+  const incomingBlockCount = await deleteQueryDocuments(
+    db.collectionGroup("blocks").where("blockedUserId", "==", uid),
+  );
+  const reportsByUserCount = await deleteQueryDocuments(
+    db.collection("reports").where("reporterId", "==", uid),
+  );
+  const reportsAboutUserCount = await deleteQueryDocuments(
+    db.collection("reports").where("reportedUserId", "==", uid),
+  );
+
+  const finalBatch = db.batch();
+  finalBatch.delete(db.collection("privateProfiles").doc(uid));
+  finalBatch.delete(db.collection("users").doc(uid));
+  await finalBatch.commit();
+
+  return {
+    ...chatCleanup,
+    deviceCount,
+    ownBlockCount,
+    incomingBlockCount,
+    reportsByUserCount,
+    reportsAboutUserCount,
+  };
 }
 
 exports.registerDeviceToken = onCall({ region: REGION }, async (request) => {
@@ -152,6 +272,25 @@ exports.unregisterAllDeviceTokens = onCall(
     const uid = requireAuthenticatedUid(request);
     const deletedCount = await deleteAllDeviceTokensForUid(uid);
     return { success: true, deletedCount };
+  },
+);
+
+exports.deleteCurrentAccount = onCall(
+  { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+  async (request) => {
+    const uid = requireRecentAuthentication(request);
+
+    logger.info("Account deletion started", { uid });
+    const cleanup = await deleteAccountFirestoreData(uid);
+
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (error) {
+      if (!error || error.code !== "auth/user-not-found") throw error;
+    }
+
+    logger.info("Account deletion completed", { uid, ...cleanup });
+    return { success: true, ...cleanup };
   },
 );
 
