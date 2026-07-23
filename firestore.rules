@@ -442,7 +442,7 @@ service cloud.firestore {
           && validPublicUserData(request.resource.data, userId)
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['isAdmin', 'isSuspended', 'createdAt', 'uid']));
-      allow delete: if isAdmin() || (activeUser() && request.auth.uid == userId);
+      allow delete: if false;
 
       match /blocks/{blockedUserId} {
         allow get: if activeUser()
@@ -463,7 +463,7 @@ service cloud.firestore {
       allow create, update: if signedIn()
         && request.auth.uid == userId
         && validPrivateProfileData(request.resource.data);
-      allow delete: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
     }
 
     match /chats/{chatId} {
@@ -474,7 +474,7 @@ service cloud.firestore {
         || (activeUser() && isCurrentChatParticipant() && validReadStateUpdate())
         || (activeUser() && isCurrentChatParticipant() && validChatUnsendUpdate())
         || isAdmin();
-      allow delete: if (activeUser() && isCurrentChatParticipant()) || isAdmin();
+      allow delete: if false;
 
       match /messages/{messageId} {
         allow read: if (activeUser() && isChatParticipant(chatId)) || isAdmin();
