@@ -6,6 +6,7 @@ const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const db = admin.firestore();
 const REGION = "asia-south1";
 const MAX_CHAT_PREVIEWS = 100;
+const MAX_LEGACY_MESSAGES = 100;
 const MAX_DISCOVERY_USERS = 100;
 
 function requireAuthenticatedUid(request) {
@@ -49,6 +50,34 @@ function safeInteger(value, fallback = 0) {
   return Number.isInteger(value) ? value : fallback;
 }
 
+function safeMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+}
+
+function canonicalParticipants(firstId, secondId) {
+  return [firstId, secondId].sort();
+}
+
+function validParticipants(value, uid) {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    value.every((participant) => typeof participant === "string") &&
+    value[0] !== value[1] &&
+    value.includes(uid)
+  );
+}
+
+function participantsFromMessage(message, uid) {
+  const senderId = safeString(message.senderId);
+  const receiverId = safeString(message.receiverId);
+  if (!senderId || !receiverId || senderId === receiverId) return null;
+  if (senderId !== uid && receiverId !== uid) return null;
+  return canonicalParticipants(senderId, receiverId);
+}
+
 function publicUserPayload(snapshot) {
   const data = snapshot.data() || {};
   return {
@@ -77,6 +106,192 @@ function publicUserPayload(snapshot) {
   };
 }
 
+async function legacyChatDocuments(uid) {
+  const [sentMessages, receivedMessages] = await Promise.all([
+    db
+      .collectionGroup("messages")
+      .where("senderId", "==", uid)
+      .limit(MAX_LEGACY_MESSAGES)
+      .get(),
+    db
+      .collectionGroup("messages")
+      .where("receiverId", "==", uid)
+      .limit(MAX_LEGACY_MESSAGES)
+      .get(),
+  ]);
+
+  const references = new Map();
+  for (const message of [...sentMessages.docs, ...receivedMessages.docs]) {
+    const chatRef = message.ref.parent.parent;
+    if (chatRef) references.set(chatRef.path, chatRef);
+    if (references.size >= MAX_CHAT_PREVIEWS) break;
+  }
+
+  if (!references.size) return [];
+  return db.getAll(...references.values());
+}
+
+async function repairLegacyChat({
+  chatDocument,
+  data,
+  participants,
+  latestMessageId,
+  latestData,
+}) {
+  const lastMessageTime =
+    data.lastMessageTime || latestData.timestamp || admin.firestore.Timestamp.now();
+  const isUnsent =
+    latestData.isUnsent === true ||
+    data.lastMessageIsUnsent === true ||
+    data.lastMessage === "This message was unsent";
+  const lastMessage = isUnsent
+    ? "This message was unsent"
+    : safeString(data.lastMessage, safeString(latestData.text, "Message"));
+  const lastSenderId = safeString(
+    data.lastMessageSenderId,
+    safeString(latestData.senderId),
+  );
+  const existingUnreadCounts = safeMap(data.unreadCounts);
+  const existingReadStates = safeMap(data.readStates);
+  const unreadCounts = {};
+  const readStates = {};
+
+  for (const participant of participants) {
+    unreadCounts[participant] = safeInteger(existingUnreadCounts[participant], 0);
+    const existingState = safeMap(existingReadStates[participant]);
+    readStates[participant] = {
+      ...existingState,
+      unreadCount: safeInteger(
+        existingState.unreadCount,
+        unreadCounts[participant],
+      ),
+    };
+  }
+
+  await chatDocument.ref.set(
+    {
+      participants,
+      lastMessage,
+      lastMessageTime,
+      latestMessageAt: data.latestMessageAt || lastMessageTime,
+      lastMessageSenderId: lastSenderId,
+      latestSenderId: safeString(data.latestSenderId, lastSenderId),
+      lastMessageType: safeString(
+        latestData.type,
+        safeString(data.lastMessageType, "text"),
+      ),
+      lastMessageIsUnsent: isUnsent,
+      createdAt: data.createdAt || lastMessageTime,
+      unreadCounts,
+      readStates,
+      legacyRepair: {
+        repairedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sourceMessageId: latestMessageId,
+      },
+    },
+    { merge: true },
+  );
+}
+
+async function buildChatPreview({
+  chatDocument,
+  uid,
+  currentUserRef,
+  allowRepair,
+}) {
+  const data = chatDocument.data() || {};
+  const latestMessages = await chatDocument.ref
+    .collection("messages")
+    .orderBy("timestamp", "desc")
+    .limit(1)
+    .get();
+  if (latestMessages.empty) return null;
+
+  const latestMessage = latestMessages.docs[0];
+  const latestData = latestMessage.data() || {};
+  const existingParticipants = validParticipants(data.participants, uid)
+    ? data.participants
+    : null;
+  const participants =
+    existingParticipants || participantsFromMessage(latestData, uid);
+  if (!participants) return null;
+
+  const otherUserId = participants.find((value) => value !== uid);
+  if (!otherUserId) return null;
+
+  const otherUserRef = db.collection("users").doc(otherUserId);
+  const blockedByCurrentRef = currentUserRef
+    .collection("blocks")
+    .doc(otherUserId);
+  const blockedByOtherRef = otherUserRef.collection("blocks").doc(uid);
+  const [otherUser, blockedByCurrent, blockedByOther] = await Promise.all([
+    otherUserRef.get(),
+    blockedByCurrentRef.get(),
+    blockedByOtherRef.get(),
+  ]);
+
+  if (blockedByCurrent.exists || blockedByOther.exists) return null;
+
+  const otherData = otherUser.exists ? otherUser.data() || {} : {};
+  if (otherData.isSuspended === true) return null;
+
+  const needsRepair =
+    !existingParticipants ||
+    !data.lastMessageTime ||
+    !data.lastMessageSenderId ||
+    !data.unreadCounts ||
+    !data.readStates;
+  if (allowRepair && needsRepair) {
+    await repairLegacyChat({
+      chatDocument,
+      data,
+      participants,
+      latestMessageId: latestMessage.id,
+      latestData,
+    });
+  }
+
+  const unreadCounts = safeMap(data.unreadCounts);
+  const readStates = safeMap(data.readStates);
+  const currentReadState = safeMap(readStates[uid]);
+  const isUnsent =
+    latestData.isUnsent === true ||
+    data.lastMessageIsUnsent === true ||
+    data.lastMessage === "This message was unsent";
+  const lastMessage = isUnsent
+    ? "This message was unsent"
+    : safeString(data.lastMessage, safeString(latestData.text));
+  const lastMessageTime = data.lastMessageTime || latestData.timestamp;
+  const lastSenderId = safeString(
+    data.lastMessageSenderId,
+    safeString(latestData.senderId),
+  );
+
+  return {
+    chatId: chatDocument.id,
+    otherUserId,
+    otherUserName: otherUser.exists
+      ? safeString(otherData.nickname, "NearMeU user")
+      : "Unavailable user",
+    otherUserPhotoUrl:
+      typeof otherData.photoUrl === "string" ? otherData.photoUrl : null,
+    lastMessage,
+    lastMessageTimeMillis: timestampMillis(lastMessageTime),
+    messageType: safeString(
+      latestData.type,
+      safeString(data.lastMessageType, "text"),
+    ),
+    isUnsent,
+    lastMessageSenderId: lastSenderId || null,
+    lastMessageSeen:
+      typeof latestData.isSeen === "boolean" ? latestData.isSeen : null,
+    unreadCount: Number.isInteger(unreadCounts[uid])
+      ? unreadCounts[uid]
+      : safeInteger(currentReadState.unreadCount, 0),
+    isOtherUserOnline: otherData.isOnline === true,
+  };
+}
+
 exports.getPrivateChatPreviews = onCall(
   { region: REGION, timeoutSeconds: 60, memory: "256MiB" },
   async (request) => {
@@ -91,91 +306,21 @@ exports.getPrivateChatPreviews = onCall(
       .limit(MAX_CHAT_PREVIEWS)
       .get();
 
+    const normalDocuments = chatsSnapshot.docs;
+    const chatDocuments = normalDocuments.length
+      ? normalDocuments
+      : await legacyChatDocuments(uid);
+    const allowRepair = normalDocuments.length === 0;
+
     const previews = await Promise.all(
-      chatsSnapshot.docs.map(async (chatDocument) => {
-        const data = chatDocument.data() || {};
-        const participants = Array.isArray(data.participants)
-          ? data.participants.filter((value) => typeof value === "string")
-          : [];
-
-        if (participants.length !== 2 || !participants.includes(uid)) {
-          return null;
-        }
-
-        const otherUserId = participants.find((value) => value !== uid);
-        if (!otherUserId) return null;
-
-        const otherUserRef = db.collection("users").doc(otherUserId);
-        const blockedByCurrentRef = currentUserRef
-          .collection("blocks")
-          .doc(otherUserId);
-        const blockedByOtherRef = otherUserRef.collection("blocks").doc(uid);
-
-        const [otherUser, blockedByCurrent, blockedByOther, latestMessages] =
-          await Promise.all([
-            otherUserRef.get(),
-            blockedByCurrentRef.get(),
-            blockedByOtherRef.get(),
-            chatDocument.ref
-              .collection("messages")
-              .orderBy("timestamp", "desc")
-              .limit(1)
-              .get(),
-          ]);
-
-        if (blockedByCurrent.exists || blockedByOther.exists) return null;
-
-        const otherData = otherUser.exists ? otherUser.data() || {} : {};
-        if (otherData.isSuspended === true) return null;
-
-        const unreadCounts =
-          data.unreadCounts && typeof data.unreadCounts === "object"
-            ? data.unreadCounts
-            : {};
-        const readStates =
-          data.readStates && typeof data.readStates === "object"
-            ? data.readStates
-            : {};
-        const currentReadState =
-          readStates[uid] && typeof readStates[uid] === "object"
-            ? readStates[uid]
-            : {};
-
-        let lastMessageSeen = null;
-        let messageType = safeString(data.lastMessageType, "text");
-        let isUnsent =
-          data.lastMessageIsUnsent === true ||
-          data.lastMessage === "This message was unsent";
-
-        if (!latestMessages.empty) {
-          const latestData = latestMessages.docs[0].data() || {};
-          messageType = safeString(latestData.type, messageType);
-          isUnsent = latestData.isUnsent === true || isUnsent;
-          lastMessageSeen =
-            typeof latestData.isSeen === "boolean" ? latestData.isSeen : null;
-        }
-
-        return {
-          chatId: chatDocument.id,
-          otherUserId,
-          otherUserName: otherUser.exists
-            ? safeString(otherData.nickname, "NearMeU user")
-            : "Unavailable user",
-          lastMessage: safeString(data.lastMessage),
-          lastMessageTimeMillis: timestampMillis(data.lastMessageTime),
-          messageType,
-          isUnsent,
-          lastMessageSenderId:
-            typeof data.lastMessageSenderId === "string"
-              ? data.lastMessageSenderId
-              : null,
-          lastMessageSeen,
-          unreadCount: Number.isInteger(unreadCounts[uid])
-            ? unreadCounts[uid]
-            : safeInteger(currentReadState.unreadCount, 0),
-          isOtherUserOnline: otherData.isOnline === true,
-        };
-      }),
+      chatDocuments.map((chatDocument) =>
+        buildChatPreview({
+          chatDocument,
+          uid,
+          currentUserRef,
+          allowRepair,
+        }),
+      ),
     );
 
     const chats = previews
@@ -185,9 +330,10 @@ exports.getPrivateChatPreviews = onCall(
         const secondTime = second.lastMessageTimeMillis || 0;
         if (firstTime !== secondTime) return secondTime - firstTime;
         return first.chatId.localeCompare(second.chatId);
-      });
+      })
+      .slice(0, MAX_CHAT_PREVIEWS);
 
-    return { chats };
+    return { chats, repairedLegacyChats: allowRepair && chats.length > 0 };
   },
 );
 
