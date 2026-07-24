@@ -116,6 +116,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         builder: (_) => ChatScreen(
           otherUserId: chat.otherUserId,
           otherUserName: chat.otherUserName,
+          initialPhotoUrl: chat.otherUserPhotoUrl,
         ),
       ),
     );
@@ -464,6 +465,8 @@ class _ChatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sentByCurrentUser = chat.lastMessageSenderId == currentUserId;
+    final photoUrl = chat.otherUserPhotoUrl?.trim();
+    final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -488,6 +491,8 @@ class _ChatCard extends StatelessWidget {
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: avatarColor,
+                    foregroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
+                    onForegroundImageError: hasPhoto ? (_, __) {} : null,
                     child: Text(
                       chat.otherUserName.isEmpty
                           ? '?'

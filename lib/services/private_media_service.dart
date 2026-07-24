@@ -207,7 +207,9 @@ class PrivateMediaService {
       ownerUid: senderId,
       chatId: chatId,
     );
-    final localFile = File(p.join(localDirectory.path, '$messageId.$extension'));
+    final localFile = File(
+      p.join(localDirectory.path, '$messageId.$extension'),
+    );
     await media.file.copy(localFile.path);
 
     String? localThumbnailPath;
@@ -392,7 +394,9 @@ class PrivateMediaService {
   Future<void> _createCloudMessage(MessageModel message) async {
     final storagePath = message.mediaStoragePath;
     if (storagePath == null || storagePath.isEmpty) {
-      throw const PrivateMediaException('Private media storage path is missing.');
+      throw const PrivateMediaException(
+        'Private media storage path is missing.',
+      );
     }
     await _functions.httpsCallable('sendPrivateMediaMessage').call<void>(
       <String, dynamic>{
@@ -455,9 +459,7 @@ class PrivateMediaService {
   }) {
     return _localChatStore.upsertMessages(
       ownerUid: ownerUid,
-      records: <LocalStoredMessage>[
-        record.copyWith(pendingUpload: false),
-      ],
+      records: <LocalStoredMessage>[record.copyWith(pendingUpload: false)],
     );
   }
 
@@ -552,12 +554,24 @@ class PrivateMediaService {
         localThumbnailPath = thumbnail.path;
       }
 
-      await _localChatStore.markMediaDownloaded(
-        ownerUid: ownerUid,
-        chatId: chatId,
-        messageId: message.id,
+      final downloadedMessage = message.withLocalMedia(
         localMediaPath: destination.path,
         localThumbnailPath: localThumbnailPath,
+      );
+      await _localChatStore.upsertMessages(
+        ownerUid: ownerUid,
+        records: <LocalStoredMessage>[
+          LocalStoredMessage(
+            chatId: chatId,
+            message: downloadedMessage,
+            localMediaPath: destination.path,
+            localThumbnailPath: localThumbnailPath,
+            cloudExpiresAt: message.cloudExpiresAt,
+            downloadComplete: true,
+            cloudMediaDeleted: message.cloudMediaDeletedAt != null,
+            pendingUpload: false,
+          ),
+        ],
       );
       await _acknowledgeDownload(
         ownerUid: ownerUid,

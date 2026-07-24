@@ -65,10 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _open(Widget screen, {bool reloadUser = false}) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     if (!mounted) return;
     if (reloadUser) await _loadUser();
   }
@@ -117,9 +114,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final message = error.code == 'reauthentication-cancelled'
           ? 'Account deletion was cancelled. No account data was removed.'
           : 'Could not verify and delete the account. Please retry.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       setState(() => isDeletingAccount = false);
@@ -182,10 +179,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.person_outline_rounded,
                       title: 'Edit Profile',
                       subtitle: 'Update your profile info',
-                      onTap: () => _open(
-                        const EditProfileScreen(),
-                        reloadUser: true,
-                      ),
+                      onTap: () =>
+                          _open(const EditProfileScreen(), reloadUser: true),
                     ),
                   ],
                 ),
@@ -313,10 +308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             label: 'Nearby',
           ),
           BottomNavigationBarItem(
-            icon: UnreadNavIcon(
-              userId: uid,
-              icon: Icons.chat_bubble_outline,
-            ),
+            icon: UnreadNavIcon(userId: uid, icon: Icons.chat_bubble_outline),
             label: 'Chats',
           ),
           const BottomNavigationBarItem(
@@ -345,6 +337,8 @@ class _ProfileCard extends StatelessWidget {
     final lookingFor = user?.lookingFor.trim().isNotEmpty == true
         ? user!.lookingFor
         : 'Not set';
+    final photoUrl = user?.photoUrl?.trim();
+    final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -362,6 +356,8 @@ class _ProfileCard extends StatelessWidget {
           CircleAvatar(
             radius: 34,
             backgroundColor: AppColors.primary,
+            foregroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
+            onForegroundImageError: hasPhoto ? (_, __) {} : null,
             child: Text(
               nickname.substring(0, 1).toUpperCase(),
               style: const TextStyle(
@@ -494,10 +490,7 @@ class _SettingsTile extends StatelessWidget {
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            height: 1.35,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, height: 1.35),
         ),
         trailing: const Icon(
           Icons.chevron_right_rounded,
