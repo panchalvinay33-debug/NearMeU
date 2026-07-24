@@ -13,7 +13,7 @@ class LocalChatStore {
   LocalChatStore({FlutterSecureStorage? secureStorage})
     : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 2;
   static const String _keyPrefix = 'nearmeu_local_chat_key_v1_';
   static const Duration cloudMessageRetention = Duration(days: 7);
 
@@ -77,12 +77,18 @@ class LocalChatStore {
             reply_to_sender_id TEXT,
             message_type TEXT NOT NULL DEFAULT 'text',
             remote_media_url TEXT,
+            media_storage_path TEXT,
+            media_content_type TEXT,
+            media_size_bytes INTEGER,
+            media_duration_ms INTEGER,
+            download_ack_json TEXT NOT NULL DEFAULT '{}',
             local_media_path TEXT,
             local_thumbnail_path TEXT,
             is_seen INTEGER NOT NULL DEFAULT 0,
             seen_at_ms INTEGER,
             deleted_for_json TEXT NOT NULL DEFAULT '[]',
             cloud_expires_at_ms INTEGER,
+            cloud_media_deleted_at_ms INTEGER,
             download_complete INTEGER NOT NULL DEFAULT 0,
             cloud_media_deleted INTEGER NOT NULL DEFAULT 0,
             pending_upload INTEGER NOT NULL DEFAULT 0,
@@ -90,18 +96,37 @@ class LocalChatStore {
             PRIMARY KEY (owner_uid, chat_id, message_id)
           )
         ''');
-        await db.execute(
-          'CREATE INDEX messages_chat_time_idx '
-          'ON messages(owner_uid, chat_id, timestamp_ms)',
-        );
-        await db.execute(
-          'CREATE INDEX messages_cloud_expiry_idx '
-          'ON messages(owner_uid, cloud_expires_at_ms)',
-        );
+        await _createIndexes(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE messages ADD COLUMN media_storage_path TEXT');
+          await db.execute('ALTER TABLE messages ADD COLUMN media_content_type TEXT');
+          await db.execute('ALTER TABLE messages ADD COLUMN media_size_bytes INTEGER');
+          await db.execute('ALTER TABLE messages ADD COLUMN media_duration_ms INTEGER');
+          await db.execute(
+            "ALTER TABLE messages ADD COLUMN download_ack_json TEXT NOT NULL DEFAULT '{}'",
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN cloud_media_deleted_at_ms INTEGER',
+          );
+        }
+        await _createIndexes(db);
       },
     );
     _openDatabases[uid] = database;
     return database;
+  }
+
+  Future<void> _createIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS messages_chat_time_idx '
+      'ON messages(owner_uid, chat_id, timestamp_ms)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS messages_cloud_expiry_idx '
+      'ON messages(owner_uid, cloud_expires_at_ms)',
+    );
   }
 
   Future<void> saveRemoteMessages({
@@ -109,9 +134,6 @@ class LocalChatStore {
     required String chatId,
     required Iterable<MessageModel> messages,
   }) async {
-    // Remote snapshots do not carry device-only fields. Merge them with the
-    // existing encrypted records so a refresh never erases a downloaded file,
-    // thumbnail or download acknowledgement.
     final existingRecords = await loadMessages(
       ownerUid: ownerUid,
       chatId: chatId,
@@ -123,17 +145,25 @@ class LocalChatStore {
 
     final records = messages.map((message) {
       final existing = existingById[message.id];
+      final localMediaPath = existing?.localMediaPath;
+      final localThumbnailPath = existing?.localThumbnailPath;
       return LocalStoredMessage(
         chatId: chatId,
-        message: message,
-        localMediaPath: existing?.localMediaPath,
-        localThumbnailPath: existing?.localThumbnailPath,
+        message: message.withLocalMedia(
+          localMediaPath: localMediaPath,
+          localThumbnailPath: localThumbnailPath,
+        ),
+        localMediaPath: localMediaPath,
+        localThumbnailPath: localThumbnailPath,
         cloudExpiresAt:
+            message.cloudExpiresAt ??
             existing?.cloudExpiresAt ??
             message.timestamp.add(cloudMessageRetention),
         downloadComplete:
             message.type == 'text' || (existing?.downloadComplete ?? false),
-        cloudMediaDeleted: existing?.cloudMediaDeleted ?? false,
+        cloudMediaDeleted:
+            message.cloudMediaDeletedAt != null ||
+            (existing?.cloudMediaDeleted ?? false),
         pendingUpload: false,
       );
     });
@@ -150,6 +180,10 @@ class LocalChatStore {
 
     for (final record in records) {
       final message = record.message;
+      final acknowledgements = message.downloadAcknowledgements.map(
+        (uid, acknowledgedAt) =>
+            MapEntry(uid, acknowledgedAt.millisecondsSinceEpoch),
+      );
       batch.insert(
         'messages',
         <String, Object?>{
@@ -167,12 +201,22 @@ class LocalChatStore {
           'reply_to_sender_id': message.replyToSenderId,
           'message_type': message.type,
           'remote_media_url': message.mediaUrl,
-          'local_media_path': record.localMediaPath,
-          'local_thumbnail_path': record.localThumbnailPath,
+          'media_storage_path': message.mediaStoragePath,
+          'media_content_type': message.mediaContentType,
+          'media_size_bytes': message.mediaSizeBytes,
+          'media_duration_ms': message.mediaDurationMs,
+          'download_ack_json': jsonEncode(acknowledgements),
+          'local_media_path': record.localMediaPath ?? message.localMediaPath,
+          'local_thumbnail_path':
+              record.localThumbnailPath ?? message.localThumbnailPath,
           'is_seen': message.isSeen ? 1 : 0,
           'seen_at_ms': message.seenAt?.millisecondsSinceEpoch,
           'deleted_for_json': jsonEncode(message.deletedFor),
-          'cloud_expires_at_ms': record.cloudExpiresAt?.millisecondsSinceEpoch,
+          'cloud_expires_at_ms':
+              (record.cloudExpiresAt ?? message.cloudExpiresAt)
+                  ?.millisecondsSinceEpoch,
+          'cloud_media_deleted_at_ms':
+              message.cloudMediaDeletedAt?.millisecondsSinceEpoch,
           'download_complete': record.downloadComplete ? 1 : 0,
           'cloud_media_deleted': record.cloudMediaDeleted ? 1 : 0,
           'pending_upload': record.pendingUpload ? 1 : 0,
@@ -228,16 +272,47 @@ class LocalChatStore {
       }
     }
 
-    DateTime? dateFromMillis(Object? value) {
-      return value is int ? DateTime.fromMillisecondsSinceEpoch(value) : null;
+    final acknowledgements = <String, DateTime>{};
+    final acknowledgementJson = row['download_ack_json'];
+    if (acknowledgementJson is String && acknowledgementJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(acknowledgementJson);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            final milliseconds = entry.value;
+            if (entry.key is String && milliseconds is num) {
+              acknowledgements[entry.key as String] =
+                  DateTime.fromMillisecondsSinceEpoch(milliseconds.toInt());
+            }
+          }
+        }
+      } on FormatException {
+        acknowledgements.clear();
+      }
     }
 
+    DateTime? dateFromMillis(Object? value) {
+      if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+      if (value is num) {
+        return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      }
+      return null;
+    }
+
+    final localMediaPath = row['local_media_path'] as String?;
+    final localThumbnailPath = row['local_thumbnail_path'] as String?;
+    final cloudExpiresAt = dateFromMillis(row['cloud_expires_at_ms']);
+    final cloudMediaDeletedAt = dateFromMillis(
+      row['cloud_media_deleted_at_ms'],
+    );
     final message = MessageModel(
       id: row['message_id']! as String,
       senderId: row['sender_id']! as String,
       receiverId: row['receiver_id']! as String,
       text: (row['text'] as String?) ?? '',
-      timestamp: DateTime.fromMillisecondsSinceEpoch(row['timestamp_ms']! as int),
+      timestamp: DateTime.fromMillisecondsSinceEpoch(
+        row['timestamp_ms']! as int,
+      ),
       isUnsent: row['is_unsent'] == 1,
       unsentAt: dateFromMillis(row['unsent_at_ms']),
       replyToMessageId: row['reply_to_message_id'] as String?,
@@ -245,6 +320,15 @@ class LocalChatStore {
       replyToSenderId: row['reply_to_sender_id'] as String?,
       type: (row['message_type'] as String?) ?? 'text',
       mediaUrl: row['remote_media_url'] as String?,
+      mediaStoragePath: row['media_storage_path'] as String?,
+      mediaContentType: row['media_content_type'] as String?,
+      mediaSizeBytes: row['media_size_bytes'] as int?,
+      mediaDurationMs: row['media_duration_ms'] as int?,
+      downloadAcknowledgements: acknowledgements,
+      cloudExpiresAt: cloudExpiresAt,
+      cloudMediaDeletedAt: cloudMediaDeletedAt,
+      localMediaPath: localMediaPath,
+      localThumbnailPath: localThumbnailPath,
       isSeen: row['is_seen'] == 1,
       seenAt: dateFromMillis(row['seen_at_ms']),
       deletedFor: deletedFor,
@@ -253,11 +337,12 @@ class LocalChatStore {
     return LocalStoredMessage(
       chatId: row['chat_id']! as String,
       message: message,
-      localMediaPath: row['local_media_path'] as String?,
-      localThumbnailPath: row['local_thumbnail_path'] as String?,
-      cloudExpiresAt: dateFromMillis(row['cloud_expires_at_ms']),
+      localMediaPath: localMediaPath,
+      localThumbnailPath: localThumbnailPath,
+      cloudExpiresAt: cloudExpiresAt,
       downloadComplete: row['download_complete'] == 1,
-      cloudMediaDeleted: row['cloud_media_deleted'] == 1,
+      cloudMediaDeleted:
+          row['cloud_media_deleted'] == 1 || cloudMediaDeletedAt != null,
       pendingUpload: row['pending_upload'] == 1,
     );
   }
@@ -287,14 +372,17 @@ class LocalChatStore {
     required String ownerUid,
     required String chatId,
     required String messageId,
+    DateTime? deletedAt,
   }) async {
     final database = await openForUser(ownerUid);
+    final timestamp = deletedAt ?? DateTime.now();
     await database.update(
       'messages',
       <String, Object?>{
         'remote_media_url': null,
+        'cloud_media_deleted_at_ms': timestamp.millisecondsSinceEpoch,
         'cloud_media_deleted': 1,
-        'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
+        'updated_at_ms': timestamp.millisecondsSinceEpoch,
       },
       where: 'owner_uid = ? AND chat_id = ? AND message_id = ?',
       whereArgs: <Object?>[ownerUid, chatId, messageId],
@@ -318,6 +406,9 @@ class LocalChatStore {
         'reply_to_text': null,
         'reply_to_sender_id': null,
         'remote_media_url': null,
+        'media_storage_path': null,
+        'cloud_media_deleted': 1,
+        'cloud_media_deleted_at_ms': unsentAt.millisecondsSinceEpoch,
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       },
       where: 'owner_uid = ? AND chat_id = ? AND message_id = ?',
@@ -335,6 +426,7 @@ class LocalChatStore {
       'messages',
       <String, Object?>{
         'remote_media_url': null,
+        'cloud_media_deleted_at_ms': cutoff,
         'cloud_media_deleted': 1,
         'updated_at_ms': cutoff,
       },

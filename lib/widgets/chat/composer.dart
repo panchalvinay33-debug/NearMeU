@@ -4,7 +4,9 @@ class ChatComposer extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool showEmojiPicker;
+  final bool isSendingMedia;
   final VoidCallback onEmojiTap;
+  final VoidCallback? onAttachment;
   final VoidCallback? onSend;
   final VoidCallback onTextFieldTap;
   final Widget? replyPreview;
@@ -17,6 +19,8 @@ class ChatComposer extends StatelessWidget {
     required this.onEmojiTap,
     required this.onSend,
     required this.onTextFieldTap,
+    this.isSendingMedia = false,
+    this.onAttachment,
     this.replyPreview,
   });
 
@@ -25,7 +29,6 @@ class ChatComposer extends StatelessWidget {
     return Column(
       children: [
         if (replyPreview != null) replyPreview!,
-
         Container(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           decoration: const BoxDecoration(color: Color(0xff0B0B0B)),
@@ -49,9 +52,7 @@ class ChatComposer extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(width: 10),
-
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -61,37 +62,56 @@ class ChatComposer extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     focusNode: focusNode,
+                    enabled: !isSendingMedia,
                     style: const TextStyle(color: Colors.white, fontSize: 15),
                     cursorColor: const Color(0xFF8B5CF6),
                     minLines: 1,
                     maxLines: 5,
                     onTap: onTextFieldTap,
-                    decoration: const InputDecoration(
-                      hintText: "Type a message...",
-                      hintStyle: TextStyle(color: Colors.white38),
+                    decoration: InputDecoration(
+                      hintText: isSendingMedia
+                          ? 'Preparing media...'
+                          : 'Type a message...',
+                      hintStyle: const TextStyle(color: Colors.white38),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 14,
-                      ),
+                      contentPadding: const EdgeInsets.fromLTRB(18, 14, 4, 14),
+                      suffixIcon: isSendingMedia
+                          ? const Padding(
+                              padding: EdgeInsets.all(13),
+                              child: SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Color(0xFFB56BFF),
+                                ),
+                              ),
+                            )
+                          : IconButton(
+                              tooltip: 'Attach photo or video',
+                              onPressed: onAttachment,
+                              icon: Icon(
+                                Icons.add_circle_outline_rounded,
+                                color: onAttachment == null
+                                    ? Colors.white24
+                                    : Colors.white70,
+                              ),
+                            ),
                     ),
                   ),
                 ),
               ),
-
               const SizedBox(width: 10),
-
               InkWell(
                 borderRadius: BorderRadius.circular(18),
-                onTap: onSend,
+                onTap: isSendingMedia ? null : onSend,
                 child: Container(
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: onSend == null
-                          ? const [Color(0xff4A4A4A), Color(0xff333333)]
-                          : const [Color(0xff9C27B0), Color(0xff673AB7)],
+                      colors: onSend == null || isSendingMedia
+                          ? const <Color>[Color(0xff4A4A4A), Color(0xff333333)]
+                          : const <Color>[Color(0xff9C27B0), Color(0xff673AB7)],
                     ),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
