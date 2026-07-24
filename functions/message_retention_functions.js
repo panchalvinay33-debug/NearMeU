@@ -34,6 +34,7 @@ async function deletePrivateMedia(messageSnapshot) {
     !chatRef ||
     !privateMediaPathAllowed({
       path: storagePath,
+      senderId: data.senderId,
       chatId: chatRef.id,
       messageId: messageSnapshot.id,
     })
@@ -126,7 +127,8 @@ async function refreshChatMetadata(chatRef) {
   const latestData = latest.data() || {};
   const isUnsent = latestData.isUnsent === true;
   const type = typeof latestData.type === "string" ? latestData.type : "text";
-  const fallbackText = type === "image" ? "Photo" : type === "video" ? "Video" : "Message";
+  const fallbackText =
+    type === "image" ? "Photo" : type === "video" ? "Video" : "Message";
   const text = isUnsent
     ? "This message was unsent"
     : typeof latestData.text === "string" && latestData.text.trim()
