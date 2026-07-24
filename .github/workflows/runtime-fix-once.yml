@@ -1,11 +1,10 @@
 name: Apply NearMeU runtime fixes once
 
 on:
-  pull_request:
+  push:
     branches:
       - main
     paths:
-      - tool/apply_runtime_fix.py
       - .github/workflows/runtime-fix-once.yml
 
 permissions:
@@ -13,15 +12,15 @@ permissions:
 
 jobs:
   patch-and-verify:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: contains(github.event.head_commit.message, 'Trigger verified NearMeU runtime fix runner')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Check out pull request branch
+      - name: Check out fix branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: fix/app-check-avatar-runtime-v1
           fetch-depth: 0
           persist-credentials: true
 
@@ -61,8 +60,6 @@ jobs:
 
       - name: Commit verified fixes
         shell: bash
-        env:
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           git restore pubspec.lock
           git diff --check
@@ -76,4 +73,4 @@ jobs:
             lib/widgets/chat/private_media_content.dart \
             lib/widgets/chat/message_bubble.dart
           git commit -m "Fix profile avatars and preserve downloaded media"
-          git push origin "HEAD:${HEAD_BRANCH}"
+          git push origin HEAD:fix/app-check-avatar-runtime-v1
