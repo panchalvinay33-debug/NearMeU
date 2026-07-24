@@ -7,6 +7,7 @@ AppUser user(
   int age = 25,
   bool suspended = false,
   bool online = false,
+  DateTime? lastSeen,
   double? latitude,
   double? longitude,
   String? state,
@@ -24,6 +25,7 @@ AppUser user(
     age: age,
     isSuspended: suspended,
     isOnline: online,
+    lastSeen: lastSeen ?? (online ? DateTime.now() : null),
     latitude: latitude,
     longitude: longitude,
     state: state,
@@ -93,22 +95,31 @@ void main() {
     ]);
   });
 
-  test('default discovery radius is 25 km and cannot exceed 50 km', () {
+  test('default discovery is Any distance and explicit radius is capped at 100 km', () {
     final near = user('near', latitude: 23.35, longitude: 77.45);
     final medium = user('medium', latitude: 23.6, longitude: 77.5);
     final far = user('far', latitude: 24.0, longitude: 77.5);
+    final veryFar = user('veryFar', latitude: 25.0, longitude: 77.5);
 
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [near, medium, far],
+        candidates: [near, medium, far, veryFar],
+      ).map((candidate) => candidate.uid),
+      ['near', 'medium', 'far', 'veryFar'],
+    );
+    expect(
+      NearbyUserPresenter.filterEligibleUsers(
+        currentUser: current,
+        candidates: [near, medium, far, veryFar],
+        maxDistanceKm: 25,
       ).map((candidate) => candidate.uid),
       ['near'],
     );
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [near, medium, far],
+        candidates: [near, medium, far, veryFar],
         maxDistanceKm: 50,
       ).map((candidate) => candidate.uid),
       ['near', 'medium'],
@@ -116,15 +127,15 @@ void main() {
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [far],
+        candidates: [near, medium, far, veryFar],
         maxDistanceKm: 1000,
-      ),
-      isEmpty,
+      ).map((candidate) => candidate.uid),
+      ['near', 'medium', 'far'],
     );
   });
 
-  test('distance display uses whole kilometres and no exact coordinates', () {
-    expect(NearbyUserPresenter.distanceText(0.2), '1 km');
+  test('distance display uses privacy-safe rounded labels', () {
+    expect(NearbyUserPresenter.distanceText(0.2), 'Less than 1 km');
     expect(NearbyUserPresenter.distanceText(2.49), '2 km');
     expect(NearbyUserPresenter.distanceText(2.5), '3 km');
     expect(NearbyUserPresenter.distanceText(100.4), '100 km');
