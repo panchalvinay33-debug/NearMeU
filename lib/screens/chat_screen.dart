@@ -58,6 +58,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _initChatScreen() async {
     await _checkBlockStatus();
     await _markChatOpened();
+
+    final user = currentUser;
+    if (user != null && !_isBlocked) {
+      await _mediaService.recoverPendingUploads(
+        ownerUid: user.uid,
+        otherUserId: widget.otherUserId,
+      );
+    }
   }
 
   Future<void> _checkBlockStatus() async {
@@ -740,7 +748,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text('User not logged in', style: TextStyle(color: Colors.white)),
+          child: Text(
+            'User not logged in',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
     }
