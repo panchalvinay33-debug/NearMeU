@@ -1,7 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-
-import 'user_service.dart';
 
 class ProfilePhotoException implements Exception {
   const ProfilePhotoException(this.message);
@@ -15,20 +14,27 @@ class ProfilePhotoException implements Exception {
 class ProfilePhotoService {
   ProfilePhotoService({
     FirebaseStorage? storage,
+    FirebaseFirestore? firestore,
     ImagePicker? picker,
-    UserService? userService,
   }) : _storage = storage ?? FirebaseStorage.instance,
-       _picker = picker ?? ImagePicker(),
-       _userService = userService ?? UserService();
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _picker = picker ?? ImagePicker();
 
   static const int maximumProfilePhotoBytes = 5 * 1024 * 1024;
 
   final FirebaseStorage _storage;
+  final FirebaseFirestore _firestore;
   final ImagePicker _picker;
-  final UserService _userService;
 
   Reference _profilePhotoRef(String uid) {
     return _storage.ref().child('profile_photos/$uid/avatar');
+  }
+
+  Future<void> _savePhotoUrl(String uid, String? photoUrl) async {
+    await _firestore.collection('users').doc(uid).set(
+      <String, dynamic>{'photoUrl': photoUrl},
+      SetOptions(merge: true),
+    );
   }
 
   Future<String?> pickAndUpload(String uid) async {
@@ -68,7 +74,7 @@ class ProfilePhotoService {
     );
 
     final downloadUrl = await reference.getDownloadURL();
-    await _userService.updateProfilePhoto(uid: uid, photoUrl: downloadUrl);
+    await _savePhotoUrl(uid, downloadUrl);
     return downloadUrl;
   }
 
@@ -78,6 +84,6 @@ class ProfilePhotoService {
     } on FirebaseException catch (error) {
       if (error.code != 'object-not-found') rethrow;
     }
-    await _userService.updateProfilePhoto(uid: uid, photoUrl: null);
+    await _savePhotoUrl(uid, null);
   }
 }
