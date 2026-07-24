@@ -16,6 +16,9 @@ const { isRecentAuthentication } = require("./account_deletion_logic");
 
 admin.initializeApp();
 
+// Export trusted messaging and anti-abuse functions.
+Object.assign(exports, require("./anti_abuse_functions"));
+
 const db = admin.firestore();
 const messaging = admin.messaging();
 const REGION = "asia-south1";

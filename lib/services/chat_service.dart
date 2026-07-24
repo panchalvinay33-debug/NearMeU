@@ -257,7 +257,6 @@ class ChatService {
     yield* _firestore
         .collection('chats')
         .where('participants', arrayContains: currentUserId)
-        .orderBy('lastMessageTime', descending: true)
         .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
           final List<ChatPreviewModel> chats = [];
