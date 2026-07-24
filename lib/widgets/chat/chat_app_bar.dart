@@ -6,6 +6,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String userName;
   final String lastSeen;
   final bool isOnline;
+  final String? photoUrl;
   final VoidCallback? onBack;
   final VoidCallback? onMenu;
 
@@ -14,6 +15,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.userName,
     required this.lastSeen,
     required this.isOnline,
+    this.photoUrl,
     this.onBack,
     this.onMenu,
   });
@@ -21,8 +23,26 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(72);
 
+  Widget _fallbackAvatar() {
+    return Container(
+      color: AppColors.primary,
+      alignment: Alignment.center,
+      child: Text(
+        userName.isEmpty ? '?' : userName[0].toUpperCase(),
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final normalizedPhotoUrl = photoUrl?.trim();
+    final hasPhoto = normalizedPhotoUrl?.isNotEmpty == true;
+
     return AppBar(
       automaticallyImplyLeading: false,
       elevation: 0,
@@ -53,16 +73,24 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           const SizedBox(width: 14),
           Stack(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.primary,
-                child: Text(
-                  userName.isEmpty ? '?' : userName[0].toUpperCase(),
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+              Container(
+                width: 48,
+                height: 48,
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                   ),
+                ),
+                child: ClipOval(
+                  child: hasPhoto
+                      ? Image.network(
+                          normalizedPhotoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _fallbackAvatar(),
+                        )
+                      : _fallbackAvatar(),
                 ),
               ),
               if (isOnline)
