@@ -32,14 +32,30 @@ service firebase.storage {
         ).data.participants;
     }
 
+    function validDeterministicChatId(senderId, receiverId, chatId) {
+      return receiverId is string
+        && receiverId != senderId
+        && (
+          (
+            senderId < receiverId
+            && chatId == senderId + '_' + receiverId
+          )
+          || (
+            receiverId < senderId
+            && chatId == receiverId + '_' + senderId
+          )
+        );
+    }
+
     function validPrivateChatMedia(senderId, chatId, messageId) {
       let metadata = request.resource.metadata;
       return request.resource != null
         && request.resource.size > 0
+        && request.resource.contentType is string
         && metadata.senderId == senderId
         && metadata.chatId == chatId
         && metadata.messageId == messageId
-        && metadata.receiverId is string
+        && validDeterministicChatId(senderId, metadata.receiverId, chatId)
         && (
           (
             metadata.mediaType == 'image'
