@@ -10,4 +10,5 @@ setGlobalOptions({ enforceAppCheck: true });
 module.exports = {
   ...require("./index.js"),
   ...require("./anti_abuse_functions.js"),
+  ...require("./trusted_read_functions.js"),
 };
