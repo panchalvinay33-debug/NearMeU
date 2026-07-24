@@ -12,4 +12,5 @@ module.exports = {
   ...require("./anti_abuse_functions.js"),
   ...require("./trusted_read_functions.js"),
   ...require("./message_retention_functions.js"),
+  ...require("./private_media_functions.js"),
 };
