@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,6 +30,11 @@ class LocalChatStore {
   Future<String> _databasePath(String uid) async {
     final directory = await getApplicationSupportDirectory();
     return p.join(directory.path, 'chat_${_safeUid(uid)}.db');
+  }
+
+  Future<Directory> _privateMediaRoot(String uid) async {
+    final directory = await getApplicationSupportDirectory();
+    return Directory(p.join(directory.path, 'private_media', _safeUid(uid)));
   }
 
   Future<String> _databasePassword(String uid) async {
@@ -100,10 +106,18 @@ class LocalChatStore {
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute('ALTER TABLE messages ADD COLUMN media_storage_path TEXT');
-          await db.execute('ALTER TABLE messages ADD COLUMN media_content_type TEXT');
-          await db.execute('ALTER TABLE messages ADD COLUMN media_size_bytes INTEGER');
-          await db.execute('ALTER TABLE messages ADD COLUMN media_duration_ms INTEGER');
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN media_storage_path TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN media_content_type TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN media_size_bytes INTEGER',
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD COLUMN media_duration_ms INTEGER',
+          );
           await db.execute(
             "ALTER TABLE messages ADD COLUMN download_ack_json TEXT NOT NULL DEFAULT '{}'",
           );
@@ -126,6 +140,10 @@ class LocalChatStore {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS messages_cloud_expiry_idx '
       'ON messages(owner_uid, cloud_expires_at_ms)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS messages_pending_upload_idx '
+      'ON messages(owner_uid, pending_upload, updated_at_ms)',
     );
   }
 
@@ -240,6 +258,27 @@ class LocalChatStore {
       whereArgs: <Object?>[ownerUid, chatId],
       orderBy: 'timestamp_ms ASC',
       limit: limit.clamp(1, 2000),
+    );
+    return rows.map(_recordFromRow).toList(growable: false);
+  }
+
+  Future<List<LocalStoredMessage>> loadPendingUploads({
+    required String ownerUid,
+    String? chatId,
+    int limit = 50,
+  }) async {
+    final database = await openForUser(ownerUid);
+    final hasChat = chatId != null && chatId.trim().isNotEmpty;
+    final rows = await database.query(
+      'messages',
+      where: hasChat
+          ? 'owner_uid = ? AND chat_id = ? AND pending_upload = 1'
+          : 'owner_uid = ? AND pending_upload = 1',
+      whereArgs: hasChat
+          ? <Object?>[ownerUid, chatId]
+          : <Object?>[ownerUid],
+      orderBy: 'updated_at_ms ASC',
+      limit: limit.clamp(1, 200),
     );
     return rows.map(_recordFromRow).toList(growable: false);
   }
@@ -443,11 +482,33 @@ class LocalChatStore {
     required String messageId,
   }) async {
     final database = await openForUser(ownerUid);
+    final rows = await database.query(
+      'messages',
+      columns: const <String>['local_media_path', 'local_thumbnail_path'],
+      where: 'owner_uid = ? AND chat_id = ? AND message_id = ?',
+      whereArgs: <Object?>[ownerUid, chatId, messageId],
+      limit: 1,
+    );
     await database.delete(
       'messages',
       where: 'owner_uid = ? AND chat_id = ? AND message_id = ?',
       whereArgs: <Object?>[ownerUid, chatId, messageId],
     );
+    if (rows.isNotEmpty) {
+      await _deleteFile(rows.first['local_media_path'] as String?);
+      await _deleteFile(rows.first['local_thumbnail_path'] as String?);
+    }
+  }
+
+  Future<void> _deleteFile(String? path) async {
+    if (path == null || path.trim().isEmpty) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } on FileSystemException {
+      // Database privacy state is authoritative. Files that are temporarily
+      // locked can be removed by account cleanup later.
+    }
   }
 
   Future<void> closeForUser(String uid) async {
@@ -457,8 +518,18 @@ class LocalChatStore {
 
   Future<void> clearAccount(String uid) async {
     await closeForUser(uid);
-    final path = await _databasePath(uid);
-    await deleteDatabase(path);
+    final databasePath = await _databasePath(uid);
+    await deleteDatabase(databasePath);
     await _secureStorage.delete(key: _keyName(uid));
+
+    final mediaRoot = await _privateMediaRoot(uid);
+    try {
+      if (await mediaRoot.exists()) {
+        await mediaRoot.delete(recursive: true);
+      }
+    } on FileSystemException {
+      // Auth/database removal still succeeds. The app-private directory is
+      // inaccessible to other accounts and can be retried on the next cleanup.
+    }
   }
 }
