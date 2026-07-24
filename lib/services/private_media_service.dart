@@ -41,6 +41,8 @@ class PrivateMediaException implements Exception {
   String toString() => message;
 }
 
+enum _MediaConfirmation { confirmed, rejected, unknown }
+
 class PrivateMediaService {
   PrivateMediaService({
     FirebaseStorage? storage,
@@ -260,62 +262,58 @@ class PrivateMediaService {
 
     final reference = _storage.ref().child(storagePath);
     try {
-      await reference.putFile(
-        localFile,
-        SettableMetadata(
-          contentType: media.contentType,
-          cacheControl: 'private,max-age=0,no-store',
-          customMetadata: <String, String>{
-            'senderId': senderId,
-            'receiverId': receiverId,
-            'chatId': chatId,
-            'messageId': messageId,
-            'mediaType': media.type,
-          },
-        ),
-      );
-
-      await _functions.httpsCallable('sendPrivateMediaMessage').call<void>(
-        <String, dynamic>{
-          'receiverId': receiverId,
-          'messageId': messageId,
-          'type': media.type,
-          'storagePath': storagePath,
-          'caption': caption.trim(),
-          'durationMs': media.durationMs,
-          'replyTo': replyTo == null
-              ? null
-              : <String, dynamic>{
-                  'messageId': replyTo.id,
-                  'text': replyTo.text,
-                  'senderId': replyTo.senderId,
-                },
-        },
-      );
-
-      await _localChatStore.upsertMessages(
-        ownerUid: senderId,
-        records: <LocalStoredMessage>[
-          pendingRecord.copyWith(pendingUpload: false),
-        ],
-      );
-      return pendingMessage;
-    } catch (error) {
       try {
-        await reference.delete();
-      } catch (_) {}
-      await _localChatStore.deleteMessageForOwner(
-        ownerUid: senderId,
-        chatId: chatId,
-        messageId: messageId,
+        await reference.putFile(
+          localFile,
+          SettableMetadata(
+            contentType: media.contentType,
+            cacheControl: 'private,max-age=0,no-store',
+            customMetadata: <String, String>{
+              'senderId': senderId,
+              'receiverId': receiverId,
+              'chatId': chatId,
+              'messageId': messageId,
+              'mediaType': media.type,
+            },
+          ),
+        );
+      } catch (_) {
+        await _cleanupPendingRecord(
+          ownerUid: senderId,
+          record: pendingRecord,
+          deleteCloudObject: true,
+        );
+        rethrow;
+      }
+
+      Object? confirmationError;
+      final confirmation = await _confirmPendingRecord(
+        pendingRecord,
+        onError: (error) => confirmationError = error,
       );
-      try {
-        await localFile.delete();
-        if (localThumbnailPath != null) {
-          await File(localThumbnailPath).delete();
-        }
-      } catch (_) {}
-      rethrow;
+      switch (confirmation) {
+        case _MediaConfirmation.confirmed:
+          await _finalizePendingRecord(
+            ownerUid: senderId,
+            record: pendingRecord,
+          );
+          return pendingMessage;
+        case _MediaConfirmation.rejected:
+          await _cleanupPendingRecord(
+            ownerUid: senderId,
+            record: pendingRecord,
+            deleteCloudObject: true,
+          );
+          throw PrivateMediaException(_friendlyError(confirmationError));
+        case _MediaConfirmation.unknown:
+          developer.log(
+            'Private media confirmation deferred to outbox recovery',
+            error: confirmationError,
+          );
+          throw const PrivateMediaException(
+            'Media is saved securely and will be confirmed when this chat reconnects.',
+          );
+      }
     } finally {
       if (media.file.path != localFile.path) {
         try {
@@ -323,6 +321,168 @@ class PrivateMediaService {
         } catch (_) {}
       }
     }
+  }
+
+  Future<void> recoverPendingUploads({
+    required String ownerUid,
+    String? otherUserId,
+  }) async {
+    final chatId = otherUserId == null
+        ? null
+        : chatIdFor(ownerUid, otherUserId);
+    final records = await _localChatStore.loadPendingUploads(
+      ownerUid: ownerUid,
+      chatId: chatId,
+    );
+
+    for (final record in records) {
+      Object? confirmationError;
+      final confirmation = await _confirmPendingRecord(
+        record,
+        onError: (error) => confirmationError = error,
+      );
+      switch (confirmation) {
+        case _MediaConfirmation.confirmed:
+          await _finalizePendingRecord(ownerUid: ownerUid, record: record);
+        case _MediaConfirmation.rejected:
+          developer.log(
+            'Removing rejected pending private media',
+            error: confirmationError,
+          );
+          await _cleanupPendingRecord(
+            ownerUid: ownerUid,
+            record: record,
+            deleteCloudObject: true,
+          );
+        case _MediaConfirmation.unknown:
+          developer.log(
+            'Private media outbox remains pending',
+            error: confirmationError,
+          );
+      }
+    }
+  }
+
+  Future<_MediaConfirmation> _confirmPendingRecord(
+    LocalStoredMessage record, {
+    required void Function(Object error) onError,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await _createCloudMessage(record.message);
+        return _MediaConfirmation.confirmed;
+      } catch (error) {
+        lastError = error;
+        onError(error);
+        if (_isDefinitiveFunctionsFailure(error)) break;
+      }
+    }
+
+    final committed = await _isCloudMessageCommitted(record);
+    if (committed == true) return _MediaConfirmation.confirmed;
+    if (committed == false) return _MediaConfirmation.rejected;
+    if (lastError != null) onError(lastError);
+    return _MediaConfirmation.unknown;
+  }
+
+  Future<void> _createCloudMessage(MessageModel message) async {
+    final storagePath = message.mediaStoragePath;
+    if (storagePath == null || storagePath.isEmpty) {
+      throw const PrivateMediaException('Private media storage path is missing.');
+    }
+    await _functions.httpsCallable('sendPrivateMediaMessage').call<void>(
+      <String, dynamic>{
+        'receiverId': message.receiverId,
+        'messageId': message.id,
+        'type': message.type,
+        'storagePath': storagePath,
+        'caption': message.text.trim(),
+        'durationMs': message.mediaDurationMs,
+        'replyTo': message.hasReply
+            ? <String, dynamic>{
+                'messageId': message.replyToMessageId,
+                'text': message.replyToText,
+                'senderId': message.replyToSenderId,
+              }
+            : null,
+      },
+    );
+  }
+
+  bool _isDefinitiveFunctionsFailure(Object error) {
+    if (error is! FirebaseFunctionsException) return false;
+    return const <String>{
+      'invalid-argument',
+      'unauthenticated',
+      'permission-denied',
+      'failed-precondition',
+      'resource-exhausted',
+      'already-exists',
+      'not-found',
+    }.contains(error.code);
+  }
+
+  Future<bool?> _isCloudMessageCommitted(LocalStoredMessage record) async {
+    try {
+      final snapshot = await _firestore
+          .collection('chats')
+          .doc(record.chatId)
+          .collection('messages')
+          .doc(record.message.id)
+          .get();
+      if (!snapshot.exists) return false;
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      return data['senderId'] == record.message.senderId &&
+          data['receiverId'] == record.message.receiverId &&
+          data['mediaStoragePath'] == record.message.mediaStoragePath;
+    } on FirebaseException catch (error, stackTrace) {
+      developer.log(
+        'Could not verify pending media commit',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _finalizePendingRecord({
+    required String ownerUid,
+    required LocalStoredMessage record,
+  }) {
+    return _localChatStore.upsertMessages(
+      ownerUid: ownerUid,
+      records: <LocalStoredMessage>[
+        record.copyWith(pendingUpload: false),
+      ],
+    );
+  }
+
+  Future<void> _cleanupPendingRecord({
+    required String ownerUid,
+    required LocalStoredMessage record,
+    required bool deleteCloudObject,
+  }) async {
+    final storagePath = record.message.mediaStoragePath;
+    if (deleteCloudObject && storagePath != null && storagePath.isNotEmpty) {
+      try {
+        await _storage.ref().child(storagePath).delete();
+      } catch (_) {}
+    }
+    await _localChatStore.deleteMessageForOwner(
+      ownerUid: ownerUid,
+      chatId: record.chatId,
+      messageId: record.message.id,
+    );
+  }
+
+  String _friendlyError(Object? error) {
+    if (error is FirebaseFunctionsException) {
+      final message = error.message?.trim();
+      if (message != null && message.isNotEmpty) return message;
+    }
+    if (error is PrivateMediaException) return error.message;
+    return 'Could not send this media. Please try again.';
   }
 
   Future<String> downloadMessageMedia({
@@ -432,8 +592,6 @@ class PrivateMediaService {
         );
       }
     } catch (error, stackTrace) {
-      // The verified local file remains usable. A future open/download attempt
-      // retries the idempotent acknowledgement and cloud cleanup.
       developer.log(
         'Private media acknowledgement deferred',
         error: error,
