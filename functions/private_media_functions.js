@@ -292,9 +292,7 @@ exports.sendPrivateMediaMessage = onCall(
         alreadyCreated: result.alreadyCreated,
       };
     } catch (error) {
-      if (!(error instanceof HttpsError && error.code === "already-exists")) {
-        await deleteRejectedUpload(media.storagePath);
-      }
+      await deleteRejectedUpload(media.storagePath);
       if (error instanceof HttpsError) throw error;
       logger.error("Private media message creation failed", {
         senderId,
