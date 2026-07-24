@@ -344,6 +344,7 @@ class PrivateMediaService {
       switch (confirmation) {
         case _MediaConfirmation.confirmed:
           await _finalizePendingRecord(ownerUid: ownerUid, record: record);
+          break;
         case _MediaConfirmation.rejected:
           developer.log(
             'Removing rejected pending private media',
@@ -354,11 +355,13 @@ class PrivateMediaService {
             record: record,
             deleteCloudObject: true,
           );
+          break;
         case _MediaConfirmation.unknown:
           developer.log(
             'Private media outbox remains pending',
             error: confirmationError,
           );
+          break;
       }
     }
   }
