@@ -8,17 +8,22 @@ import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
 import '../security/chat_security.dart';
 import '../security/suspension_service.dart';
+import 'local_chat_store.dart';
 import 'user_service.dart';
 
 class ChatService {
-  ChatService({ChatSecurity? chatSecurity})
-    : _chatSecurity = chatSecurity ?? ChatSecurity();
+  ChatService({
+    ChatSecurity? chatSecurity,
+    LocalChatStore? localChatStore,
+  }) : _chatSecurity = chatSecurity ?? ChatSecurity(),
+       _localChatStore = localChatStore ?? LocalChatStore();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'asia-south1',
   );
   final ChatSecurity _chatSecurity;
+  final LocalChatStore _localChatStore;
   final UserService _userService = UserService();
   final Set<String> _pendingMessageKeys = <String>{};
   final SuspensionService _suspensionService = SuspensionService();
@@ -45,10 +50,7 @@ class ChatService {
       currentUserId: senderId,
       otherUserId: receiverId,
     );
-
-    if (isBlocked) {
-      throw Exception('blocked');
-    }
+    if (isBlocked) throw Exception('blocked');
 
     final pendingKey = '$senderId|$receiverId|$safeText';
     if (!_pendingMessageKeys.add(pendingKey)) {
@@ -108,18 +110,17 @@ class ChatService {
     required MessageModel message,
   }) async {
     await _suspensionService.ensureUserAllowed(currentUserId);
-
     if (!message.canUnsend(currentUserId)) return;
 
     final chatId = getChatId(currentUserId, otherUserId);
-
     final messageRef = _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .doc(message.id);
+    final unsentAt = DateTime.now();
 
-    await messageRef.update({
+    await messageRef.update(<String, Object?>{
       'text': '',
       'isUnsent': true,
       'unsentAt': FieldValue.serverTimestamp(),
@@ -129,6 +130,21 @@ class ChatService {
       'type': 'text',
       'mediaUrl': null,
     });
+
+    try {
+      await _localChatStore.markMessageUnsent(
+        ownerUid: currentUserId,
+        chatId: chatId,
+        messageId: message.id,
+        unsentAt: unsentAt,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Local unsend update deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
     final messagesSnapshot = await _firestore
         .collection('chats')
@@ -140,11 +156,14 @@ class ChatService {
 
     if (messagesSnapshot.docs.isNotEmpty &&
         messagesSnapshot.docs.first.id == message.id) {
-      await _firestore.collection('chats').doc(chatId).set({
-        'lastMessage': 'This message was unsent',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageIsUnsent': true,
-      }, SetOptions(merge: true));
+      await _firestore.collection('chats').doc(chatId).set(
+        <String, Object?>{
+          'lastMessage': 'This message was unsent',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'lastMessageIsUnsent': true,
+        },
+        SetOptions(merge: true),
+      );
     }
   }
 
@@ -156,16 +175,32 @@ class ChatService {
     await _suspensionService.ensureUserAllowed(currentUserId);
 
     final chatId = getChatId(currentUserId, otherUserId);
-
     final messageRef = _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .doc(message.id);
 
-    await messageRef.set({
-      'deletedFor': FieldValue.arrayUnion([currentUserId]),
-    }, SetOptions(merge: true));
+    await messageRef.set(
+      <String, Object?>{
+        'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
+      },
+      SetOptions(merge: true),
+    );
+
+    try {
+      await _localChatStore.deleteMessageForOwner(
+        ownerUid: currentUserId,
+        chatId: chatId,
+        messageId: message.id,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Local delete-for-me update deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> markChatAsRead({
@@ -174,15 +209,17 @@ class ChatService {
     String? lastReadMessageId,
   }) async {
     final chatId = getChatId(currentUserId, otherUserId);
-
     final updateData = <Object, Object?>{
       FieldPath(<String>['unreadCounts', currentUserId]): 0,
       FieldPath(<String>['readStates', currentUserId, 'unreadCount']): 0,
       FieldPath(<String>['readStates', currentUserId, 'lastReadAt']):
           FieldValue.serverTimestamp(),
       if (lastReadMessageId != null)
-        FieldPath(<String>['readStates', currentUserId, 'lastReadMessageId']):
-            lastReadMessageId,
+        FieldPath(<String>[
+          'readStates',
+          currentUserId,
+          'lastReadMessageId',
+        ]): lastReadMessageId,
     };
 
     try {
@@ -199,7 +236,6 @@ class ChatService {
     await _suspensionService.ensureUserAllowed(currentUserId);
 
     final chatId = getChatId(currentUserId, otherUserId);
-
     final snapshot = await _firestore
         .collection('chats')
         .doc(chatId)
@@ -212,7 +248,6 @@ class ChatService {
       currentUserId: currentUserId,
       otherUserId: otherUserId,
     );
-
     if (snapshot.docs.isEmpty) return;
 
     const batchSize = 400;
@@ -223,12 +258,11 @@ class ChatService {
       final batch = _firestore.batch();
 
       for (final messageDoc in snapshot.docs.sublist(start, end)) {
-        batch.update(messageDoc.reference, {
+        batch.update(messageDoc.reference, <String, Object?>{
           'isSeen': true,
           'seenAt': FieldValue.serverTimestamp(),
         });
       }
-
       await batch.commit();
     }
   }
@@ -238,39 +272,100 @@ class ChatService {
     required String user2,
   }) async* {
     await _suspensionService.ensureUserAllowed(user1);
-
     final chatId = getChatId(user1, user2);
+    var hasUsableLocalHistory = false;
 
-    yield* _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('timestamp', descending: true)
-        .limit(200)
-        .snapshots(includeMetadataChanges: false)
-        .map((snapshot) {
-          final latestMessages = <MessageModel>[];
+    try {
+      await _localChatStore.clearExpiredRemoteReferences(ownerUid: user1);
+      final localMessages = await _localChatStore.loadVisibleMessages(
+        ownerUid: user1,
+        chatId: chatId,
+      );
+      hasUsableLocalHistory = localMessages.isNotEmpty;
+      if (hasUsableLocalHistory) yield localMessages;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Encrypted local chat history is unavailable; using cloud only',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
-          for (final document in snapshot.docs) {
-            try {
-              final message = MessageModel.fromMap(
-                document.id,
-                document.data(),
-              );
-              if (!message.deletedFor.contains(user1)) {
-                latestMessages.add(message);
-              }
-            } catch (error, stackTrace) {
-              developer.log(
-                'Skipping malformed legacy message',
-                error: error,
-                stackTrace: stackTrace,
-              );
-            }
-          }
+    try {
+      final remoteStream = _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .limit(200)
+          .snapshots(includeMetadataChanges: false);
 
-          return latestMessages.reversed.toList();
-        });
+      await for (final snapshot in remoteStream) {
+        final remoteMessages = _messagesFromSnapshot(
+          snapshot: snapshot,
+          ownerUid: user1,
+        );
+
+        try {
+          await _localChatStore.saveRemoteMessages(
+            ownerUid: user1,
+            chatId: chatId,
+            messages: remoteMessages,
+          );
+          await _localChatStore.clearExpiredRemoteReferences(ownerUid: user1);
+          final mergedMessages = await _localChatStore.loadVisibleMessages(
+            ownerUid: user1,
+            chatId: chatId,
+          );
+          hasUsableLocalHistory = mergedMessages.isNotEmpty;
+          yield mergedMessages;
+        } catch (error, stackTrace) {
+          developer.log(
+            'Could not persist the latest cloud messages locally',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          hasUsableLocalHistory = remoteMessages.isNotEmpty;
+          yield remoteMessages;
+        }
+      }
+    } on FirebaseException catch (error, stackTrace) {
+      if (!hasUsableLocalHistory) rethrow;
+      developer.log(
+        'Cloud chat stream unavailable; encrypted local history remains visible',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } catch (error, stackTrace) {
+      if (!hasUsableLocalHistory) rethrow;
+      developer.log(
+        'Cloud chat stream ended; encrypted local history remains visible',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  List<MessageModel> _messagesFromSnapshot({
+    required QuerySnapshot<Map<String, dynamic>> snapshot,
+    required String ownerUid,
+  }) {
+    final latestMessages = <MessageModel>[];
+    for (final document in snapshot.docs) {
+      try {
+        final message = MessageModel.fromMap(document.id, document.data());
+        if (!message.deletedFor.contains(ownerUid)) {
+          latestMessages.add(message);
+        }
+      } catch (error, stackTrace) {
+        developer.log(
+          'Skipping malformed legacy message',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    return latestMessages.reversed.toList(growable: false);
   }
 
   Stream<List<ChatPreviewModel>> getChatsForUser(String currentUserId) async* {
@@ -287,11 +382,7 @@ class ChatService {
             try {
               final data = document.data();
               final rawParticipants = data['participants'];
-
-              if (rawParticipants is! List) {
-                developer.log('Skipping chat without participants list');
-                continue;
-              }
+              if (rawParticipants is! List) continue;
 
               final participants = rawParticipants.whereType<String>().toList();
               if (participants.length != 2 ||
@@ -314,27 +405,13 @@ class ChatService {
               } on FirebaseException catch (error, stackTrace) {
                 if (!_isTransientFirestoreError(error)) {
                   developer.log(
-                    'Skipping chat because block relationship is unavailable',
+                    'Skipping chat because block status is unavailable',
                     error: error,
                     stackTrace: stackTrace,
                   );
                   continue;
                 }
-
-                developer.log(
-                  'Using cached chat preview while block check is offline',
-                  error: error,
-                  stackTrace: stackTrace,
-                );
-              } catch (error, stackTrace) {
-                developer.log(
-                  'Skipping chat because block relationship could not be read',
-                  error: error,
-                  stackTrace: stackTrace,
-                );
-                continue;
               }
-
               if (isBlocked) continue;
 
               AppUser? otherUser;
@@ -365,7 +442,6 @@ class ChatService {
                   : currentReadState['unreadCount'] is int
                   ? currentReadState['unreadCount'] as int
                   : 0;
-
               bool? lastMessageSeen;
               var messageType = data['lastMessageType'] is String
                   ? data['lastMessageType'] as String
@@ -380,7 +456,6 @@ class ChatService {
                     .orderBy('timestamp', descending: true)
                     .limit(1)
                     .get();
-
                 if (latestMessage.docs.isNotEmpty) {
                   final messageData = latestMessage.docs.first.data();
                   if (messageData['type'] is String) {
@@ -416,6 +491,7 @@ class ChatService {
                   otherUserName: otherUser?.nickname.isNotEmpty == true
                       ? otherUser!.nickname
                       : 'Unavailable user',
+                  otherUserPhotoUrl: otherUser?.photoUrl,
                   lastMessage: data['lastMessage'] is String
                       ? data['lastMessage'] as String
                       : '',
@@ -441,13 +517,17 @@ class ChatService {
             }
           }
 
-          chats.sort((a, b) {
-            final aTime =
-                a.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final bTime =
-                b.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final byTime = bTime.compareTo(aTime);
-            return byTime != 0 ? byTime : a.chatId.compareTo(b.chatId);
+          chats.sort((first, second) {
+            final firstTime =
+                first.lastMessageTime ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final secondTime =
+                second.lastMessageTime ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final byTime = secondTime.compareTo(firstTime);
+            return byTime != 0
+                ? byTime
+                : first.chatId.compareTo(second.chatId);
           });
           return chats;
         });
@@ -455,12 +535,13 @@ class ChatService {
 
   Stream<int> watchPrivateUnreadCount(String currentUserId) {
     return getChatsForUser(currentUserId).map(
-      (chats) => chats.fold<int>(0, (total, chat) => total + chat.unreadCount),
+      (chats) => chats.fold<int>(
+        0,
+        (total, chat) => total + chat.unreadCount,
+      ),
     );
   }
 
-  /// Hides every shared message for the deleting user without destroying the
-  /// other participant's copy of the conversation.
   Future<void> deleteCurrentUserChats(String uid) async {
     final chats = await _firestore
         .collection('chats')
@@ -482,15 +563,15 @@ class ChatService {
             ? start + batchSize
             : visibleMessages.length;
         final batch = _firestore.batch();
-
         for (final message in visibleMessages.sublist(start, end)) {
-          batch.update(message.reference, {
-            'deletedFor': FieldValue.arrayUnion([uid]),
+          batch.update(message.reference, <String, Object?>{
+            'deletedFor': FieldValue.arrayUnion(<String>[uid]),
           });
         }
-
         await batch.commit();
       }
     }
+
+    await _localChatStore.clearAccount(uid);
   }
 }

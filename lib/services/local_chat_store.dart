@@ -109,12 +109,32 @@ class LocalChatStore {
     required String chatId,
     required Iterable<MessageModel> messages,
   }) async {
+    // Remote snapshots do not carry device-only fields. Merge them with the
+    // existing encrypted records so a refresh never erases a downloaded file,
+    // thumbnail or download acknowledgement.
+    final existingRecords = await loadMessages(
+      ownerUid: ownerUid,
+      chatId: chatId,
+      limit: 2000,
+    );
+    final existingById = <String, LocalStoredMessage>{
+      for (final record in existingRecords) record.message.id: record,
+    };
+
     final records = messages.map((message) {
+      final existing = existingById[message.id];
       return LocalStoredMessage(
         chatId: chatId,
         message: message,
-        cloudExpiresAt: message.timestamp.add(cloudMessageRetention),
-        downloadComplete: message.type == 'text',
+        localMediaPath: existing?.localMediaPath,
+        localThumbnailPath: existing?.localThumbnailPath,
+        cloudExpiresAt:
+            existing?.cloudExpiresAt ??
+            message.timestamp.add(cloudMessageRetention),
+        downloadComplete:
+            message.type == 'text' || (existing?.downloadComplete ?? false),
+        cloudMediaDeleted: existing?.cloudMediaDeleted ?? false,
+        pendingUpload: false,
       );
     });
     await upsertMessages(ownerUid: ownerUid, records: records);
@@ -178,6 +198,22 @@ class LocalChatStore {
       limit: limit.clamp(1, 2000),
     );
     return rows.map(_recordFromRow).toList(growable: false);
+  }
+
+  Future<List<MessageModel>> loadVisibleMessages({
+    required String ownerUid,
+    required String chatId,
+    int limit = 2000,
+  }) async {
+    final records = await loadMessages(
+      ownerUid: ownerUid,
+      chatId: chatId,
+      limit: limit,
+    );
+    return records
+        .where((record) => !record.message.deletedFor.contains(ownerUid))
+        .map((record) => record.message)
+        .toList(growable: false);
   }
 
   LocalStoredMessage _recordFromRow(Map<String, Object?> row) {
