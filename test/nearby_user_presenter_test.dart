@@ -95,22 +95,23 @@ void main() {
     ]);
   });
 
-  test('default discovery is Any distance and explicit radius is capped at 50 km', () {
+  test('default discovery is Any distance and explicit radius is capped at 100 km', () {
     final near = user('near', latitude: 23.35, longitude: 77.45);
     final medium = user('medium', latitude: 23.6, longitude: 77.5);
     final far = user('far', latitude: 24.0, longitude: 77.5);
+    final veryFar = user('veryFar', latitude: 25.0, longitude: 77.5);
 
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [near, medium, far],
+        candidates: [near, medium, far, veryFar],
       ).map((candidate) => candidate.uid),
-      ['near', 'medium', 'far'],
+      ['near', 'medium', 'far', 'veryFar'],
     );
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [near, medium, far],
+        candidates: [near, medium, far, veryFar],
         maxDistanceKm: 25,
       ).map((candidate) => candidate.uid),
       ['near'],
@@ -118,7 +119,7 @@ void main() {
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [near, medium, far],
+        candidates: [near, medium, far, veryFar],
         maxDistanceKm: 50,
       ).map((candidate) => candidate.uid),
       ['near', 'medium'],
@@ -126,10 +127,10 @@ void main() {
     expect(
       NearbyUserPresenter.filterEligibleUsers(
         currentUser: current,
-        candidates: [far],
+        candidates: [near, medium, far, veryFar],
         maxDistanceKm: 1000,
-      ),
-      isEmpty,
+      ).map((candidate) => candidate.uid),
+      ['near', 'medium', 'far'],
     );
   });
 
