@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -16,9 +18,9 @@ class SuspensionService {
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
     AuthService? authService,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance,
-        _authService = authService ?? AuthService();
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _auth = auth ?? FirebaseAuth.instance,
+       _authService = authService ?? AuthService();
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
@@ -39,9 +41,40 @@ class SuspensionService {
     });
   }
 
+  bool _isTransientFirestoreError(FirebaseException error) {
+    return error.code == 'unavailable' ||
+        error.code == 'deadline-exceeded' ||
+        error.code == 'cancelled' ||
+        error.code == 'unknown';
+  }
+
   Future<bool> isSuspended(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    return doc.exists && doc.data()?['isSuspended'] == true;
+    final reference = _firestore.collection('users').doc(uid);
+
+    try {
+      final document = await reference.get();
+      return document.exists && document.data()?['isSuspended'] == true;
+    } on FirebaseException catch (error, stackTrace) {
+      if (!_isTransientFirestoreError(error)) rethrow;
+
+      developer.log(
+        'Suspension check is using cached data while Firestore is unavailable',
+        error: error,
+        stackTrace: stackTrace,
+      );
+
+      try {
+        final cachedDocument = await reference.get(
+          const GetOptions(source: Source.cache),
+        );
+        return cachedDocument.exists &&
+            cachedDocument.data()?['isSuspended'] == true;
+      } on FirebaseException {
+        // Backend rules and callable functions still reject suspended users.
+        // Avoid breaking read-only screens during a temporary DNS outage.
+        return false;
+      }
+    }
   }
 
   Future<void> ensureUserAllowed(String uid) async {
