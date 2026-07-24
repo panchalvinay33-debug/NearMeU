@@ -8,6 +8,7 @@ const {
   MAX_VIDEO_BYTES,
   MAX_VIDEO_DURATION_MS,
   deterministicChatId,
+  normalizeDownloadAcknowledgement,
   normalizePrivateMediaRequest,
   validateStoredMedia,
 } = require("./private_media_logic");
@@ -68,6 +69,28 @@ test("video duration is capped at two minutes", () => {
   assert.throws(
     () => normalizePrivateMediaRequest(tooLong.payload, tooLong.senderId),
     /two minutes/,
+  );
+});
+
+test("download acknowledgements require a valid chat and message ID", () => {
+  const input = request();
+  assert.deepEqual(
+    normalizeDownloadAcknowledgement({
+      chatId: input.chatId,
+      messageId: input.messageId,
+    }),
+    {
+      chatId: input.chatId,
+      messageId: input.messageId,
+    },
+  );
+  assert.throws(
+    () =>
+      normalizeDownloadAcknowledgement({
+        chatId: input.chatId,
+        messageId: "bad id",
+      }),
+    /messageId/,
   );
 });
 
