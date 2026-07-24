@@ -21,6 +21,14 @@ function deterministicChatId(firstId, secondId) {
   return [firstId, secondId].sort().join("_");
 }
 
+function validMessageId(value) {
+  const messageId = requiredString(value, "messageId", 64);
+  if (!MESSAGE_ID_PATTERN.test(messageId)) {
+    throw new TypeError("messageId is invalid.");
+  }
+  return messageId;
+}
+
 function normalizePrivateMediaRequest(data, senderId) {
   const payload = data && typeof data === "object" ? data : {};
   const receiverId = requiredString(payload.receiverId, "receiverId", 128);
@@ -28,11 +36,7 @@ function normalizePrivateMediaRequest(data, senderId) {
     throw new TypeError("You cannot send media to yourself.");
   }
 
-  const messageId = requiredString(payload.messageId, "messageId", 64);
-  if (!MESSAGE_ID_PATTERN.test(messageId)) {
-    throw new TypeError("messageId is invalid.");
-  }
-
+  const messageId = validMessageId(payload.messageId);
   const type = requiredString(payload.type, "type", 16);
   if (type !== "image" && type !== "video") {
     throw new TypeError("Only image and video messages are supported.");
@@ -68,6 +72,14 @@ function normalizePrivateMediaRequest(data, senderId) {
     storagePath,
     caption,
     durationMs: durationMs === null ? null : Math.trunc(durationMs),
+  };
+}
+
+function normalizeDownloadAcknowledgement(data) {
+  const payload = data && typeof data === "object" ? data : {};
+  return {
+    chatId: requiredString(payload.chatId, "chatId", 300),
+    messageId: validMessageId(payload.messageId),
   };
 }
 
@@ -128,6 +140,7 @@ module.exports = {
   MAX_VIDEO_BYTES,
   MAX_VIDEO_DURATION_MS,
   deterministicChatId,
+  normalizeDownloadAcknowledgement,
   normalizePrivateMediaRequest,
   validateStoredMedia,
 };
