@@ -70,3 +70,10 @@ key.properties
 functions/node_modules/
 functions/.firebase/
 functions/lib/
+
+# Local NearMeU repair and migration backups
+.nearmeu*_backup/
+.nearmeu_*_backup/
+.nearmeu_patch_backup/
+.nearmeu_login_backup/
+.nearmeu_nonadmin_backup/
