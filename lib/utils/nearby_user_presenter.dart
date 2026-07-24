@@ -83,7 +83,7 @@ class NearbyUserPresenter {
   }) {
     final safeState = state?.trim();
     if (safeState == null || safeState.isEmpty) return distanceText;
-    return '$distanceText \u2022 $safeState';
+    return '$distanceText • $safeState';
   }
 
   static String lastSeenText(AppUser user, {DateTime? now}) {
@@ -110,8 +110,15 @@ class NearbyUserPresenter {
     return 'Offline';
   }
 
+  static bool matchesCurrentPreference(
+    AppUser currentUser,
+    AppUser otherUser,
+  ) {
+    return _preferenceMatches(currentUser.lookingFor, otherUser.gender);
+  }
+
   static bool areMutuallyCompatible(AppUser currentUser, AppUser otherUser) {
-    return _preferenceMatches(currentUser.lookingFor, otherUser.gender) &&
+    return matchesCurrentPreference(currentUser, otherUser) &&
         _preferenceMatches(otherUser.lookingFor, currentUser.gender);
   }
 
@@ -128,7 +135,11 @@ class NearbyUserPresenter {
     return candidates.where((user) {
       if (user.uid == currentUser.uid) return false;
       if (user.isSuspended || !user.isAdult) return false;
-      if (!areMutuallyCompatible(currentUser, user)) return false;
+
+      // Discovery follows the signed-in user's selection. A profile is no
+      // longer hidden merely because the other person's preference differs;
+      // mutual matches are ranked first below.
+      if (!matchesCurrentPreference(currentUser, user)) return false;
       if (currentUser.blockedUsers.contains(user.uid)) return false;
       if (user.blockedUsers.contains(currentUser.uid)) return false;
 
@@ -151,6 +162,12 @@ class NearbyUserPresenter {
 
       // Online users always come first.
       if (aOnline != bOnline) return aOnline ? -1 : 1;
+
+      // Prefer profiles whose interest also matches the signed-in user, but
+      // do not hide otherwise valid discovery profiles.
+      final aMutual = areMutuallyCompatible(currentUser, a);
+      final bMutual = areMutuallyCompatible(currentUser, b);
+      if (aMutual != bMutual) return aMutual ? -1 : 1;
 
       // Within each group, nearest users come first.
       final aDistance = distanceKm(currentUser, a);
