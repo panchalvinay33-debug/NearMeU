@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -93,7 +94,7 @@ class ChatService {
       case 'unauthenticated':
         return 'Please sign in again.';
       default:
-        return 'Unable to send this message. Please try again.';
+        return 'Unable to complete this chat action. Please try again.';
     }
   }
 
@@ -113,23 +114,18 @@ class ChatService {
     if (!message.canUnsend(currentUserId)) return;
 
     final chatId = getChatId(currentUserId, otherUserId);
-    final messageRef = _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(message.id);
     final unsentAt = DateTime.now();
 
-    await messageRef.update(<String, Object?>{
-      'text': '',
-      'isUnsent': true,
-      'unsentAt': FieldValue.serverTimestamp(),
-      'replyToMessageId': null,
-      'replyToText': null,
-      'replyToSenderId': null,
-      'type': 'text',
-      'mediaUrl': null,
-    });
+    try {
+      await _functions.httpsCallable('unsendPrivateMessage').call<void>(
+        <String, dynamic>{
+          'otherUserId': otherUserId,
+          'messageId': message.id,
+        },
+      );
+    } on FirebaseFunctionsException catch (error) {
+      throw ChatSecurityException(_functionsErrorMessage(error));
+    }
 
     try {
       await _localChatStore.markMessageUnsent(
@@ -138,31 +134,27 @@ class ChatService {
         messageId: message.id,
         unsentAt: unsentAt,
       );
+      await _deleteLocalMediaFile(message.localMediaPath);
+      await _deleteLocalMediaFile(message.localThumbnailPath);
     } catch (error, stackTrace) {
       developer.log(
-        'Local unsend update deferred',
+        'Local unsend cleanup deferred',
         error: error,
         stackTrace: stackTrace,
       );
     }
+  }
 
-    final messagesSnapshot = await _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .orderBy('timestamp', descending: true)
-        .limit(1)
-        .get();
-
-    if (messagesSnapshot.docs.isNotEmpty &&
-        messagesSnapshot.docs.first.id == message.id) {
-      await _firestore.collection('chats').doc(chatId).set(
-        <String, Object?>{
-          'lastMessage': 'This message was unsent',
-          'lastMessageTime': FieldValue.serverTimestamp(),
-          'lastMessageIsUnsent': true,
-        },
-        SetOptions(merge: true),
+  Future<void> _deleteLocalMediaFile(String? path) async {
+    if (path == null || path.trim().isEmpty) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } on FileSystemException catch (error, stackTrace) {
+      developer.log(
+        'Could not remove local unsent media immediately',
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
