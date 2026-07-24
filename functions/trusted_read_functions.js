@@ -2,12 +2,18 @@
 
 const admin = require("firebase-admin");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const {
+  mergeChatDocuments,
+  shouldScanLegacyChats,
+} = require("./trusted_read_logic");
 
 const db = admin.firestore();
 const REGION = "asia-south1";
 const MAX_CHAT_PREVIEWS = 100;
 const MAX_LEGACY_MESSAGES = 100;
 const MAX_DISCOVERY_USERS = 100;
+const MAX_CHAT_DOCUMENTS_TO_INSPECT =
+  MAX_CHAT_PREVIEWS + MAX_LEGACY_MESSAGES;
 
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
@@ -307,10 +313,17 @@ exports.getPrivateChatPreviews = onCall(
       .get();
 
     const normalDocuments = chatsSnapshot.docs;
-    const chatDocuments = normalDocuments.length
-      ? normalDocuments
-      : await legacyChatDocuments(uid);
-    const allowRepair = normalDocuments.length === 0;
+    const legacyDocuments = shouldScanLegacyChats(
+      normalDocuments.length,
+      MAX_CHAT_PREVIEWS,
+    )
+      ? await legacyChatDocuments(uid)
+      : [];
+    const chatDocuments = mergeChatDocuments({
+      normalDocuments,
+      legacyDocuments,
+      maximumDocuments: MAX_CHAT_DOCUMENTS_TO_INSPECT,
+    });
 
     const previews = await Promise.all(
       chatDocuments.map((chatDocument) =>
@@ -318,7 +331,7 @@ exports.getPrivateChatPreviews = onCall(
           chatDocument,
           uid,
           currentUserRef,
-          allowRepair,
+          allowRepair: true,
         }),
       ),
     );
@@ -333,7 +346,10 @@ exports.getPrivateChatPreviews = onCall(
       })
       .slice(0, MAX_CHAT_PREVIEWS);
 
-    return { chats, repairedLegacyChats: allowRepair && chats.length > 0 };
+    return {
+      chats,
+      repairedLegacyChats: legacyDocuments.length > 0,
+    };
   },
 );
 
