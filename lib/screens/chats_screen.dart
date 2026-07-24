@@ -155,9 +155,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: _buildBody(currentUser.uid),
-      ),
+      body: SafeArea(child: _buildBody(currentUser.uid)),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF1A1A1A),
         selectedItemColor: AppColors.primary,
@@ -300,8 +298,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const SupportAnnouncementsScreen(),
+                            builder: (_) => const SupportAnnouncementsScreen(),
                           ),
                         ),
                       ),

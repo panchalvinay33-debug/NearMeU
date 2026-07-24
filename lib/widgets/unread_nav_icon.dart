@@ -7,11 +7,7 @@ import '../theme/app_colors.dart';
 import '../utils/badge_formatters.dart';
 
 class UnreadNavIcon extends StatefulWidget {
-  const UnreadNavIcon({
-    super.key,
-    required this.userId,
-    required this.icon,
-  });
+  const UnreadNavIcon({super.key, required this.userId, required this.icon});
 
   final String userId;
   final IconData icon;
@@ -73,10 +69,7 @@ class _UnreadNavIconState extends State<UnreadNavIcon> {
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(99),
-                border: Border.all(
-                  color: const Color(0xFF1A1A1A),
-                  width: 2,
-                ),
+                border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
               ),
               child: Text(
                 BadgeFormatters.unread(_count),
