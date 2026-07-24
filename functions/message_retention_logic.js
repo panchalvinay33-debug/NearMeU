@@ -22,11 +22,14 @@ function isExpiredAt({ expiresAtMs, nowMs }) {
   );
 }
 
-function privateMediaPathAllowed({ path, chatId, messageId }) {
+function privateMediaPathAllowed({ path, senderId, chatId, messageId }) {
   if (typeof path !== "string" || !path) return false;
+  if (typeof senderId !== "string" || !senderId) return false;
   if (typeof chatId !== "string" || !chatId) return false;
   if (typeof messageId !== "string" || !messageId) return false;
-  return path.startsWith(`privateChatMedia/${chatId}/${messageId}/`);
+  return path.startsWith(
+    `privateChatMedia/${senderId}/${chatId}/${messageId}/`,
+  );
 }
 
 module.exports = {
