@@ -2,6 +2,7 @@
 
 const admin = require("firebase-admin");
 const { logger } = require("firebase-functions");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
@@ -19,6 +20,7 @@ const {
 const db = admin.firestore();
 const REGION = "asia-south1";
 const PENDING_DELETE_LIMIT = 300;
+const UNSEND_POLICY_VERSION = 1;
 
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
@@ -108,6 +110,19 @@ async function deletePendingMedia({
   }
 }
 
+async function refreshMetadataSafely(chatRef, messageId, source) {
+  try {
+    await refreshChatMetadata(chatRef);
+  } catch (error) {
+    logger.error("Chat preview refresh after unsend failed", {
+      chatId: chatRef.id,
+      messageId,
+      source,
+      error,
+    });
+  }
+}
+
 exports.unsendPrivateMessage = onCall(
   {
     region: REGION,
@@ -183,7 +198,6 @@ exports.unsendPrivateMessage = onCall(
           storagePath,
           senderId: message.senderId,
           alreadyUnsent: true,
-          cleanupPending: message.cloudMediaDeletePending === true,
         };
       }
 
@@ -201,25 +215,22 @@ exports.unsendPrivateMessage = onCall(
         mediaDurationMs: null,
         cloudMediaDeletePending: Boolean(storagePath),
         cloudMediaDeleteReason: storagePath ? "unsent" : null,
+        unsendSource: "trusted_backend",
+        unsendPolicyVersion: UNSEND_POLICY_VERSION,
       });
 
       return {
         storagePath,
         senderId: message.senderId,
         alreadyUnsent: false,
-        cleanupPending: Boolean(storagePath),
       };
     });
 
-    try {
-      await refreshChatMetadata(chatRef);
-    } catch (error) {
-      logger.error("Chat preview refresh after unsend failed", {
-        chatId: unsendRequest.chatId,
-        messageId: unsendRequest.messageId,
-        error,
-      });
-    }
+    await refreshMetadataSafely(
+      chatRef,
+      unsendRequest.messageId,
+      "trusted_backend",
+    );
 
     let mediaCleanup = { deleted: false, pending: false };
     if (result.storagePath) {
@@ -239,6 +250,107 @@ exports.unsendPrivateMessage = onCall(
       cloudMediaDeleted: mediaCleanup.deleted,
       cleanupPending: mediaCleanup.pending,
     };
+  },
+);
+
+// Older app versions used a tightly constrained direct Firestore unsend. This
+// trigger keeps those clients safe during rollout: valid requests receive the
+// same media cleanup, while attempts outside the server-side 60-minute window
+// are restored from the before snapshot.
+exports.guardLegacyPrivateMessageUnsend = onDocumentUpdated(
+  {
+    document: "chats/{chatId}/messages/{messageId}",
+    region: REGION,
+    retry: true,
+  },
+  async (event) => {
+    const beforeSnapshot = event.data && event.data.before;
+    const afterSnapshot = event.data && event.data.after;
+    if (!beforeSnapshot || !afterSnapshot) return;
+
+    const before = beforeSnapshot.data() || {};
+    const after = afterSnapshot.data() || {};
+    if (before.isUnsent === true || after.isUnsent !== true) return;
+    if (after.unsendSource === "trusted_backend") return;
+
+    const chatRef = parentChatReference(afterSnapshot);
+    if (!chatRef) return;
+
+    const eventTimeMs = Date.parse(event.time || "");
+    const decision = unsendDecision({
+      actorId: before.senderId,
+      senderId: before.senderId,
+      receiverId: before.receiverId,
+      otherUserId: before.receiverId,
+      isUnsent: false,
+      timestampMs: timestampMillis(before.timestamp),
+      nowMs: Number.isFinite(eventTimeMs) ? eventTimeMs : Date.now(),
+    });
+
+    if (!decision.allowed) {
+      await afterSnapshot.ref.set(
+        {
+          text: before.text || "",
+          isUnsent: before.isUnsent === true,
+          unsentAt: before.unsentAt || null,
+          replyToMessageId: before.replyToMessageId || null,
+          replyToText: before.replyToText || null,
+          replyToSenderId: before.replyToSenderId || null,
+          type: before.type || "text",
+          mediaUrl: before.mediaUrl || null,
+          mediaStoragePath: before.mediaStoragePath || null,
+          mediaContentType: before.mediaContentType || null,
+          mediaSizeBytes: before.mediaSizeBytes || null,
+          mediaDurationMs: before.mediaDurationMs || null,
+          cloudMediaDeletePending: before.cloudMediaDeletePending === true,
+          cloudMediaDeleteReason: before.cloudMediaDeleteReason || null,
+          unsendSource: before.unsendSource || admin.firestore.FieldValue.delete(),
+          unsendPolicyVersion:
+            before.unsendPolicyVersion || admin.firestore.FieldValue.delete(),
+        },
+        { merge: true },
+      );
+      await refreshMetadataSafely(
+        chatRef,
+        afterSnapshot.id,
+        "legacy_client_restore",
+      );
+      logger.warn("Legacy direct unsend restored after server validation", {
+        chatId: chatRef.id,
+        messageId: afterSnapshot.id,
+        reason: decision.reason,
+      });
+      return;
+    }
+
+    const storagePath = typeof before.mediaStoragePath === "string"
+      ? before.mediaStoragePath
+      : null;
+    await afterSnapshot.ref.set(
+      {
+        cloudMediaDeletePending: Boolean(storagePath),
+        cloudMediaDeleteReason: storagePath ? "legacy_unsent" : null,
+        unsendSource: "legacy_client_guard",
+        unsendPolicyVersion: UNSEND_POLICY_VERSION,
+      },
+      { merge: true },
+    );
+    await refreshMetadataSafely(
+      chatRef,
+      afterSnapshot.id,
+      "legacy_client_guard",
+    );
+
+    if (storagePath) {
+      await deletePendingMedia({
+        messageRef: afterSnapshot.ref,
+        storagePath,
+        senderId: before.senderId,
+        chatId: chatRef.id,
+        messageId: afterSnapshot.id,
+        reason: "legacy_unsent",
+      });
+    }
   },
 );
 
