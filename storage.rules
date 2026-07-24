@@ -18,10 +18,54 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    function chatExists(chatId) {
+      return firestore.exists(
+        /databases/(default)/documents/chats/$(chatId)
+      );
+    }
+
+    function isChatParticipant(chatId) {
+      return signedIn()
+        && chatExists(chatId)
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/chats/$(chatId)
+        ).data.participants;
+    }
+
+    function validPrivateChatMedia(senderId, chatId, messageId) {
+      let metadata = request.resource.metadata;
+      return request.resource != null
+        && request.resource.size > 0
+        && metadata.senderId == senderId
+        && metadata.chatId == chatId
+        && metadata.messageId == messageId
+        && metadata.receiverId is string
+        && (
+          (
+            metadata.mediaType == 'image'
+            && request.resource.size <= 5 * 1024 * 1024
+            && request.resource.contentType.matches('image/(jpeg|png|webp)')
+          )
+          || (
+            metadata.mediaType == 'video'
+            && request.resource.size <= 30 * 1024 * 1024
+            && request.resource.contentType == 'video/mp4'
+          )
+        );
+    }
+
     match /profile_photos/{uid}/{fileName} {
       allow read: if signedIn();
       allow create, update: if owns(uid) && validProfilePhoto();
       allow delete: if owns(uid);
+    }
+
+    match /privateChatMedia/{senderId}/{chatId}/{messageId}/{fileName} {
+      allow read: if owns(senderId) || isChatParticipant(chatId);
+      allow create: if owns(senderId)
+        && validPrivateChatMedia(senderId, chatId, messageId);
+      allow update: if false;
+      allow delete: if owns(senderId);
     }
 
     match /{allPaths=**} {
