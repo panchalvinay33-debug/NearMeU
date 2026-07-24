@@ -1,0 +1,43 @@
+name: NearMeU test diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-test-file:
+    name: Test ${{ matrix.test_file }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        test_file:
+          - test/widget_test.dart
+          - test/location_privacy_test.dart
+          - test/chat_link_parser_test.dart
+          - test/widgets_user_info_privacy_test.dart
+          - test/nearby_user_presenter_test.dart
+          - test/notification_route_test.dart
+          - test/telemetry_policy_test.dart
+          - test/utils/badge_formatters_test.dart
+          - test/utils/distance_formatters_test.dart
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run test file
+        run: flutter test "${{ matrix.test_file }}"
