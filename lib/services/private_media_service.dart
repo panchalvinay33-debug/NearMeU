@@ -355,7 +355,9 @@ class PrivateMediaService {
       chatId: chatId,
     );
     final extension = message.isVideo ? 'mp4' : 'jpg';
-    final destination = File(p.join(localDirectory.path, '${message.id}.$extension'));
+    final destination = File(
+      p.join(localDirectory.path, '${message.id}.$extension'),
+    );
     final partial = File('${destination.path}.part');
     if (await partial.exists()) await partial.delete();
 
@@ -411,7 +413,9 @@ class PrivateMediaService {
     required String chatId,
     required MessageModel message,
   }) async {
-    if (message.senderId == ownerUid || message.isDownloadedBy(ownerUid)) return;
+    if (message.senderId == ownerUid || message.cloudMediaDeletedAt != null) {
+      return;
+    }
     try {
       final result = await _functions
           .httpsCallable('acknowledgePrivateMediaDownload')
