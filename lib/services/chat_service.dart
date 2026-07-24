@@ -95,6 +95,13 @@ class ChatService {
     }
   }
 
+  bool _isTransientFirestoreError(FirebaseException error) {
+    return error.code == 'unavailable' ||
+        error.code == 'deadline-exceeded' ||
+        error.code == 'cancelled' ||
+        error.code == 'unknown';
+  }
+
   Future<void> unsendMessage({
     required String currentUserId,
     required String otherUserId,
@@ -242,10 +249,25 @@ class ChatService {
         .limit(200)
         .snapshots(includeMetadataChanges: false)
         .map((snapshot) {
-          final latestMessages = snapshot.docs
-              .map((doc) => MessageModel.fromMap(doc.id, doc.data()))
-              .where((message) => !message.deletedFor.contains(user1))
-              .toList();
+          final latestMessages = <MessageModel>[];
+
+          for (final document in snapshot.docs) {
+            try {
+              final message = MessageModel.fromMap(
+                document.id,
+                document.data(),
+              );
+              if (!message.deletedFor.contains(user1)) {
+                latestMessages.add(message);
+              }
+            } catch (error, stackTrace) {
+              developer.log(
+                'Skipping malformed legacy message',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            }
+          }
 
           return latestMessages.reversed.toList();
         });
@@ -259,105 +281,164 @@ class ChatService {
         .where('participants', arrayContains: currentUserId)
         .snapshots(includeMetadataChanges: false)
         .asyncMap((snapshot) async {
-          final List<ChatPreviewModel> chats = [];
+          final chats = <ChatPreviewModel>[];
 
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-
-            final participants = List<String>.from(data['participants'] ?? []);
-
-            final otherUserId = participants.firstWhere(
-              (id) => id != currentUserId,
-              orElse: () => '',
-            );
-
-            if (otherUserId.isEmpty) continue;
-
-            if (await _userService.isBlockedEitherWay(
-              currentUserId: currentUserId,
-              otherUserId: otherUserId,
-            )) {
-              continue;
-            }
-
-            AppUser? otherUser;
+          for (final document in snapshot.docs) {
             try {
-              otherUser = await _userService.getUser(otherUserId);
-            } catch (error) {
-              developer.log(
-                'Unable to read chat participant public profile',
-                error: error,
-              );
-            }
+              final data = document.data();
+              final rawParticipants = data['participants'];
 
-            final unreadCounts = Map<String, dynamic>.from(
-              data['unreadCounts'] ?? <String, dynamic>{},
-            );
-            final readStates = Map<String, dynamic>.from(
-              data['readStates'] ?? <String, dynamic>{},
-            );
-            final currentReadState = readStates[currentUserId] is Map
-                ? Map<String, dynamic>.from(readStates[currentUserId] as Map)
-                : <String, dynamic>{};
-            var unreadCount = unreadCounts[currentUserId] is int
-                ? unreadCounts[currentUserId] as int
-                : (currentReadState['unreadCount'] is int
-                      ? currentReadState['unreadCount'] as int
-                      : 0);
-            bool? lastMessageSeen;
-            String messageType = (data['lastMessageType'] as String?) ?? 'text';
-            bool isUnsent =
-                data['lastMessageIsUnsent'] == true ||
-                data['lastMessage'] == 'This message was unsent';
-
-            try {
-              final latestMessage = await doc.reference
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .limit(1)
-                  .get();
-              if (latestMessage.docs.isNotEmpty) {
-                final messageData = latestMessage.docs.first.data();
-                messageType = (messageData['type'] as String?) ?? messageType;
-                isUnsent = messageData['isUnsent'] == true || isUnsent;
-                lastMessageSeen = messageData['isSeen'] as bool?;
+              if (rawParticipants is! List) {
+                developer.log('Skipping chat without participants list');
+                continue;
               }
 
-              if (unreadCount == 0 && !data.containsKey('unreadCounts')) {
-                final unreadSnapshot = await doc.reference
+              final participants = rawParticipants.whereType<String>().toList();
+              if (participants.length != 2 ||
+                  !participants.contains(currentUserId)) {
+                continue;
+              }
+
+              final otherUserId = participants.firstWhere(
+                (id) => id != currentUserId,
+                orElse: () => '',
+              );
+              if (otherUserId.isEmpty) continue;
+
+              var isBlocked = false;
+              try {
+                isBlocked = await _userService.isBlockedEitherWay(
+                  currentUserId: currentUserId,
+                  otherUserId: otherUserId,
+                );
+              } on FirebaseException catch (error, stackTrace) {
+                if (!_isTransientFirestoreError(error)) {
+                  developer.log(
+                    'Skipping chat because block relationship is unavailable',
+                    error: error,
+                    stackTrace: stackTrace,
+                  );
+                  continue;
+                }
+
+                developer.log(
+                  'Using cached chat preview while block check is offline',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+              } catch (error, stackTrace) {
+                developer.log(
+                  'Skipping chat because block relationship could not be read',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+                continue;
+              }
+
+              if (isBlocked) continue;
+
+              AppUser? otherUser;
+              try {
+                otherUser = await _userService.getUser(otherUserId);
+              } catch (error, stackTrace) {
+                developer.log(
+                  'Unable to read chat participant public profile',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+              }
+
+              final unreadCounts = data['unreadCounts'] is Map
+                  ? Map<String, dynamic>.from(data['unreadCounts'] as Map)
+                  : <String, dynamic>{};
+              final readStates = data['readStates'] is Map
+                  ? Map<String, dynamic>.from(data['readStates'] as Map)
+                  : <String, dynamic>{};
+              final currentReadState = readStates[currentUserId] is Map
+                  ? Map<String, dynamic>.from(
+                      readStates[currentUserId] as Map,
+                    )
+                  : <String, dynamic>{};
+
+              var unreadCount = unreadCounts[currentUserId] is int
+                  ? unreadCounts[currentUserId] as int
+                  : currentReadState['unreadCount'] is int
+                  ? currentReadState['unreadCount'] as int
+                  : 0;
+
+              bool? lastMessageSeen;
+              var messageType = data['lastMessageType'] is String
+                  ? data['lastMessageType'] as String
+                  : 'text';
+              var isUnsent =
+                  data['lastMessageIsUnsent'] == true ||
+                  data['lastMessage'] == 'This message was unsent';
+
+              try {
+                final latestMessage = await document.reference
                     .collection('messages')
-                    .where('receiverId', isEqualTo: currentUserId)
-                    .where('isSeen', isEqualTo: false)
-                    .limit(100)
+                    .orderBy('timestamp', descending: true)
+                    .limit(1)
                     .get();
-                unreadCount = unreadSnapshot.size;
+
+                if (latestMessage.docs.isNotEmpty) {
+                  final messageData = latestMessage.docs.first.data();
+                  if (messageData['type'] is String) {
+                    messageType = messageData['type'] as String;
+                  }
+                  isUnsent = messageData['isUnsent'] == true || isUnsent;
+                  lastMessageSeen = messageData['isSeen'] is bool
+                      ? messageData['isSeen'] as bool
+                      : null;
+                }
+
+                if (unreadCount == 0 && !data.containsKey('unreadCounts')) {
+                  final unreadSnapshot = await document.reference
+                      .collection('messages')
+                      .where('receiverId', isEqualTo: currentUserId)
+                      .where('isSeen', isEqualTo: false)
+                      .limit(100)
+                      .get();
+                  unreadCount = unreadSnapshot.size;
+                }
+              } catch (error, stackTrace) {
+                developer.log(
+                  'Unable to hydrate chat preview metadata',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
               }
-            } catch (error) {
+
+              chats.add(
+                ChatPreviewModel(
+                  chatId: document.id,
+                  otherUserId: otherUserId,
+                  otherUserName: otherUser?.nickname.isNotEmpty == true
+                      ? otherUser!.nickname
+                      : 'Unavailable user',
+                  lastMessage: data['lastMessage'] is String
+                      ? data['lastMessage'] as String
+                      : '',
+                  lastMessageTime: data['lastMessageTime'] is Timestamp
+                      ? (data['lastMessageTime'] as Timestamp).toDate()
+                      : null,
+                  messageType: messageType,
+                  isUnsent: isUnsent,
+                  lastMessageSenderId: data['lastMessageSenderId'] is String
+                      ? data['lastMessageSenderId'] as String
+                      : null,
+                  lastMessageSeen: lastMessageSeen,
+                  unreadCount: unreadCount,
+                  isOtherUserOnline: otherUser?.isOnline,
+                ),
+              );
+            } catch (error, stackTrace) {
               developer.log(
-                'Unable to hydrate chat preview metadata',
+                'Skipping malformed legacy chat preview',
                 error: error,
+                stackTrace: stackTrace,
               );
             }
-
-            chats.add(
-              ChatPreviewModel(
-                chatId: doc.id,
-                otherUserId: otherUserId,
-                otherUserName: otherUser?.nickname.isNotEmpty == true
-                    ? otherUser!.nickname
-                    : 'Unavailable user',
-                lastMessage: (data['lastMessage'] as String?) ?? '',
-                lastMessageTime: data['lastMessageTime'] is Timestamp
-                    ? (data['lastMessageTime'] as Timestamp).toDate()
-                    : null,
-                messageType: messageType,
-                isUnsent: isUnsent,
-                lastMessageSenderId: data['lastMessageSenderId'] as String?,
-                lastMessageSeen: lastMessageSeen,
-                unreadCount: unreadCount,
-                isOtherUserOnline: otherUser?.isOnline,
-              ),
-            );
           }
 
           chats.sort((a, b) {
