@@ -43,7 +43,7 @@ void main() {
     blocked: const ['blocked'],
   );
 
-  test('only mutually compatible nearby adults are eligible', () {
+  test('eligible adults follow the signed-in user preference', () {
     final result = NearbyUserPresenter.filterEligibleUsers(
       currentUser: current,
       candidates: [
@@ -69,10 +69,42 @@ void main() {
           longitude: 77.42,
           lookingFor: 'Female',
         ),
+        user(
+          'wrongGender',
+          gender: 'Male',
+          lookingFor: 'Female',
+          latitude: 23.27,
+          longitude: 77.42,
+        ),
       ],
     );
 
-    expect(result.map((candidate) => candidate.uid), ['eligible']);
+    expect(result.map((candidate) => candidate.uid), [
+      'eligible',
+      'oneSided',
+    ]);
+  });
+
+  test('mutual matches rank before one-sided matches in the same group', () {
+    final users = [
+      user(
+        'oneSided',
+        online: true,
+        latitude: 23.26,
+        longitude: 77.41,
+        lookingFor: 'Female',
+      ),
+      user(
+        'mutual',
+        online: true,
+        latitude: 23.26,
+        longitude: 77.41,
+      ),
+    ];
+
+    NearbyUserPresenter.sortUsers(currentUser: current, users: users);
+
+    expect(users.map((candidate) => candidate.uid), ['mutual', 'oneSided']);
   });
 
   test('online users and valid-distance users sort before unavailable distances', () {

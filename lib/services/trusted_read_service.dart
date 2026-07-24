@@ -1,66 +1,216 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
+import 'local_preview_cache.dart';
 
 class TrustedReadService {
-  TrustedReadService({FirebaseFunctions? functions})
-    : _functions =
-          functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1');
+  TrustedReadService({
+    FirebaseFunctions? functions,
+    FirebaseFirestore? firestore,
+    FirebaseAuth? auth,
+    LocalPreviewCache? previewCache,
+  }) : _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1'),
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _auth = auth ?? FirebaseAuth.instance,
+       _previewCache = previewCache ?? LocalPreviewCache();
+
+  static final Map<String, List<ChatPreviewModel>> _memoryChatCache =
+      <String, List<ChatPreviewModel>>{};
+  static final Map<String, List<AppUser>> _memoryNearbyCache =
+      <String, List<AppUser>>{};
 
   final FirebaseFunctions _functions;
+  final FirebaseFirestore _firestore;
+  final FirebaseAuth _auth;
+  final LocalPreviewCache _previewCache;
 
   Future<List<ChatPreviewModel>> getChatPreviews() async {
-    final result = await _functions
-        .httpsCallable('getPrivateChatPreviews')
-        .call<Map<String, dynamic>>();
-    final payload = Map<String, dynamic>.from(result.data);
+    final uid = _auth.currentUser?.uid;
+    Object? callableError;
+    StackTrace? callableStackTrace;
+
+    try {
+      final result = await _functions
+          .httpsCallable('getPrivateChatPreviews')
+          .call<Map<String, dynamic>>();
+      final chats = _parseChatPreviews(result.data);
+      if (uid != null) await _rememberChatPreviews(uid, chats);
+      return chats;
+    } catch (error, stackTrace) {
+      callableError = error;
+      callableStackTrace = stackTrace;
+      developer.log(
+        'Trusted chat preview read failed; trying Firestore fallback',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    if (uid != null) {
+      try {
+        final chats = await _getChatPreviewsFromFirestore(uid);
+        await _rememberChatPreviews(uid, chats);
+        return chats;
+      } catch (error, stackTrace) {
+        developer.log(
+          'Firestore chat preview fallback failed; using device cache',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+
+      final memoryChats = _memoryChatCache[uid];
+      if (memoryChats != null && memoryChats.isNotEmpty) {
+        return List<ChatPreviewModel>.unmodifiable(memoryChats);
+      }
+
+      final cachedChats = await _previewCache.loadChatPreviews(uid);
+      if (cachedChats.isNotEmpty) {
+        _memoryChatCache[uid] = cachedChats;
+        return cachedChats;
+      }
+    }
+
+    if (callableError != null) {
+      Error.throwWithStackTrace(
+        callableError,
+        callableStackTrace ?? StackTrace.current,
+      );
+    }
+    return const <ChatPreviewModel>[];
+  }
+
+  List<ChatPreviewModel> _parseChatPreviews(Map<String, dynamic> payload) {
     final rawChats = payload['chats'];
     if (rawChats is! List) return const <ChatPreviewModel>[];
 
     final chats = <ChatPreviewModel>[];
     for (final rawChat in rawChats) {
       if (rawChat is! Map) continue;
-      final data = Map<String, dynamic>.from(rawChat);
-      final chatId = data['chatId'];
-      final otherUserId = data['otherUserId'];
-      if (chatId is! String || otherUserId is! String) continue;
+      final chat = ChatPreviewModel.fromMap(
+        Map<String, dynamic>.from(rawChat),
+      );
+      if (chat.chatId.isEmpty || chat.otherUserId.isEmpty) continue;
+      chats.add(chat);
+    }
+    _sortChats(chats);
+    return chats;
+  }
 
-      final timeMillis = data['lastMessageTimeMillis'];
+  Future<List<ChatPreviewModel>> _getChatPreviewsFromFirestore(
+    String uid,
+  ) async {
+    final results = await Future.wait([
+      _firestore
+          .collection('chats')
+          .where('participants', arrayContains: uid)
+          .limit(100)
+          .get(),
+      _firestore.collection('users').doc(uid).collection('blocks').get(),
+    ]);
+    final chatSnapshot = results[0] as QuerySnapshot<Map<String, dynamic>>;
+    final ownBlocks = results[1] as QuerySnapshot<Map<String, dynamic>>;
+    final blockedByMe = ownBlocks.docs.map((document) => document.id).toSet();
+    final chats = <ChatPreviewModel>[];
+
+    for (final document in chatSnapshot.docs) {
+      final data = document.data();
+      final rawParticipants = data['participants'];
+      if (rawParticipants is! List) continue;
+      final participants = rawParticipants.whereType<String>().toList();
+      if (participants.length != 2 || !participants.contains(uid)) continue;
+
+      final otherUserId = participants.firstWhere(
+        (participant) => participant != uid,
+        orElse: () => '',
+      );
+      if (otherUserId.isEmpty || blockedByMe.contains(otherUserId)) continue;
+
+      final incomingBlock = await _firestore
+          .collection('users')
+          .doc(otherUserId)
+          .collection('blocks')
+          .doc(uid)
+          .get();
+      if (incomingBlock.exists) continue;
+
+      DocumentSnapshot<Map<String, dynamic>>? otherUser;
+      try {
+        otherUser = await _firestore.collection('users').doc(otherUserId).get();
+      } catch (_) {
+        otherUser = null;
+      }
+      final otherData = otherUser?.data() ?? const <String, dynamic>{};
+      if (otherData['isSuspended'] == true) continue;
+
+      final unreadCounts = data['unreadCounts'] is Map
+          ? Map<String, dynamic>.from(data['unreadCounts'] as Map)
+          : const <String, dynamic>{};
+      final readStates = data['readStates'] is Map
+          ? Map<String, dynamic>.from(data['readStates'] as Map)
+          : const <String, dynamic>{};
+      final currentReadState = readStates[uid] is Map
+          ? Map<String, dynamic>.from(readStates[uid] as Map)
+          : const <String, dynamic>{};
+      final lastMessageTime = data['lastMessageTime'];
+
       chats.add(
         ChatPreviewModel(
-          chatId: chatId,
+          chatId: document.id,
           otherUserId: otherUserId,
-          otherUserName: data['otherUserName'] is String
-              ? data['otherUserName'] as String
+          otherUserName: otherData['nickname'] is String
+              ? otherData['nickname'] as String
               : 'NearMeU user',
+          otherUserPhotoUrl: otherData['photoUrl'] is String
+              ? otherData['photoUrl'] as String
+              : null,
           lastMessage: data['lastMessage'] is String
               ? data['lastMessage'] as String
               : '',
-          lastMessageTime: timeMillis is num
-              ? DateTime.fromMillisecondsSinceEpoch(timeMillis.toInt())
+          lastMessageTime: lastMessageTime is Timestamp
+              ? lastMessageTime.toDate()
               : null,
-          messageType: data['messageType'] is String
-              ? data['messageType'] as String
+          messageType: data['lastMessageType'] is String
+              ? data['lastMessageType'] as String
               : 'text',
-          isUnsent: data['isUnsent'] == true,
+          isUnsent:
+              data['lastMessageIsUnsent'] == true ||
+              data['lastMessage'] == 'This message was unsent',
           lastMessageSenderId: data['lastMessageSenderId'] is String
               ? data['lastMessageSenderId'] as String
               : null,
-          lastMessageSeen: data['lastMessageSeen'] is bool
-              ? data['lastMessageSeen'] as bool
-              : null,
-          unreadCount: data['unreadCount'] is num
-              ? (data['unreadCount'] as num).toInt()
+          unreadCount: unreadCounts[uid] is num
+              ? (unreadCounts[uid] as num).toInt()
+              : currentReadState['unreadCount'] is num
+              ? (currentReadState['unreadCount'] as num).toInt()
               : 0,
-          isOtherUserOnline: data['isOtherUserOnline'] is bool
-              ? data['isOtherUserOnline'] as bool
+          isOtherUserOnline: otherData['isOnline'] is bool
+              ? otherData['isOnline'] as bool
               : null,
         ),
       );
     }
 
+    _sortChats(chats);
+    return chats;
+  }
+
+  Future<void> _rememberChatPreviews(
+    String uid,
+    List<ChatPreviewModel> chats,
+  ) async {
+    final immutable = List<ChatPreviewModel>.unmodifiable(chats);
+    _memoryChatCache[uid] = immutable;
+    await _previewCache.saveChatPreviews(uid, immutable);
+  }
+
+  void _sortChats(List<ChatPreviewModel> chats) {
     chats.sort((first, second) {
       final firstTime =
           first.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -68,14 +218,34 @@ class TrustedReadService {
           second.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
       return secondTime.compareTo(firstTime);
     });
-    return chats;
   }
 
   Future<List<AppUser>> getNearbyCandidates() async {
-    final result = await _functions
-        .httpsCallable('getNearbyCandidates')
-        .call<Map<String, dynamic>>();
-    final payload = Map<String, dynamic>.from(result.data);
+    final uid = _auth.currentUser?.uid;
+    try {
+      final result = await _functions
+          .httpsCallable('getNearbyCandidates')
+          .call<Map<String, dynamic>>();
+      final users = _parseNearbyCandidates(result.data);
+      if (uid != null) {
+        _memoryNearbyCache[uid] = List<AppUser>.unmodifiable(users);
+      }
+      return users;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Trusted nearby read failed; using the last successful result',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      final cached = uid == null ? null : _memoryNearbyCache[uid];
+      if (cached != null && cached.isNotEmpty) {
+        return List<AppUser>.unmodifiable(cached);
+      }
+      rethrow;
+    }
+  }
+
+  List<AppUser> _parseNearbyCandidates(Map<String, dynamic> payload) {
     final rawUsers = payload['users'];
     if (rawUsers is! List) return const <AppUser>[];
 
