@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../../models/message_model.dart';
 import 'linkified_message_text.dart';
 import 'message_footer.dart';
+import 'private_media_content.dart';
 import 'quoted_reply.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -39,17 +41,17 @@ class MessageBubble extends StatelessWidget {
             gradient: message.isUnsent
                 ? null
                 : isMe
-                    ? const LinearGradient(
-                        colors: [Color(0xff8E2DE2), Color(0xff6A1BFF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
+                ? const LinearGradient(
+                    colors: [Color(0xff8E2DE2), Color(0xff6A1BFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
             color: message.isUnsent
                 ? const Color(0xff141414)
                 : isMe
-                    ? null
-                    : const Color(0xff1C1C1C),
+                ? null
+                : const Color(0xff1C1C1C),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(20),
               topRight: const Radius.circular(20),
@@ -87,15 +89,18 @@ class MessageBubble extends StatelessWidget {
                       repliedToMe: repliedToMe,
                       otherUserName: otherUserName,
                     ),
-                    LinkifiedMessageText(
-                      text: message.text,
-                      isMe: isMe,
-                      baseStyle: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15.5,
-                        height: 1.4,
+                    if (message.isMedia)
+                      PrivateMediaContent(message: message),
+                    if (message.text.trim().isNotEmpty)
+                      LinkifiedMessageText(
+                        text: message.text,
+                        isMe: isMe,
+                        baseStyle: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15.5,
+                          height: 1.4,
+                        ),
                       ),
-                    ),
                     MessageFooter(message: message, isMe: isMe, time: time),
                   ],
                 ),
