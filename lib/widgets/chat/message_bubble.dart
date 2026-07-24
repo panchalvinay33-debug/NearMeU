@@ -90,7 +90,10 @@ class MessageBubble extends StatelessWidget {
                       otherUserName: otherUserName,
                     ),
                     if (message.isMedia)
-                      PrivateMediaContent(message: message),
+                      PrivateMediaContent(
+                        key: ValueKey(message.id),
+                        message: message,
+                      ),
                     if (message.text.trim().isNotEmpty)
                       LinkifiedMessageText(
                         text: message.text,

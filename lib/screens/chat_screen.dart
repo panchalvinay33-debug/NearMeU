@@ -21,11 +21,13 @@ import 'user_profile_screen.dart';
 class ChatScreen extends StatefulWidget {
   final String otherUserId;
   final String otherUserName;
+  final String? initialPhotoUrl;
 
   const ChatScreen({
     super.key,
     required this.otherUserId,
     required this.otherUserName,
+    this.initialPhotoUrl,
   });
 
   @override
@@ -269,9 +271,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.toString())),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error.toString())));
   }
 
   void _scrollToBottom() {
@@ -320,9 +322,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (message.isUnsent || message.text.trim().isEmpty) return;
     await Clipboard.setData(ClipboardData(text: message.text.trim()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Message copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Message copied')));
   }
 
   Future<void> _deleteForMe(MessageModel message) async {
@@ -334,9 +336,9 @@ class _ChatScreenState extends State<ChatScreen> {
       message: message,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Message deleted for you')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Message deleted for you')));
   }
 
   Future<void> _showMessageOptions(MessageModel message) async {
@@ -359,7 +361,10 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 if (!_isBlocked)
                   ListTile(
-                    leading: const Icon(Icons.reply_rounded, color: Colors.white),
+                    leading: const Icon(
+                      Icons.reply_rounded,
+                      color: Colors.white,
+                    ),
                     title: const Text(
                       'Reply',
                       style: TextStyle(color: Colors.white),
@@ -371,7 +376,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 if (!message.isUnsent && message.text.trim().isNotEmpty)
                   ListTile(
-                    leading: const Icon(Icons.copy_rounded, color: Colors.white),
+                    leading: const Icon(
+                      Icons.copy_rounded,
+                      color: Colors.white,
+                    ),
                     title: const Text(
                       'Copy',
                       style: TextStyle(color: Colors.white),
@@ -397,7 +405,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 if (isMe && canUnsend)
                   ListTile(
-                    leading: const Icon(Icons.undo_rounded, color: Colors.white),
+                    leading: const Icon(
+                      Icons.undo_rounded,
+                      color: Colors.white,
+                    ),
                     title: const Text(
                       'Unsend',
                       style: TextStyle(color: Colors.white),
@@ -768,6 +779,7 @@ class _ChatScreenState extends State<ChatScreen> {
             stream: _userService.streamUser(widget.otherUserId),
             builder: (context, snapshot) {
               final otherUser = snapshot.data;
+              final livePhotoUrl = otherUser?.photoUrl?.trim();
               final isOnline =
                   !_isBlocked &&
                   otherUser != null &&
@@ -778,6 +790,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? 'Online'
                     : _formatLastSeen(otherUser?.lastSeen),
                 isOnline: isOnline,
+                photoUrl: livePhotoUrl != null && livePhotoUrl.isNotEmpty
+                    ? livePhotoUrl
+                    : widget.initialPhotoUrl,
                 onBack: () => Navigator.pop(context),
                 onMenu: _showChatMenu,
               );

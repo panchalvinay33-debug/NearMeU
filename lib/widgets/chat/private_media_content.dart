@@ -35,12 +35,22 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
   @override
   void didUpdateWidget(covariant PrivateMediaContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.message.id != widget.message.id ||
-        oldWidget.message.localMediaPath != widget.message.localMediaPath) {
+    if (oldWidget.message.id != widget.message.id) {
       _localPath = widget.message.localMediaPath;
       _thumbnailPath = widget.message.localThumbnailPath;
       _discardMissingLocalFiles();
+      return;
     }
+
+    final nextLocalPath = widget.message.localMediaPath;
+    if (nextLocalPath != null && nextLocalPath.trim().isNotEmpty) {
+      _localPath = nextLocalPath;
+    }
+    final nextThumbnailPath = widget.message.localThumbnailPath;
+    if (nextThumbnailPath != null && nextThumbnailPath.trim().isNotEmpty) {
+      _thumbnailPath = nextThumbnailPath;
+    }
+    _discardMissingLocalFiles();
   }
 
   void _discardMissingLocalFiles() {
@@ -82,9 +92,9 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) setState(() => _isDownloading = false);
     }
@@ -108,9 +118,7 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _PrivateImageScreen(file: File(path)),
-      ),
+      MaterialPageRoute(builder: (_) => _PrivateImageScreen(file: File(path))),
     );
   }
 
