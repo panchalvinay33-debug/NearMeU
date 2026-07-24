@@ -29,11 +29,13 @@ test("expiry comparison includes the exact expiry instant", () => {
   assert.equal(isExpiredAt({ expiresAtMs: expiresAt, nowMs: 5001 }), true);
 });
 
-test("media deletion is restricted to the exact private chat message folder", () => {
-  const allowed = "privateChatMedia/chat-a/message-b/photo.jpg";
+test("media deletion is restricted to the sender scoped message folder", () => {
+  const allowed =
+    "privateChatMedia/sender-a/chat-a/message-b/photo.jpg";
   assert.equal(
     privateMediaPathAllowed({
       path: allowed,
+      senderId: "sender-a",
       chatId: "chat-a",
       messageId: "message-b",
     }),
@@ -42,6 +44,7 @@ test("media deletion is restricted to the exact private chat message folder", ()
   assert.equal(
     privateMediaPathAllowed({
       path: "profilePhotos/user/photo.jpg",
+      senderId: "sender-a",
       chatId: "chat-a",
       messageId: "message-b",
     }),
@@ -49,7 +52,8 @@ test("media deletion is restricted to the exact private chat message folder", ()
   );
   assert.equal(
     privateMediaPathAllowed({
-      path: "privateChatMedia/chat-a/another-message/photo.jpg",
+      path: "privateChatMedia/other/chat-a/message-b/photo.jpg",
+      senderId: "sender-a",
       chatId: "chat-a",
       messageId: "message-b",
     }),
