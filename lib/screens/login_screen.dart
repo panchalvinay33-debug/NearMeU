@@ -6,8 +6,8 @@ import '../security/suspension_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/user_service.dart';
-import 'gender_screen.dart';
 import 'nearby_screen.dart';
+import 'premium_signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -82,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => GenderScreen(
+            builder: (_) => PremiumSignupScreen(
               uid: firebaseUser.uid,
               email: firebaseUser.email ?? '',
             ),
