@@ -6,9 +6,9 @@ import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/presence_service.dart';
 import '../services/user_service.dart';
-import 'gender_screen.dart';
 import 'login_screen.dart';
 import 'nearby_screen.dart';
+import 'premium_signup_screen.dart';
 
 class AuthGateScreen extends StatefulWidget {
   const AuthGateScreen({super.key});
@@ -29,7 +29,6 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
   }
 
   Future<void> _handleStartup() async {
-    // Small delay so Firebase Auth has time to restore the session.
     await Future.delayed(const Duration(milliseconds: 700));
 
     final User? firebaseUser = FirebaseAuth.instance.currentUser;
@@ -59,7 +58,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
       NotificationNavigationService.instance.setAppShellReady(false);
       _goTo(
-        GenderScreen(
+        PremiumSignupScreen(
           uid: firebaseUser.uid,
           email: firebaseUser.email ?? '',
         ),
