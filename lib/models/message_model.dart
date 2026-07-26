@@ -211,7 +211,8 @@ class MessageModel {
 
   bool get isImage => type == 'image';
   bool get isVideo => type == 'video';
-  bool get isMedia => isImage || isVideo;
+  bool get isVoice => type == 'voice';
+  bool get isMedia => isImage || isVideo || isVoice;
   bool get hasLocalMedia =>
       localMediaPath != null && localMediaPath!.trim().isNotEmpty;
   bool get hasRemoteMedia =>
