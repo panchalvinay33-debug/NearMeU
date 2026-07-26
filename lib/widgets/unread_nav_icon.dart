@@ -20,15 +20,22 @@ class _UnreadNavIconState extends State<UnreadNavIcon> {
   final TrustedReadService _trustedReadService = TrustedReadService();
   Timer? _timer;
   int _count = 0;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_refresh());
     _timer = Timer.periodic(
-      const Duration(seconds: 20),
+      const Duration(seconds: 3),
       (_) => unawaited(_refresh()),
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant UnreadNavIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) unawaited(_refresh());
   }
 
   @override
@@ -38,7 +45,8 @@ class _UnreadNavIconState extends State<UnreadNavIcon> {
   }
 
   Future<void> _refresh() async {
-    if (widget.userId.isEmpty) return;
+    if (widget.userId.isEmpty || _refreshing) return;
+    _refreshing = true;
     try {
       final chats = await _trustedReadService.getChatPreviews();
       final nextCount = chats.fold<int>(
@@ -50,6 +58,8 @@ class _UnreadNavIconState extends State<UnreadNavIcon> {
       }
     } catch (_) {
       // Keep the last known badge during a temporary backend outage.
+    } finally {
+      _refreshing = false;
     }
   }
 
