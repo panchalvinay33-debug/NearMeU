@@ -19,7 +19,9 @@ class LocalChatStore {
   static const Duration cloudMessageRetention = Duration(days: 7);
 
   final FlutterSecureStorage _secureStorage;
-  final Map<String, Database> _openDatabases = <String, Database>{};
+  static final Map<String, Database> _openDatabases = <String, Database>{};
+  static final Map<String, Future<Database>> _openingDatabases =
+      <String, Future<Database>>{};
 
   String _safeUid(String uid) {
     return uid.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -57,7 +59,27 @@ class LocalChatStore {
     final cached = _openDatabases[uid];
     if (cached != null && cached.isOpen) return cached;
 
+    final opening = _openingDatabases[uid];
+    if (opening != null) return opening;
+
+    final future = _openForUserInternal(uid);
+    _openingDatabases[uid] = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_openingDatabases[uid], future)) {
+        _openingDatabases.remove(uid);
+      }
+    }
+  }
+
+  Future<Database> _openForUserInternal(String uid) async {
     final path = await _databasePath(uid);
+    final parent = Directory(p.dirname(path));
+    if (!await parent.exists()) {
+      await parent.create(recursive: true);
+    }
+
     final password = await _databasePassword(uid);
     final database = await openDatabase(
       path,
@@ -202,46 +224,41 @@ class LocalChatStore {
         (uid, acknowledgedAt) =>
             MapEntry(uid, acknowledgedAt.millisecondsSinceEpoch),
       );
-      batch.insert(
-        'messages',
-        <String, Object?>{
-          'owner_uid': ownerUid,
-          'chat_id': record.chatId,
-          'message_id': message.id,
-          'sender_id': message.senderId,
-          'receiver_id': message.receiverId,
-          'text': message.text,
-          'timestamp_ms': message.timestamp.millisecondsSinceEpoch,
-          'is_unsent': message.isUnsent ? 1 : 0,
-          'unsent_at_ms': message.unsentAt?.millisecondsSinceEpoch,
-          'reply_to_message_id': message.replyToMessageId,
-          'reply_to_text': message.replyToText,
-          'reply_to_sender_id': message.replyToSenderId,
-          'message_type': message.type,
-          'remote_media_url': message.mediaUrl,
-          'media_storage_path': message.mediaStoragePath,
-          'media_content_type': message.mediaContentType,
-          'media_size_bytes': message.mediaSizeBytes,
-          'media_duration_ms': message.mediaDurationMs,
-          'download_ack_json': jsonEncode(acknowledgements),
-          'local_media_path': record.localMediaPath ?? message.localMediaPath,
-          'local_thumbnail_path':
-              record.localThumbnailPath ?? message.localThumbnailPath,
-          'is_seen': message.isSeen ? 1 : 0,
-          'seen_at_ms': message.seenAt?.millisecondsSinceEpoch,
-          'deleted_for_json': jsonEncode(message.deletedFor),
-          'cloud_expires_at_ms':
-              (record.cloudExpiresAt ?? message.cloudExpiresAt)
-                  ?.millisecondsSinceEpoch,
-          'cloud_media_deleted_at_ms':
-              message.cloudMediaDeletedAt?.millisecondsSinceEpoch,
-          'download_complete': record.downloadComplete ? 1 : 0,
-          'cloud_media_deleted': record.cloudMediaDeleted ? 1 : 0,
-          'pending_upload': record.pendingUpload ? 1 : 0,
-          'updated_at_ms': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      batch.insert('messages', <String, Object?>{
+        'owner_uid': ownerUid,
+        'chat_id': record.chatId,
+        'message_id': message.id,
+        'sender_id': message.senderId,
+        'receiver_id': message.receiverId,
+        'text': message.text,
+        'timestamp_ms': message.timestamp.millisecondsSinceEpoch,
+        'is_unsent': message.isUnsent ? 1 : 0,
+        'unsent_at_ms': message.unsentAt?.millisecondsSinceEpoch,
+        'reply_to_message_id': message.replyToMessageId,
+        'reply_to_text': message.replyToText,
+        'reply_to_sender_id': message.replyToSenderId,
+        'message_type': message.type,
+        'remote_media_url': message.mediaUrl,
+        'media_storage_path': message.mediaStoragePath,
+        'media_content_type': message.mediaContentType,
+        'media_size_bytes': message.mediaSizeBytes,
+        'media_duration_ms': message.mediaDurationMs,
+        'download_ack_json': jsonEncode(acknowledgements),
+        'local_media_path': record.localMediaPath ?? message.localMediaPath,
+        'local_thumbnail_path':
+            record.localThumbnailPath ?? message.localThumbnailPath,
+        'is_seen': message.isSeen ? 1 : 0,
+        'seen_at_ms': message.seenAt?.millisecondsSinceEpoch,
+        'deleted_for_json': jsonEncode(message.deletedFor),
+        'cloud_expires_at_ms': (record.cloudExpiresAt ?? message.cloudExpiresAt)
+            ?.millisecondsSinceEpoch,
+        'cloud_media_deleted_at_ms':
+            message.cloudMediaDeletedAt?.millisecondsSinceEpoch,
+        'download_complete': record.downloadComplete ? 1 : 0,
+        'cloud_media_deleted': record.cloudMediaDeleted ? 1 : 0,
+        'pending_upload': record.pendingUpload ? 1 : 0,
+        'updated_at_ms': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
@@ -274,9 +291,7 @@ class LocalChatStore {
       where: hasChat
           ? 'owner_uid = ? AND chat_id = ? AND pending_upload = 1'
           : 'owner_uid = ? AND pending_upload = 1',
-      whereArgs: hasChat
-          ? <Object?>[ownerUid, chatId]
-          : <Object?>[ownerUid],
+      whereArgs: hasChat ? <Object?>[ownerUid, chatId] : <Object?>[ownerUid],
       orderBy: 'updated_at_ms ASC',
       limit: limit.clamp(1, 200),
     );
@@ -512,6 +527,7 @@ class LocalChatStore {
   }
 
   Future<void> closeForUser(String uid) async {
+    await _openingDatabases.remove(uid);
     final database = _openDatabases.remove(uid);
     if (database != null && database.isOpen) await database.close();
   }
