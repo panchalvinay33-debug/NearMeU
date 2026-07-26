@@ -1,14 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/support_announcement.dart';
 import '../utils/badge_formatters.dart';
+import 'announcement_media_service.dart';
 
 class AnnouncementService {
-  AnnouncementService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  AnnouncementService({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ??
+            FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
   static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -22,8 +29,9 @@ class AnnouncementService {
           .collection('privateState')
           .doc('supportAnnouncements');
 
-  DateTime effectiveCreatedAt(SupportAnnouncement item) =>
-      item.createdAt ?? _legacyDate;
+  DateTime effectiveCreatedAt(SupportAnnouncement item) => item.createdAt;
+
+  String newAnnouncementId() => _announcements.doc().id;
 
   Stream<List<SupportAnnouncement>> watchActiveAnnouncements({int limit = 50}) {
     return _announcements
@@ -57,7 +65,6 @@ class AnnouncementService {
 
   bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
     final createdAt = item.createdAt;
-    if (createdAt == null) return false;
     return lastReadAt == null || createdAt.isAfter(lastReadAt);
   }
 
@@ -103,13 +110,24 @@ class AnnouncementService {
   }
 
   Future<void> createAnnouncement({
+    required String announcementId,
     required String adminId,
     required String title,
     required String message,
     required String priority,
+    required String announcementType,
+    UploadedAnnouncementMedia? media,
+    String? updateVersion,
+    String? updateUrl,
+    String? updateButtonLabel,
+    bool isMandatoryUpdate = false,
   }) async {
     final safeTitle = title.trim();
     final safeMessage = message.trim();
+    final safeVersion = updateVersion?.trim();
+    final safeUrl = updateUrl?.trim();
+    final safeButton = updateButtonLabel?.trim();
+
     if (safeTitle.isEmpty || safeTitle.length > 80) {
       throw ArgumentError('Enter a title between 1 and 80 characters.');
     }
@@ -119,24 +137,64 @@ class AnnouncementService {
     if (!['normal', 'important', 'urgent'].contains(priority)) {
       throw ArgumentError('Select a valid priority.');
     }
-    await _announcements.add({
+    if (![
+      'general',
+      'new_feature',
+      'app_update',
+      'maintenance',
+      'important',
+    ].contains(announcementType)) {
+      throw ArgumentError('Select a valid announcement type.');
+    }
+    if (announcementType == 'app_update' &&
+        (safeUrl == null || safeUrl.isEmpty)) {
+      throw ArgumentError('Enter the update URL for an app update.');
+    }
+
+    await _announcements.doc(announcementId).set({
       'title': safeTitle,
       'message': safeMessage,
       'priority': priority,
       'type': 'official_announcement',
+      'announcementType': announcementType,
       'targetAudience': 'allActiveUsers',
       'isActive': true,
       'createdByAdminId': adminId,
       'createdAt': FieldValue.serverTimestamp(),
       'expiresAt': null,
+      'mediaType': media?.type,
+      'mediaStoragePath': media?.storagePath,
+      'mediaContentType': media?.contentType,
+      'mediaSizeBytes': media?.sizeBytes,
+      'mediaDurationMs': media?.durationMs,
+      'mediaExpiresAt': media == null
+          ? null
+          : Timestamp.fromDate(
+              DateTime.now().add(AnnouncementMediaService.cloudRetention),
+            ),
+      'mediaDeletedAt': null,
+      'updateVersion': safeVersion?.isEmpty == true ? null : safeVersion,
+      'updateUrl': safeUrl?.isEmpty == true ? null : safeUrl,
+      'updateButtonLabel': safeButton?.isEmpty == true
+          ? (announcementType == 'app_update' ? 'Update now' : null)
+          : safeButton,
+      'isMandatoryUpdate':
+          announcementType == 'app_update' && isMandatoryUpdate,
     });
   }
 
   Future<void> expireAnnouncement(String announcementId) async {
-    await _announcements.doc(announcementId).set({
-      'isActive': false,
-      'expiresAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    try {
+      await _functions
+          .httpsCallable('expireSupportAnnouncement')
+          .call<void>(<String, dynamic>{'announcementId': announcementId});
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'not-found' && error.code != 'unimplemented') rethrow;
+      await _announcements.doc(announcementId).set({
+        'isActive': false,
+        'expiresAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
   }
 
   String formatBadge(int count) => BadgeFormatters.unread(count);
