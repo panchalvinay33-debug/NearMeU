@@ -17,8 +17,6 @@ class AnnouncementService {
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
-  static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
-
   CollectionReference<Map<String, dynamic>> get _announcements =>
       _firestore.collection('supportAnnouncements');
 
@@ -64,8 +62,7 @@ class AnnouncementService {
   }
 
   bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
-    final createdAt = item.createdAt;
-    return lastReadAt == null || createdAt.isAfter(lastReadAt);
+    return lastReadAt == null || item.createdAt.isAfter(lastReadAt);
   }
 
   void _debugLogFirebaseException(Object error) {
@@ -124,63 +121,36 @@ class AnnouncementService {
   }) async {
     final safeTitle = title.trim();
     final safeMessage = message.trim();
-    final safeVersion = updateVersion?.trim();
-    final safeUrl = updateUrl?.trim();
-    final safeButton = updateButtonLabel?.trim();
-
     if (safeTitle.isEmpty || safeTitle.length > 80) {
       throw ArgumentError('Enter a title between 1 and 80 characters.');
     }
     if (safeMessage.isEmpty || safeMessage.length > 1000) {
       throw ArgumentError('Enter a message between 1 and 1000 characters.');
     }
-    if (!['normal', 'important', 'urgent'].contains(priority)) {
-      throw ArgumentError('Select a valid priority.');
-    }
-    if (![
-      'general',
-      'new_feature',
-      'app_update',
-      'maintenance',
-      'important',
-    ].contains(announcementType)) {
-      throw ArgumentError('Select a valid announcement type.');
-    }
-    if (announcementType == 'app_update' &&
-        (safeUrl == null || safeUrl.isEmpty)) {
-      throw ArgumentError('Enter the update URL for an app update.');
-    }
 
-    await _announcements.doc(announcementId).set({
-      'title': safeTitle,
-      'message': safeMessage,
-      'priority': priority,
-      'type': 'official_announcement',
-      'announcementType': announcementType,
-      'targetAudience': 'allActiveUsers',
-      'isActive': true,
-      'createdByAdminId': adminId,
-      'createdAt': FieldValue.serverTimestamp(),
-      'expiresAt': null,
-      'mediaType': media?.type,
-      'mediaStoragePath': media?.storagePath,
-      'mediaContentType': media?.contentType,
-      'mediaSizeBytes': media?.sizeBytes,
-      'mediaDurationMs': media?.durationMs,
-      'mediaExpiresAt': media == null
-          ? null
-          : Timestamp.fromDate(
-              DateTime.now().add(AnnouncementMediaService.cloudRetention),
-            ),
-      'mediaDeletedAt': null,
-      'updateVersion': safeVersion?.isEmpty == true ? null : safeVersion,
-      'updateUrl': safeUrl?.isEmpty == true ? null : safeUrl,
-      'updateButtonLabel': safeButton?.isEmpty == true
-          ? (announcementType == 'app_update' ? 'Update now' : null)
-          : safeButton,
-      'isMandatoryUpdate':
-          announcementType == 'app_update' && isMandatoryUpdate,
-    });
+    await _functions.httpsCallable('createSupportAnnouncement').call<void>(
+      <String, dynamic>{
+        'announcementId': announcementId,
+        'adminId': adminId,
+        'title': safeTitle,
+        'message': safeMessage,
+        'priority': priority,
+        'announcementType': announcementType,
+        'media': media == null
+            ? null
+            : <String, dynamic>{
+                'type': media.type,
+                'storagePath': media.storagePath,
+                'contentType': media.contentType,
+                'sizeBytes': media.sizeBytes,
+                'durationMs': media.durationMs,
+              },
+        'updateVersion': updateVersion?.trim(),
+        'updateUrl': updateUrl?.trim(),
+        'updateButtonLabel': updateButtonLabel?.trim(),
+        'isMandatoryUpdate': isMandatoryUpdate,
+      },
+    );
   }
 
   Future<void> expireAnnouncement(String announcementId) async {
