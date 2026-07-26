@@ -67,6 +67,11 @@ service firebase.storage {
             && request.resource.size <= 30 * 1024 * 1024
             && request.resource.contentType == 'video/mp4'
           )
+          || (
+            metadata.mediaType == 'voice'
+            && request.resource.size <= 8 * 1024 * 1024
+            && request.resource.contentType.matches('audio/(mp4|m4a|aac)')
+          )
         );
     }
 
