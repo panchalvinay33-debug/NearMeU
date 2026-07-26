@@ -29,6 +29,9 @@ This roadmap keeps the current V1 scope stable while addressing production block
 ## Batch 4 — Privacy architecture
 
 - [x] Split sensitive chat media from public app storage and keep downloaded media inside app-private storage.
+- [x] Block Android screenshots, recent-app previews and ordinary screen recording by default with `FLAG_SECURE`.
+- [x] Allow screen capture only after the signed-in account is verified as an administrator.
+- [x] Re-enable screenshot blocking immediately on logout, verification failure or non-admin login.
 - [ ] Split private account data from public nearby profile data completely.
 - [ ] Keep exact coordinates, email, blocked users, settings, and device tokens private.
 - [ ] Return only privacy-safe profile summaries and rounded distance to clients.
@@ -72,5 +75,5 @@ This is now part of the official NearMeU product scope, not an experimental add-
 - [ ] Configure secure production upload signing.
 - [x] Add App Check enforcement and debug-provider testing support.
 - [ ] Complete public policy and account-deletion webpages.
-- [ ] Run two-device, offline, background-push, block/report, deletion, migration, announcement-media and forced-update tests.
+- [ ] Run two-device, offline, background-push, block/report, deletion, migration, announcement-media, forced-update and screenshot-protection tests.
 - [ ] Produce and verify the signed Android App Bundle.
