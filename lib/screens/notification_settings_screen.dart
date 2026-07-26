@@ -42,8 +42,7 @@ class _NotificationSettingsScreenState
     if (!mounted) return;
 
     setState(() {
-      messageNotificationsEnabled =
-          user?.messageNotificationsEnabled ?? true;
+      messageNotificationsEnabled = user?.messageNotificationsEnabled ?? true;
       nearbyAlertsEnabled = user?.nearbyAlertsEnabled ?? false;
       isLoading = false;
     });
@@ -65,7 +64,11 @@ class _NotificationSettingsScreenState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update notification setting. Please try again.')),
+        const SnackBar(
+          content: Text(
+            'Could not update notification setting. Please try again.',
+          ),
+        ),
       );
       messageNotificationsEnabled = !value;
     }
@@ -93,7 +96,9 @@ class _NotificationSettingsScreenState
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update nearby alerts. Please try again.')),
+        const SnackBar(
+          content: Text('Could not update nearby alerts. Please try again.'),
+        ),
       );
       nearbyAlertsEnabled = !value;
     }
@@ -139,10 +144,7 @@ class _NotificationSettingsScreenState
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
               ],
             ),
@@ -193,11 +195,7 @@ class _NotificationSettingsScreenState
       ),
       child: const Text(
         'These settings save your notification preferences in NearMeU. Android may ask for notification permission before alerts are delivered. You can change permission any time in system settings.',
-        style: TextStyle(
-          color: Colors.white60,
-          fontSize: 13,
-          height: 1.45,
-        ),
+        style: TextStyle(color: Colors.white60, fontSize: 13, height: 1.45),
       ),
     );
   }
@@ -212,17 +210,12 @@ class _NotificationSettingsScreenState
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           'Notifications',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: isLoading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: Colors.purpleAccent,
-              ),
+              child: CircularProgressIndicator(color: Colors.purpleAccent),
             )
           : ListView(
               padding: const EdgeInsets.all(16),

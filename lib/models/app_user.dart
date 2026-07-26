@@ -71,10 +71,12 @@ class AppUser {
       createdAt: data['createdAt'] is Timestamp
           ? (data['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
-      latitude: (data['exactLatitude'] as num?)?.toDouble() ??
+      latitude:
+          (data['exactLatitude'] as num?)?.toDouble() ??
           (data['approxLatitude'] as num?)?.toDouble() ??
           (data['latitude'] as num?)?.toDouble(),
-      longitude: (data['exactLongitude'] as num?)?.toDouble() ??
+      longitude:
+          (data['exactLongitude'] as num?)?.toDouble() ??
           (data['approxLongitude'] as num?)?.toDouble() ??
           (data['longitude'] as num?)?.toDouble(),
       locationCell: data['locationCell'],
@@ -88,8 +90,7 @@ class AppUser {
           ? (data['lastSeen'] as Timestamp).toDate()
           : null,
       isOnline: data['isOnline'] ?? false,
-      messageNotificationsEnabled:
-          data['messageNotificationsEnabled'] ?? true,
+      messageNotificationsEnabled: data['messageNotificationsEnabled'] ?? true,
       nearbyAlertsEnabled: data['nearbyAlertsEnabled'] ?? false,
       isAdmin: data['isAdmin'] ?? false,
       isSuspended: data['isSuspended'] ?? false,

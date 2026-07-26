@@ -224,9 +224,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
     return distance == null ? 'Any distance' : 'Within ${distance.round()} km';
   }
 
-  int get _onlineCount => _visibleUsers
-      .where(NearbyUserPresenter.isEffectivelyOnline)
-      .length;
+  int get _onlineCount =>
+      _visibleUsers.where(NearbyUserPresenter.isEffectivelyOnline).length;
 
   @override
   Widget build(BuildContext context) {

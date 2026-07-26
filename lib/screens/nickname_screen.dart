@@ -100,10 +100,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
         centerTitle: true,
         title: const Text(
           'Complete Profile',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: Form(
@@ -123,10 +120,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
             const Text(
               'Choose a nickname and enter your age',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.grey, fontSize: 16),
             ),
             const SizedBox(height: 30),
             TextFormField(

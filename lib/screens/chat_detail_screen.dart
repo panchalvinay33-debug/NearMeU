@@ -18,18 +18,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController messageController = TextEditingController();
 
   final List<Map<String, dynamic>> messages = [
-    {
-      "text": "Hey 👋",
-      "isMe": false,
-    },
-    {
-      "text": "Hi, how are you?",
-      "isMe": true,
-    },
-    {
-      "text": "I’m good 🙂",
-      "isMe": false,
-    },
+    {"text": "Hey 👋", "isMe": false},
+    {"text": "Hi, how are you?", "isMe": true},
+    {"text": "I’m good 🙂", "isMe": false},
   ];
 
   void sendMessage() {
@@ -38,10 +29,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     if (text.isEmpty) return;
 
     setState(() {
-      messages.add({
-        "text": text,
-        "isMe": true,
-      });
+      messages.add({"text": text, "isMe": true});
     });
 
     messageController.clear();
@@ -102,8 +90,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 final bool isMe = message["isMe"] == true;
 
                 return Align(
-                  alignment:
-                  isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isMe
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(
@@ -121,10 +110,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                     child: Text(
                       message["text"],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
                     ),
                   ),
                 );

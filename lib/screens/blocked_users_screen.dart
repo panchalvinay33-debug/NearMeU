@@ -93,8 +93,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   }
 
   Widget _buildAvatar(AppUser user) {
-    final firstLetter =
-        user.nickname.isNotEmpty ? user.nickname[0].toUpperCase() : '?';
+    final firstLetter = user.nickname.isNotEmpty
+        ? user.nickname[0].toUpperCase()
+        : '?';
 
     return CircleAvatar(
       radius: 28,
@@ -158,16 +159,11 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
             child: const Text(
               'Unblock',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -185,10 +181,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
           'Blocked Users',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: FutureBuilder<List<AppUser>>(
@@ -196,9 +189,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(
-                color: Colors.purpleAccent,
-              ),
+              child: CircularProgressIndicator(color: Colors.purpleAccent),
             );
           }
 

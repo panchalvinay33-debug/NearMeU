@@ -13,16 +13,13 @@ class AboutScreen extends StatelessWidget {
         centerTitle: true,
         title: const Text(
           'About NearMeU',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
         child: Column(
           children: [
-
             const SizedBox(height: 10),
 
             Container(
@@ -54,10 +51,7 @@ class AboutScreen extends StatelessWidget {
 
             Text(
               "Version 1.0.0",
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
             ),
 
             const SizedBox(height: 30),
@@ -72,7 +66,6 @@ class AboutScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Text(
                       "About NearMeU",
                       style: TextStyle(
@@ -109,7 +102,6 @@ class AboutScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Text(
                       "Features",
                       style: TextStyle(
@@ -122,7 +114,7 @@ class AboutScreen extends StatelessWidget {
                     SizedBox(height: 15),
 
                     ListTile(
-                      leading: Icon(Icons.lock,color: Colors.deepPurple),
+                      leading: Icon(Icons.lock, color: Colors.deepPurple),
                       title: Text(
                         "Privacy First",
                         style: TextStyle(color: Colors.white),
@@ -130,7 +122,10 @@ class AboutScreen extends StatelessWidget {
                     ),
 
                     ListTile(
-                      leading: Icon(Icons.location_on,color: Colors.deepPurple),
+                      leading: Icon(
+                        Icons.location_on,
+                        color: Colors.deepPurple,
+                      ),
                       title: Text(
                         "Nearby Discovery",
                         style: TextStyle(color: Colors.white),
@@ -138,14 +133,14 @@ class AboutScreen extends StatelessWidget {
                     ),
 
                     ListTile(
-                      leading: Icon(Icons.chat,color: Colors.deepPurple),
+                      leading: Icon(Icons.chat, color: Colors.deepPurple),
                       title: Text(
                         "Secure Chat",
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
                     ListTile(
-                      leading: Icon(Icons.shield,color: Colors.deepPurple),
+                      leading: Icon(Icons.shield, color: Colors.deepPurple),
                       title: Text(
                         "Safe Community",
                         style: TextStyle(color: Colors.white),
@@ -153,13 +148,12 @@ class AboutScreen extends StatelessWidget {
                     ),
 
                     ListTile(
-                      leading: Icon(Icons.flash_on,color: Colors.deepPurple),
+                      leading: Icon(Icons.flash_on, color: Colors.deepPurple),
                       title: Text(
                         "Fast & Lightweight",
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -177,7 +171,6 @@ class AboutScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Text(
                       "Support",
                       style: TextStyle(
@@ -191,11 +184,7 @@ class AboutScreen extends StatelessWidget {
 
                     Row(
                       children: [
-
-                        Icon(
-                          Icons.email,
-                          color: Colors.deepPurple,
-                        ),
+                        Icon(Icons.email, color: Colors.deepPurple),
 
                         SizedBox(width: 10),
 
@@ -208,10 +197,8 @@ class AboutScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-
                       ],
                     ),
-
                   ],
                 ),
               ),
@@ -221,10 +208,7 @@ class AboutScreen extends StatelessWidget {
 
             const Text(
               "Made with ❤️ in India",
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 16),
             ),
 
             SizedBox(height: 10),
@@ -232,14 +216,10 @@ class AboutScreen extends StatelessWidget {
             Text(
               "© 2026 NearMeU Technologies\nAll Rights Reserved.",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                height: 1.5,
-              ),
+              style: TextStyle(color: Colors.grey.shade500, height: 1.5),
             ),
 
             const SizedBox(height: 30),
-
           ],
         ),
       ),

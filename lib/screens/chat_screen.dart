@@ -43,8 +43,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen>
-    with WidgetsBindingObserver {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final LocalChatStore _localChatStore = LocalChatStore();
   late final ChatService _chatService = ChatService(
     localChatStore: _localChatStore,
@@ -306,7 +305,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (user == null || _isBlocked || _isSendingMedia) return;
     setState(() => _isSendingMedia = true);
     try {
-      final PreparedPrivateMedia? media = selection.type == _AttachmentType.image
+      final PreparedPrivateMedia? media =
+          selection.type == _AttachmentType.image
           ? await _mediaService.pickImage(source: selection.source)
           : await _mediaService.pickVideo(source: selection.source);
       if (media == null) return;
@@ -589,7 +589,10 @@ class _ChatScreenState extends State<ChatScreen>
             ),
             if (message.canUnsend(user.uid))
               ListTile(
-                leading: const Icon(Icons.undo_rounded, color: Colors.redAccent),
+                leading: const Icon(
+                  Icons.undo_rounded,
+                  color: Colors.redAccent,
+                ),
                 title: const Text(
                   'Unsend',
                   style: TextStyle(color: Colors.redAccent),
@@ -731,8 +734,7 @@ class _ChatScreenState extends State<ChatScreen>
           isRecordingVoice: _isRecordingVoice,
           recordingDuration: _recordingDuration,
           onEmojiTap: _toggleEmojiPicker,
-          onAttachment:
-              _isSending || _isSendingMedia || _isRecordingVoice
+          onAttachment: _isSending || _isSendingMedia || _isRecordingVoice
               ? null
               : _showAttachmentSheet,
           onVoiceTap: _isSending || _isSendingMedia
@@ -770,22 +772,21 @@ class _ChatScreenState extends State<ChatScreen>
                 value: reason,
                 isExpanded: true,
                 dropdownColor: AppColors.surface,
-                items: const <String>[
-                  'Spam',
-                  'Fake Profile',
-                  'Harassment',
-                  'Hate Speech',
-                  'Scam/Fraud',
-                  'Inappropriate Content',
-                  'Other',
-                ]
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(item),
-                      ),
-                    )
-                    .toList(),
+                items:
+                    const <String>[
+                          'Spam',
+                          'Fake Profile',
+                          'Harassment',
+                          'Hate Speech',
+                          'Scam/Fraud',
+                          'Inappropriate Content',
+                          'Other',
+                        ]
+                        .map(
+                          (item) =>
+                              DropdownMenuItem(value: item, child: Text(item)),
+                        )
+                        .toList(),
                 onChanged: (value) {
                   if (value != null) setDialogState(() => reason = value);
                 },
@@ -836,9 +837,9 @@ class _ChatScreenState extends State<ChatScreen>
         _showError('Profile is not available right now.');
         return;
       }
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => UserProfileScreen(user: profile)));
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => UserProfileScreen(user: profile)),
+      );
       await _checkBlockStatus();
     } catch (error) {
       if (mounted) _showError(error);
@@ -905,7 +906,10 @@ class _ChatScreenState extends State<ChatScreen>
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text('User not logged in', style: TextStyle(color: Colors.white)),
+          child: Text(
+            'User not logged in',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
     }
@@ -977,7 +981,8 @@ class _ChatScreenState extends State<ChatScreen>
                           );
                         }
 
-                        final messages = snapshot.data ?? const <MessageModel>[];
+                        final messages =
+                            snapshot.data ?? const <MessageModel>[];
                         if (messages.any(
                           (message) =>
                               message.receiverId == user.uid && !message.isSeen,

@@ -36,7 +36,7 @@ class NotificationService {
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<RemoteMessage>? _openedMessageSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _profileSubscription;
+  _profileSubscription;
   String? _registeredUid;
   String? _registeredToken;
   bool _initialized = false;
@@ -45,11 +45,7 @@ class NotificationService {
     if (_initialized) return;
     _initialized = true;
 
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
@@ -144,9 +140,7 @@ class NotificationService {
     }
 
     try {
-      await _functions
-          .httpsCallable('unregisterAllDeviceTokens')
-          .call<void>();
+      await _functions.httpsCallable('unregisterAllDeviceTokens').call<void>();
     } on FirebaseFunctionsException catch (error, stackTrace) {
       developer.log(
         'All-device unregister failed: ${error.code}',
@@ -206,19 +200,24 @@ class NotificationService {
         .collection('users')
         .doc(user.uid)
         .snapshots()
-        .listen((profile) {
-          final data = profile.data();
-          if (!profile.exists || data == null || data['isSuspended'] == true) {
-            return;
-          }
-          unawaited(_registerCurrentToken(user.uid));
-        }, onError: (Object error, StackTrace stackTrace) {
-          developer.log(
-            'Notification profile listener failed',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        });
+        .listen(
+          (profile) {
+            final data = profile.data();
+            if (!profile.exists ||
+                data == null ||
+                data['isSuspended'] == true) {
+              return;
+            }
+            unawaited(_registerCurrentToken(user.uid));
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            developer.log(
+              'Notification profile listener failed',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          },
+        );
   }
 
   Future<void> _registerCurrentToken(String uid) async {

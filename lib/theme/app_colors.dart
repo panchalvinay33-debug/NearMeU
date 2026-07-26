@@ -27,10 +27,7 @@ class AppColors {
 
   // Gradient
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [
-      Color(0xFF7C3AED),
-      Color(0xFFA855F7),
-    ],
+    colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

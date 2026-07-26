@@ -263,11 +263,7 @@ class _PremiumSignupScreenState extends State<PremiumSignupScreen> {
           const Text(
             'Create a private profile, discover people nearby and start meaningful conversations.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white60,
-              fontSize: 16,
-              height: 1.55,
-            ),
+            style: TextStyle(color: Colors.white60, fontSize: 16, height: 1.55),
           ),
           const SizedBox(height: 34),
           const _FeatureRow(
@@ -421,10 +417,7 @@ class _PremiumSignupScreenState extends State<PremiumSignupScreen> {
                   Expanded(
                     child: Text(
                       'Your email stays private and is never shown on your public profile.',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        height: 1.4,
-                      ),
+                      style: TextStyle(color: Colors.white60, height: 1.4),
                     ),
                   ),
                 ],
@@ -700,7 +693,9 @@ class _ChoiceCard extends StatelessWidget {
           boxShadow: selected
               ? <BoxShadow>[
                   BoxShadow(
-                    color: _PremiumSignupScreenState._primary.withValues(alpha: .18),
+                    color: _PremiumSignupScreenState._primary.withValues(
+                      alpha: .18,
+                    ),
                     blurRadius: 24,
                   ),
                 ]
@@ -738,7 +733,11 @@ class _ChoiceCard extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 13,
                   backgroundColor: _PremiumSignupScreenState._primary,
-                  child: Icon(Icons.check_rounded, size: 17, color: Colors.white),
+                  child: Icon(
+                    Icons.check_rounded,
+                    size: 17,
+                    color: Colors.white,
+                  ),
                 ),
               ),
           ],
@@ -826,7 +825,11 @@ class _WideChoiceCard extends StatelessWidget {
                 ),
               ),
               child: selected
-                  ? const Icon(Icons.check_rounded, size: 18, color: Colors.white)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    )
                   : null,
             ),
           ],
@@ -865,10 +868,7 @@ class _FeatureRow extends StatelessWidget {
               color: _PremiumSignupScreenState._primary.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(15),
             ),
-            child: Icon(
-              icon,
-              color: _PremiumSignupScreenState._primaryLight,
-            ),
+            child: Icon(icon, color: _PremiumSignupScreenState._primaryLight),
           ),
           const SizedBox(width: 14),
           Expanded(

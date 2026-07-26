@@ -187,14 +187,8 @@ class ChatComposer extends StatelessWidget {
                       colors:
                           (isRecordingVoice ? onVoiceTap : onSend) == null ||
                               isSendingMedia
-                          ? const <Color>[
-                              Color(0xff4A4A4A),
-                              Color(0xff333333),
-                            ]
-                          : const <Color>[
-                              Color(0xff9C27B0),
-                              Color(0xff673AB7),
-                            ],
+                          ? const <Color>[Color(0xff4A4A4A), Color(0xff333333)]
+                          : const <Color>[Color(0xff9C27B0), Color(0xff673AB7)],
                     ),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
@@ -206,9 +200,7 @@ class ChatComposer extends StatelessWidget {
                     ],
                   ),
                   child: Icon(
-                    isRecordingVoice
-                        ? Icons.send_rounded
-                        : Icons.send_rounded,
+                    isRecordingVoice ? Icons.send_rounded : Icons.send_rounded,
                     color: Colors.white,
                     size: 24,
                   ),

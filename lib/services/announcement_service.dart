@@ -6,7 +6,7 @@ import '../utils/badge_formatters.dart';
 
 class AnnouncementService {
   AnnouncementService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -33,16 +33,19 @@ class AnnouncementService {
         .snapshots()
         .handleError(_debugLogFirebaseException)
         .map((snapshot) {
-      final now = DateTime.now();
-      final items = snapshot.docs
-          .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
-          .toList();
-      items.sort(
-        (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
-      );
-      return items;
-    });
+          final now = DateTime.now();
+          final items = snapshot.docs
+              .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
+              .where(
+                (item) =>
+                    item.expiresAt == null || item.expiresAt!.isAfter(now),
+              )
+              .toList();
+          items.sort(
+            (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
+          );
+          return items;
+        });
   }
 
   Stream<DateTime?> watchLastReadAt(String uid) {
@@ -77,14 +80,16 @@ class AnnouncementService {
           .limit(100)
           .get()
           .catchError((Object error) {
-        _debugLogFirebaseException(error);
-        throw error;
-      });
+            _debugLogFirebaseException(error);
+            throw error;
+          });
 
       final now = DateTime.now();
       return snapshot.docs
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .where(
+            (item) => item.expiresAt == null || item.expiresAt!.isAfter(now),
+          )
           .where((item) => isUnread(item, lastReadAt))
           .length;
     });

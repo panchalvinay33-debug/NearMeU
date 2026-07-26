@@ -7,9 +7,7 @@ class TermsScreen extends StatelessWidget {
     return Card(
       color: const Color(0xFF1E1E1E),
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -56,7 +54,6 @@ class TermsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             const Text(
               "Terms & Conditions",
               style: TextStyle(
@@ -70,9 +67,7 @@ class TermsScreen extends StatelessWidget {
 
             Text(
               "Effective: July 2026",
-              style: TextStyle(
-                color: Colors.grey.shade400,
-              ),
+              style: TextStyle(color: Colors.grey.shade400),
             ),
 
             const SizedBox(height: 25),
@@ -127,15 +122,11 @@ class TermsScreen extends StatelessWidget {
               child: Text(
                 "© 2026 NearMeU Technologies\nAll Rights Reserved.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: Colors.grey, height: 1.5),
               ),
             ),
 
             const SizedBox(height: 30),
-
           ],
         ),
       ),

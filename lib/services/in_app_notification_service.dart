@@ -4,19 +4,26 @@ import '../models/app_notification.dart';
 
 class InAppNotificationService {
   InAppNotificationService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> _notifications(String uid) =>
       _firestore.collection('users').doc(uid).collection('notifications');
 
-  Stream<List<AppNotification>> watchNotifications(String uid, {int limit = 50}) {
+  Stream<List<AppNotification>> watchNotifications(
+    String uid, {
+    int limit = 50,
+  }) {
     return _notifications(uid)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => AppNotification.fromMap(doc.id, doc.data())).toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => AppNotification.fromMap(doc.id, doc.data()))
+              .toList(),
+        );
   }
 
   Stream<int> watchUnreadCount(String uid) {
@@ -34,11 +41,15 @@ class InAppNotificationService {
   }
 
   Future<void> markAllRead(String uid) async {
-    final snapshot = await _notifications(uid).where('readAt', isNull: true).limit(100).get();
+    final snapshot = await _notifications(
+      uid,
+    ).where('readAt', isNull: true).limit(100).get();
     if (snapshot.docs.isEmpty) return;
     final batch = _firestore.batch();
     for (final doc in snapshot.docs) {
-      batch.set(doc.reference, {'readAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+      batch.set(doc.reference, {
+        'readAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
     await batch.commit();
   }

@@ -30,10 +30,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
         centerTitle: true,
         title: const Text(
           'Looking For',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: Padding(
@@ -44,10 +41,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
             const Text(
               'Who do you want to connect with?',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.grey, fontSize: 16),
             ),
             const SizedBox(height: 35),
             Expanded(
@@ -101,10 +95,7 @@ class _LookingForScreenState extends State<LookingForScreen> {
                 ),
                 child: const Text(
                   'Continue',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

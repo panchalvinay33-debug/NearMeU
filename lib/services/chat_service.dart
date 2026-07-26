@@ -13,11 +13,9 @@ import 'local_chat_store.dart';
 import 'user_service.dart';
 
 class ChatService {
-  ChatService({
-    ChatSecurity? chatSecurity,
-    LocalChatStore? localChatStore,
-  }) : _chatSecurity = chatSecurity ?? ChatSecurity(),
-       _localChatStore = localChatStore ?? LocalChatStore();
+  ChatService({ChatSecurity? chatSecurity, LocalChatStore? localChatStore})
+    : _chatSecurity = chatSecurity ?? ChatSecurity(),
+      _localChatStore = localChatStore ?? LocalChatStore();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
@@ -118,10 +116,7 @@ class ChatService {
 
     try {
       await _functions.httpsCallable('unsendPrivateMessage').call<void>(
-        <String, dynamic>{
-          'otherUserId': otherUserId,
-          'messageId': message.id,
-        },
+        <String, dynamic>{'otherUserId': otherUserId, 'messageId': message.id},
       );
     } on FirebaseFunctionsException catch (error) {
       throw ChatSecurityException(_functionsErrorMessage(error));
@@ -173,12 +168,9 @@ class ChatService {
         .collection('messages')
         .doc(message.id);
 
-    await messageRef.set(
-      <String, Object?>{
-        'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
-      },
-      SetOptions(merge: true),
-    );
+    await messageRef.set(<String, Object?>{
+      'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
+    }, SetOptions(merge: true));
 
     try {
       await _localChatStore.deleteMessageForOwner(
@@ -207,11 +199,8 @@ class ChatService {
       FieldPath(<String>['readStates', currentUserId, 'lastReadAt']):
           FieldValue.serverTimestamp(),
       if (lastReadMessageId != null)
-        FieldPath(<String>[
-          'readStates',
-          currentUserId,
-          'lastReadMessageId',
-        ]): lastReadMessageId,
+        FieldPath(<String>['readStates', currentUserId, 'lastReadMessageId']):
+            lastReadMessageId,
     };
 
     try {
@@ -424,9 +413,7 @@ class ChatService {
                   ? Map<String, dynamic>.from(data['readStates'] as Map)
                   : <String, dynamic>{};
               final currentReadState = readStates[currentUserId] is Map
-                  ? Map<String, dynamic>.from(
-                      readStates[currentUserId] as Map,
-                    )
+                  ? Map<String, dynamic>.from(readStates[currentUserId] as Map)
                   : <String, dynamic>{};
 
               var unreadCount = unreadCounts[currentUserId] is int
@@ -511,15 +498,12 @@ class ChatService {
 
           chats.sort((first, second) {
             final firstTime =
-                first.lastMessageTime ??
-                DateTime.fromMillisecondsSinceEpoch(0);
+                first.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
             final secondTime =
                 second.lastMessageTime ??
                 DateTime.fromMillisecondsSinceEpoch(0);
             final byTime = secondTime.compareTo(firstTime);
-            return byTime != 0
-                ? byTime
-                : first.chatId.compareTo(second.chatId);
+            return byTime != 0 ? byTime : first.chatId.compareTo(second.chatId);
           });
           return chats;
         });
@@ -527,10 +511,7 @@ class ChatService {
 
   Stream<int> watchPrivateUnreadCount(String currentUserId) {
     return getChatsForUser(currentUserId).map(
-      (chats) => chats.fold<int>(
-        0,
-        (total, chat) => total + chat.unreadCount,
-      ),
+      (chats) => chats.fold<int>(0, (total, chat) => total + chat.unreadCount),
     );
   }
 

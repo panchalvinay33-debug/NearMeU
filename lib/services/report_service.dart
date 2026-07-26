@@ -3,8 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class ReportService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  CollectionReference get _reports =>
-      _firestore.collection('reports');
+  CollectionReference get _reports => _firestore.collection('reports');
 
   Future<bool> hasAlreadyReported({
     required String reporterId,
@@ -31,9 +30,7 @@ class ReportService {
     );
 
     if (alreadyReported) {
-      throw Exception(
-        'You have already reported this user.',
-      );
+      throw Exception('You have already reported this user.');
     }
 
     await _reports.add({
@@ -48,10 +45,7 @@ class ReportService {
     });
   }
 
-  Future<void> resolveReport(
-    String reportId,
-    String adminId,
-  ) async {
+  Future<void> resolveReport(String reportId, String adminId) async {
     await _reports.doc(reportId).update({
       'status': 'resolved',
       'resolvedBy': adminId,
@@ -59,9 +53,7 @@ class ReportService {
     });
   }
 
-  Future<void> deleteReport(
-    String reportId,
-  ) async {
+  Future<void> deleteReport(String reportId) async {
     await _reports.doc(reportId).delete();
   }
 }

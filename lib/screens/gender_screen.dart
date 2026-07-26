@@ -5,11 +5,7 @@ class GenderScreen extends StatefulWidget {
   final String uid;
   final String email;
 
-  const GenderScreen({
-    super.key,
-    required this.uid,
-    required this.email,
-  });
+  const GenderScreen({super.key, required this.uid, required this.email});
 
   @override
   State<GenderScreen> createState() => _GenderScreenState();
@@ -28,10 +24,7 @@ class _GenderScreenState extends State<GenderScreen> {
         centerTitle: true,
         title: const Text(
           "Select Gender",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: Padding(
@@ -42,10 +35,7 @@ class _GenderScreenState extends State<GenderScreen> {
             const Text(
               "Choose your gender to continue",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 16,
-              ),
+              style: TextStyle(color: Colors.grey, fontSize: 16),
             ),
             const SizedBox(height: 35),
 
@@ -80,17 +70,17 @@ class _GenderScreenState extends State<GenderScreen> {
                 onPressed: selectedGender.isEmpty
                     ? null
                     : () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => LookingForScreen(
-                        uid: widget.uid,
-                        email: widget.email,
-                        gender: selectedGender,
-                      ),
-                    ),
-                  );
-                },
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => LookingForScreen(
+                              uid: widget.uid,
+                              email: widget.email,
+                              gender: selectedGender,
+                            ),
+                          ),
+                        );
+                      },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purpleAccent,
                   foregroundColor: Colors.white,
@@ -100,10 +90,7 @@ class _GenderScreenState extends State<GenderScreen> {
                 ),
                 child: const Text(
                   "Continue",
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -139,9 +126,7 @@ class _GenderScreenState extends State<GenderScreen> {
               : const Color(0xff171717),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? Colors.purpleAccent
-                : Colors.grey.shade800,
+            color: selected ? Colors.purpleAccent : Colors.grey.shade800,
             width: 2,
           ),
         ),

@@ -32,9 +32,7 @@ class LocalPreviewCache {
       final chats = <ChatPreviewModel>[];
       for (final item in decoded) {
         if (item is! Map) continue;
-        final chat = ChatPreviewModel.fromMap(
-          Map<String, dynamic>.from(item),
-        );
+        final chat = ChatPreviewModel.fromMap(Map<String, dynamic>.from(item));
         if (chat.chatId.isEmpty || chat.otherUserId.isEmpty) continue;
         chats.add(chat);
       }
@@ -57,9 +55,12 @@ class LocalPreviewCache {
     String uid,
     List<ChatPreviewModel> chats,
   ) async {
-    final safeChats = chats.take(_maximumCachedChats).map((chat) {
-      return chat.toMap();
-    }).toList(growable: false);
+    final safeChats = chats
+        .take(_maximumCachedChats)
+        .map((chat) {
+          return chat.toMap();
+        })
+        .toList(growable: false);
     await _preferences.setString(_chatKey(uid), jsonEncode(safeChats));
   }
 
@@ -107,7 +108,9 @@ class LocalPreviewCache {
                 ? data['locationCell'] as String
                 : null,
             state: data['state'] is String ? data['state'] as String : null,
-            country: data['country'] is String ? data['country'] as String : null,
+            country: data['country'] is String
+                ? data['country'] as String
+                : null,
             photoUrl: data['photoUrl'] is String
                 ? data['photoUrl'] as String
                 : null,
@@ -134,27 +137,30 @@ class LocalPreviewCache {
   }
 
   Future<void> saveNearbyCandidates(String uid, List<AppUser> users) async {
-    final safeUsers = users.take(_maximumCachedNearbyUsers).map((user) {
-      return <String, dynamic>{
-        'uid': user.uid,
-        'nickname': user.nickname,
-        'gender': user.gender,
-        'lookingFor': user.lookingFor,
-        'createdAtMillis': user.createdAt.millisecondsSinceEpoch,
-        'latitude': user.latitude,
-        'longitude': user.longitude,
-        'locationCell': user.locationCell,
-        'state': user.state,
-        'country': user.country,
-        'photoUrl': user.photoUrl,
-        'age': user.age,
-        'lastSeenMillis': user.lastSeen?.millisecondsSinceEpoch,
-        'isOnline': user.isOnline,
-        'isAdmin': user.isAdmin,
-        'isSuspended': user.isSuspended,
-        'privacyVersion': user.privacyVersion,
-      };
-    }).toList(growable: false);
+    final safeUsers = users
+        .take(_maximumCachedNearbyUsers)
+        .map((user) {
+          return <String, dynamic>{
+            'uid': user.uid,
+            'nickname': user.nickname,
+            'gender': user.gender,
+            'lookingFor': user.lookingFor,
+            'createdAtMillis': user.createdAt.millisecondsSinceEpoch,
+            'latitude': user.latitude,
+            'longitude': user.longitude,
+            'locationCell': user.locationCell,
+            'state': user.state,
+            'country': user.country,
+            'photoUrl': user.photoUrl,
+            'age': user.age,
+            'lastSeenMillis': user.lastSeen?.millisecondsSinceEpoch,
+            'isOnline': user.isOnline,
+            'isAdmin': user.isAdmin,
+            'isSuspended': user.isSuspended,
+            'privacyVersion': user.privacyVersion,
+          };
+        })
+        .toList(growable: false);
     await _preferences.setString(_nearbyKey(uid), jsonEncode(safeUsers));
   }
 

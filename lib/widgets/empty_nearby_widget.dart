@@ -30,10 +30,7 @@ class EmptyNearbyWidget extends StatelessWidget {
             Text(
               "Try refreshing or check your location permission.",
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 15,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
             ),
           ],
         ),

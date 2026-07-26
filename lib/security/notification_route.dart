@@ -25,7 +25,9 @@ class NotificationRoute {
     required String currentUid,
     required dynamic participants,
   }) {
-    if (currentUid.isEmpty || participants is! List || participants.length != 2) {
+    if (currentUid.isEmpty ||
+        participants is! List ||
+        participants.length != 2) {
       return null;
     }
 

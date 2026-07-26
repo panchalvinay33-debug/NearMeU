@@ -33,7 +33,8 @@ class _SupportAnnouncementsScreenState
   DateTime? _effectiveLastReadAt(DateTime? serverValue) {
     final optimistic = _optimisticLastReadAt;
     if (optimistic == null) return serverValue;
-    if (serverValue == null || optimistic.isAfter(serverValue)) return optimistic;
+    if (serverValue == null || optimistic.isAfter(serverValue))
+      return optimistic;
     return serverValue;
   }
 
@@ -49,7 +50,9 @@ class _SupportAnnouncementsScreenState
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          const SnackBar(content: Text('All support announcements marked read.')),
+          const SnackBar(
+            content: Text('All support announcements marked read.'),
+          ),
         );
     } on FirebaseException catch (error) {
       if (kDebugMode) {
@@ -90,10 +93,10 @@ class _SupportAnnouncementsScreenState
   }
 
   Color _priorityColor(String priority) => switch (priority) {
-        'urgent' => Colors.redAccent,
-        'important' => Colors.orangeAccent,
-        _ => AppColors.primaryLight,
-      };
+    'urgent' => Colors.redAccent,
+    'important' => Colors.orangeAccent,
+    _ => AppColors.primaryLight,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +215,9 @@ class _AnnouncementList extends StatelessWidget {
           final unread = service.isUnread(item, lastReadAt);
 
           return Semantics(
-            label: unread ? 'Unread support announcement' : 'Read support announcement',
+            label: unread
+                ? 'Unread support announcement'
+                : 'Read support announcement',
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -274,10 +279,7 @@ class _AnnouncementList extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     DateFormatters.chatPreview(item.createdAt),
-                    style: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                 ],
               ),

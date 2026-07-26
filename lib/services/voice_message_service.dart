@@ -81,10 +81,7 @@ class VoiceMessageService {
         .collection('messages')
         .doc()
         .id;
-    final directory = await _mediaDirectory(
-      ownerUid: senderId,
-      chatId: chatId,
-    );
+    final directory = await _mediaDirectory(ownerUid: senderId, chatId: chatId);
     final localFile = File(p.join(directory.path, '$messageId.m4a'));
     await sourceFile.copy(localFile.path);
 
@@ -160,9 +157,7 @@ class VoiceMessageService {
 
       await _localChatStore.upsertMessages(
         ownerUid: senderId,
-        records: <LocalStoredMessage>[
-          pending.copyWith(pendingUpload: false),
-        ],
+        records: <LocalStoredMessage>[pending.copyWith(pendingUpload: false)],
       );
       return message;
     } on FirebaseFunctionsException catch (error, stackTrace) {

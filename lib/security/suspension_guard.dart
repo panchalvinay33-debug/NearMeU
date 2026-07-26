@@ -7,10 +7,7 @@ import '../screens/login_screen.dart';
 import 'suspension_service.dart';
 
 class SuspensionGuard extends StatefulWidget {
-  const SuspensionGuard({
-    super.key,
-    required this.child,
-  });
+  const SuspensionGuard({super.key, required this.child});
 
   final Widget child;
 

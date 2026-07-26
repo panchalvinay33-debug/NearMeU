@@ -11,19 +11,13 @@ class CommunityGuidelinesScreen extends StatelessWidget {
     return Card(
       color: const Color(0xFF1E1E1E),
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              icon,
-              color: Colors.deepPurple,
-              size: 28,
-            ),
+            Icon(icon, color: Colors.deepPurple, size: 28),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -73,7 +67,6 @@ class CommunityGuidelinesScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             const Text(
               "Help us keep NearMeU safe for everyone.",
               style: TextStyle(
@@ -160,15 +153,11 @@ class CommunityGuidelinesScreen extends StatelessWidget {
               child: Text(
                 "© 2026 NearMeU Technologies\nAll Rights Reserved.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: Colors.grey, height: 1.5),
               ),
             ),
 
             const SizedBox(height: 30),
-
           ],
         ),
       ),
