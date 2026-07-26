@@ -225,7 +225,11 @@ exports.sendPrivateMediaMessage = onCall(
           unreadCount: nextReceiverUnread,
         };
 
-        const preview = media.type === "image" ? "Photo" : "Video";
+        const preview = media.type === "image"
+          ? "Photo"
+          : media.type === "video"
+            ? "Video"
+            : "Voice message";
         const chatData = {
           participants,
           lastMessage: preview,
