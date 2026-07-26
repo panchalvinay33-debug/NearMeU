@@ -9,6 +9,7 @@ import 'security/suspension_guard.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
 import 'services/observability_service.dart';
+import 'widgets/app_version_gate.dart';
 import 'widgets/presence_lifecycle.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -56,8 +57,10 @@ class NearMeUApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const PresenceLifecycle(
-        child: SuspensionGuard(child: AuthGateScreen()),
+      home: const AppVersionGate(
+        child: PresenceLifecycle(
+          child: SuspensionGuard(child: AuthGateScreen()),
+        ),
       ),
     );
   }
