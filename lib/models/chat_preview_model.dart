@@ -116,6 +116,7 @@ class ChatPreviewModel {
     if (isUnsent) return 'This message was unsent';
     if (messageType == 'image') return 'Photo';
     if (messageType == 'video') return 'Video';
+    if (messageType == 'voice') return 'Voice message';
     if (messageType != 'text') return 'Attachment';
     final normalized = lastMessage.trim();
     if (normalized.isEmpty) return 'Start a conversation';
