@@ -45,27 +45,28 @@ Write-Host 'Applying NearMeU issue #68 fixes...' -ForegroundColor Cyan
 
 # 1) Authenticated startup enters the persistent app shell.
 $authGate = Join-Path $root 'lib/screens/auth_gate_screen.dart'
-Replace-RegexOnce \
-    $authGate \
-    "import 'login_screen\.dart';\s*import 'nearby_screen\.dart';" \
-    "import 'app_shell_screen.dart';`nimport 'login_screen.dart';"
-Replace-RegexOnce \
-    $authGate \
-    "MaterialPageRoute\(builder:\s*\(_\)\s*=>\s*const NearbyScreen\(\)\)," \
-    "MaterialPageRoute(builder: (_) => const AppShellScreen()),"
+Replace-RegexOnce `
+    -Path $authGate `
+    -Pattern "import 'login_screen\.dart';\s*import 'nearby_screen\.dart';" `
+    -Replacement "import 'app_shell_screen.dart';`nimport 'login_screen.dart';"
+Replace-RegexOnce `
+    -Path $authGate `
+    -Pattern "MaterialPageRoute\(builder:\s*\(_\)\s*=>\s*const NearbyScreen\(\)\)," `
+    -Replacement "MaterialPageRoute(builder: (_) => const AppShellScreen()),"
 
 # 2) One encrypted SQLCipher database opening per signed-in user, shared across
 # all ChatService / PrivateMediaService instances.
 $localStore = Join-Path $root 'lib/services/local_chat_store.dart'
-Replace-RegexOnce \
-    $localStore \
-    "final FlutterSecureStorage _secureStorage;\s*final Map<String, Database> _openDatabases = <String, Database>\{\};" \
-    @'
+$databaseFields = @'
 final FlutterSecureStorage _secureStorage;
   static final Map<String, Database> _openDatabases = <String, Database>{};
   static final Map<String, Future<Database>> _openingDatabases =
       <String, Future<Database>>{};
 '@
+Replace-RegexOnce `
+    -Path $localStore `
+    -Pattern "final FlutterSecureStorage _secureStorage;\s*final Map<String, Database> _openDatabases = <String, Database>\{\};" `
+    -Replacement $databaseFields
 
 $openReplacement = @'
 Future<Database> openForUser(String uid) async {
@@ -173,35 +174,34 @@ Future<Database> openForUser(String uid) async {
 
   Future<void> _createIndexes
 '@
-Replace-RegexOnce \
-    $localStore \
-    "Future<Database> openForUser\(String uid\) async \{.*?Future<void> _createIndexes" \
-    $openReplacement
+Replace-RegexOnce `
+    -Path $localStore `
+    -Pattern "Future<Database> openForUser\(String uid\) async \{.*?Future<void> _createIndexes" `
+    -Replacement $openReplacement
 
-Replace-RegexOnce \
-    $localStore \
-    "Future<void> closeForUser\(String uid\) async \{\s*final database = _openDatabases\.remove\(uid\);" \
-    @'
+$closeReplacement = @'
 Future<void> closeForUser(String uid) async {
     await _openingDatabases.remove(uid);
     final database = _openDatabases.remove(uid);
 '@
+Replace-RegexOnce `
+    -Path $localStore `
+    -Pattern "Future<void> closeForUser\(String uid\) async \{\s*final database = _openDatabases\.remove\(uid\);" `
+    -Replacement $closeReplacement
 
 # 3) Chat detail shares one LocalChatStore and repeatedly acknowledges reads
 # while the conversation remains visible.
 $chatScreen = Join-Path $root 'lib/screens/chat_screen.dart'
-Replace-RegexOnce \
-    $chatScreen \
-    "import 'package:emoji_picker_flutter/emoji_picker_flutter\.dart';" \
-    "import 'dart:async';`n`nimport 'package:emoji_picker_flutter/emoji_picker_flutter.dart';"
-Replace-RegexOnce \
-    $chatScreen \
-    "import '../services/chat_service\.dart';" \
-    "import '../services/chat_service.dart';`nimport '../services/local_chat_store.dart';"
-Replace-RegexOnce \
-    $chatScreen \
-    "final ChatService _chatService = ChatService\(\);\s*final PrivateMediaService _mediaService = PrivateMediaService\(\);" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "import 'package:emoji_picker_flutter/emoji_picker_flutter\.dart';" `
+    -Replacement "import 'dart:async';`n`nimport 'package:emoji_picker_flutter/emoji_picker_flutter.dart';"
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "import '../services/chat_service\.dart';" `
+    -Replacement "import '../services/chat_service.dart';`nimport '../services/local_chat_store.dart';"
+
+$serviceFields = @'
 final LocalChatStore _localChatStore = LocalChatStore();
   late final ChatService _chatService = ChatService(
     localChatStore: _localChatStore,
@@ -210,18 +210,22 @@ final LocalChatStore _localChatStore = LocalChatStore();
     localChatStore: _localChatStore,
   );
 '@
-Replace-RegexOnce \
-    $chatScreen \
-    "bool _checkingBlock = true;" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "final ChatService _chatService = ChatService\(\);\s*final PrivateMediaService _mediaService = PrivateMediaService\(\);" `
+    -Replacement $serviceFields
+
+$readFields = @'
 bool _checkingBlock = true;
   Timer? _readAcknowledgementTimer;
   bool _isAcknowledgingRead = false;
 '@
-Replace-RegexOnce \
-    $chatScreen \
-    "_initChatScreen\(\);\s*\}" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "bool _checkingBlock = true;" `
+    -Replacement $readFields
+
+$initReplacement = @'
 _initChatScreen();
     _readAcknowledgementTimer = Timer.periodic(
       const Duration(seconds: 3),
@@ -229,10 +233,12 @@ _initChatScreen();
     );
   }
 '@
-Replace-RegexOnce \
-    $chatScreen \
-    "Future<void> _markChatOpened\(\) async \{.*?\n  \}" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "_initChatScreen\(\);\s*\}" `
+    -Replacement $initReplacement
+
+$markReadReplacement = @'
 Future<void> _markChatOpened() async {
     final user = currentUser;
     if (user == null || _isBlocked || _isAcknowledgingRead) return;
@@ -250,18 +256,22 @@ Future<void> _markChatOpened() async {
     }
   }
 '@
-Replace-RegexOnce \
-    $chatScreen \
-    "void dispose\(\) \{\s*final user = currentUser;" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "Future<void> _markChatOpened\(\) async \{.*?\n  \}" `
+    -Replacement $markReadReplacement
+
+$disposeReplacement = @'
 void dispose() {
     _readAcknowledgementTimer?.cancel();
     final user = currentUser;
 '@
-Replace-RegexOnce \
-    $chatScreen \
-    "final messages = snapshot\.data \?\? <MessageModel>\[\];" \
-    @'
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "void dispose\(\) \{\s*final user = currentUser;" `
+    -Replacement $disposeReplacement
+
+$messagesReplacement = @'
 final messages = snapshot.data ?? <MessageModel>[];
                         if (messages.any(
                           (message) =>
@@ -270,16 +280,28 @@ final messages = snapshot.data ?? <MessageModel>[];
                           unawaited(_markChatOpened());
                         }
 '@
+Replace-RegexOnce `
+    -Path $chatScreen `
+    -Pattern "final messages = snapshot\.data \?\? <MessageModel>\[\];" `
+    -Replacement $messagesReplacement
 
 Write-Host 'Formatting patched Dart files...' -ForegroundColor Cyan
-dart format \
-    lib/screens/app_shell_screen.dart \
-    lib/screens/auth_gate_screen.dart \
-    lib/screens/chat_screen.dart \
-    lib/services/local_chat_store.dart
+$formatTargets = @(
+    'lib/screens/app_shell_screen.dart',
+    'lib/screens/auth_gate_screen.dart',
+    'lib/screens/chat_screen.dart',
+    'lib/services/local_chat_store.dart'
+)
+& dart format @formatTargets
+if ($LASTEXITCODE -ne 0) {
+    throw 'dart format failed.'
+}
 
 Write-Host 'Running Flutter analysis...' -ForegroundColor Cyan
-flutter analyze
+& flutter analyze
+if ($LASTEXITCODE -ne 0) {
+    throw 'flutter analyze failed.'
+}
 
 Write-Host ''
 Write-Host 'Issue #68 source patch completed successfully.' -ForegroundColor Green
