@@ -26,17 +26,8 @@ foreach ($relativePath in $targets) {
     )
 }
 
+# Run the guarded patch from its real repository location. The patch derives
+# the project root from $PSScriptRoot, so copying it to TEMP would point it at
+# the wrong directory and make Git branch detection return no value.
 $sourcePatch = Join-Path $PSScriptRoot 'apply_issue_68_fixes.ps1'
-$tempPatch = Join-Path $env:TEMP 'nearmeu_apply_issue_68_fixes.ps1'
-$patchContent = (Get-Content -Raw -LiteralPath $sourcePatch).Replace("`r`n", "`n")
-[System.IO.File]::WriteAllText(
-    $tempPatch,
-    $patchContent,
-    [System.Text.UTF8Encoding]::new($false)
-)
-
-try {
-    & $tempPatch
-} finally {
-    Remove-Item -LiteralPath $tempPatch -Force -ErrorAction SilentlyContinue
-}
+& $sourcePatch
