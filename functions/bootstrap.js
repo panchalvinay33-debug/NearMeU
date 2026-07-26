@@ -11,6 +11,7 @@ module.exports = {
   ...require("./index.js"),
   ...require("./anti_abuse_functions.js"),
   ...require("./trusted_read_functions.js"),
+  ...require("./chat_read_functions.js"),
   ...require("./message_retention_functions.js"),
   ...require("./private_media_functions.js"),
   ...require("./private_media_ack_functions.js"),
