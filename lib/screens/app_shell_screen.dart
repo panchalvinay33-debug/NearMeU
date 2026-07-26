@@ -7,8 +7,9 @@ import 'chats_screen.dart';
 import 'nearby_screen.dart';
 import 'settings_screen.dart';
 
-/// Keeps the three primary authenticated tabs alive so switching tabs feels
-/// like a native app instead of rebuilding a web page on every tap.
+/// Keeps the primary authenticated tabs alive. The shell navigation bar is
+/// painted over the legacy per-screen bar, avoiding a second layout row while
+/// the screens are migrated incrementally.
 class AppShellScreen extends StatefulWidget {
   const AppShellScreen({super.key, this.initialIndex = 0});
 
@@ -36,15 +37,12 @@ class _AppShellScreenState extends State<AppShellScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final navigationHeight = kBottomNavigationBarHeight + bottomInset;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: <Widget>[
-          Padding(
-            padding: EdgeInsets.only(bottom: navigationHeight),
+          Positioned.fill(
             child: IndexedStack(index: _currentIndex, children: _tabs),
           ),
           Positioned(
@@ -52,6 +50,7 @@ class _AppShellScreenState extends State<AppShellScreen> {
             right: 0,
             bottom: 0,
             child: Material(
+              elevation: 12,
               color: AppColors.surface,
               child: SafeArea(
                 top: false,
