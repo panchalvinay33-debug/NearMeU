@@ -64,7 +64,11 @@ exports.acknowledgePrivateMediaDownload = onCall(
           "Only the receiving user can confirm this download.",
         );
       }
-      if (message.type !== "image" && message.type !== "video") {
+      if (
+        message.type !== "image" &&
+        message.type !== "video" &&
+        message.type !== "voice"
+      ) {
         throw new HttpsError(
           "failed-precondition",
           "This message does not contain downloadable media.",
@@ -146,8 +150,6 @@ exports.acknowledgePrivateMediaDownload = onCall(
         { merge: true },
       );
     } catch (error) {
-      // The seven-day retention worker may have removed the message between
-      // object deletion and this audit update. The cloud media is already gone.
       logger.warn("Cloud media deleted before acknowledgement audit update", {
         uid,
         chatId: acknowledgement.chatId,
