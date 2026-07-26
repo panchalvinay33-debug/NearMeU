@@ -19,12 +19,14 @@ class AppShellScreen extends StatefulWidget {
 }
 
 class _AppShellScreenState extends State<AppShellScreen> {
+  static const double _navigationHeight = kBottomNavigationBarHeight;
+
   late int _currentIndex;
 
   final List<Widget> _tabs = const <Widget>[
-    NearbyScreen(showBottomNavigationBar: false),
-    ChatsScreen(showBottomNavigationBar: false),
-    SettingsScreen(showBottomNavigationBar: false),
+    NearbyScreen(),
+    ChatsScreen(),
+    SettingsScreen(),
   ];
 
   @override
@@ -36,37 +38,54 @@ class _AppShellScreenState extends State<AppShellScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(index: _currentIndex, children: _tabs),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.white54,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == _currentIndex) return;
-          setState(() => _currentIndex = index);
-        },
-        items: <BottomNavigationBarItem>[
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_rounded),
-            label: 'Nearby',
-          ),
-          BottomNavigationBarItem(
-            icon: uid.isEmpty
-                ? const Icon(Icons.chat_bubble_outline_rounded)
-                : UnreadNavIcon(
-                    userId: uid,
-                    icon: Icons.chat_bubble_outline_rounded,
-                  ),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: 'Settings',
+      body: Stack(
+        children: <Widget>[
+          IndexedStack(index: _currentIndex, children: _tabs),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _navigationHeight + bottomInset,
+            child: ColoredBox(
+              color: AppColors.surface,
+              child: SafeArea(
+                top: false,
+                child: BottomNavigationBar(
+                  currentIndex: _currentIndex,
+                  backgroundColor: AppColors.surface,
+                  selectedItemColor: AppColors.primary,
+                  unselectedItemColor: Colors.white54,
+                  type: BottomNavigationBarType.fixed,
+                  onTap: (index) {
+                    if (index == _currentIndex) return;
+                    setState(() => _currentIndex = index);
+                  },
+                  items: <BottomNavigationBarItem>[
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.location_on_rounded),
+                      label: 'Nearby',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: uid.isEmpty
+                          ? const Icon(Icons.chat_bubble_outline_rounded)
+                          : UnreadNavIcon(
+                              userId: uid,
+                              icon: Icons.chat_bubble_outline_rounded,
+                            ),
+                      label: 'Chats',
+                    ),
+                    const BottomNavigationBarItem(
+                      icon: Icon(Icons.settings_rounded),
+                      label: 'Settings',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
