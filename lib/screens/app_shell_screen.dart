@@ -19,8 +19,6 @@ class AppShellScreen extends StatefulWidget {
 }
 
 class _AppShellScreenState extends State<AppShellScreen> {
-  static const double _navigationHeight = kBottomNavigationBarHeight;
-
   late int _currentIndex;
 
   final List<Widget> _tabs = const <Widget>[
@@ -39,18 +37,21 @@ class _AppShellScreenState extends State<AppShellScreen> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final navigationHeight = kBottomNavigationBarHeight + bottomInset;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: <Widget>[
-          IndexedStack(index: _currentIndex, children: _tabs),
+          Padding(
+            padding: EdgeInsets.only(bottom: navigationHeight),
+            child: IndexedStack(index: _currentIndex, children: _tabs),
+          ),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            height: _navigationHeight + bottomInset,
-            child: ColoredBox(
+            child: Material(
               color: AppColors.surface,
               child: SafeArea(
                 top: false,
