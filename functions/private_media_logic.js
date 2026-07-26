@@ -2,7 +2,9 @@
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
+const MAX_VOICE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_DURATION_MS = 2 * 60 * 1000;
+const MAX_VOICE_DURATION_MS = 2 * 60 * 1000;
 const MAX_CAPTION_LENGTH = 500;
 const MESSAGE_ID_PATTERN = /^[A-Za-z0-9_-]{10,64}$/;
 
@@ -38,8 +40,8 @@ function normalizePrivateMediaRequest(data, senderId) {
 
   const messageId = validMessageId(payload.messageId);
   const type = requiredString(payload.type, "type", 16);
-  if (type !== "image" && type !== "video") {
-    throw new TypeError("Only image and video messages are supported.");
+  if (type !== "image" && type !== "video" && type !== "voice") {
+    throw new TypeError("Only image, video and voice messages are supported.");
   }
 
   const chatId = deterministicChatId(senderId, receiverId);
@@ -53,15 +55,24 @@ function normalizePrivateMediaRequest(data, senderId) {
   if (caption.length > MAX_CAPTION_LENGTH) {
     throw new TypeError("Caption is too long.");
   }
+  if (type === "voice" && caption) {
+    throw new TypeError("Voice messages do not support captions.");
+  }
 
-  const durationMs = type === "video" ? Number(payload.durationMs) : null;
+  const needsDuration = type === "video" || type === "voice";
+  const durationMs = needsDuration ? Number(payload.durationMs) : null;
+  const maximumDuration = type === "voice"
+    ? MAX_VOICE_DURATION_MS
+    : MAX_VIDEO_DURATION_MS;
   if (
-    type === "video" &&
-    (!Number.isFinite(durationMs) ||
-      durationMs <= 0 ||
-      durationMs > MAX_VIDEO_DURATION_MS)
+    needsDuration &&
+    (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > maximumDuration)
   ) {
-    throw new TypeError("Video must be two minutes or shorter.");
+    throw new TypeError(
+      type === "voice"
+        ? "Voice message must be two minutes or shorter."
+        : "Video must be two minutes or shorter.",
+    );
   }
 
   return {
@@ -100,17 +111,25 @@ function validateStoredMedia({
 
   const allowedContentTypes = type === "image"
     ? new Set(["image/jpeg", "image/png", "image/webp"])
-    : new Set(["video/mp4"]);
+    : type === "video"
+      ? new Set(["video/mp4"])
+      : new Set(["audio/mp4", "audio/m4a", "audio/aac"]);
   if (!allowedContentTypes.has(contentType)) {
     throw new TypeError("Uploaded media format is not supported.");
   }
 
-  const maximumBytes = type === "image" ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES;
+  const maximumBytes = type === "image"
+    ? MAX_IMAGE_BYTES
+    : type === "video"
+      ? MAX_VIDEO_BYTES
+      : MAX_VOICE_BYTES;
   if (size > maximumBytes) {
     throw new TypeError(
       type === "image"
         ? "Photo is larger than 5 MB."
-        : "Compressed video is larger than 30 MB.",
+        : type === "video"
+          ? "Compressed video is larger than 30 MB."
+          : "Voice message is larger than 8 MB.",
     );
   }
 
@@ -138,7 +157,9 @@ module.exports = {
   MAX_CAPTION_LENGTH,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MAX_VOICE_BYTES,
   MAX_VIDEO_DURATION_MS,
+  MAX_VOICE_DURATION_MS,
   deterministicChatId,
   normalizeDownloadAcknowledgement,
   normalizePrivateMediaRequest,
