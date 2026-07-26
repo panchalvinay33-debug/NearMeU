@@ -58,14 +58,19 @@ This is now part of the official NearMeU product scope, not an experimental add-
 - [x] Run scheduled cleanup every six hours for media whose seven-day retention has expired.
 - [x] Delete announcement media immediately when an admin expires the announcement.
 - [x] Keep all new announcement fields optional so legacy text announcements remain compatible.
+- [x] Add a trusted Android version-policy endpoint and non-dismissible startup update gate.
+- [x] Block app entry when installed `versionCode` is below `minimumSupportedVersionCode`.
+- [x] Open the configured HTTPS Play Store or APK update link from the forced-update screen.
+- [x] Fail closed with Retry when version policy cannot be verified.
+- [x] Add admin-only backend support for changing latest/minimum version, update URL and maintenance mode.
+- [ ] Publish one transition release containing the version gate; this becomes the minimum baseline for all future forced updates.
 - [ ] Add push notification delivery when a new official announcement is published.
 - [ ] Add analytics for delivered, opened, media-played and update-button-clicked events.
-- [ ] Add production Play Store update enforcement after release signing and store publication are ready.
 
 ## Batch 7 — Release preparation
 
 - [ ] Configure secure production upload signing.
 - [x] Add App Check enforcement and debug-provider testing support.
 - [ ] Complete public policy and account-deletion webpages.
-- [ ] Run two-device, offline, background-push, block/report, deletion, migration and announcement-media tests.
+- [ ] Run two-device, offline, background-push, block/report, deletion, migration, announcement-media and forced-update tests.
 - [ ] Produce and verify the signed Android App Bundle.
