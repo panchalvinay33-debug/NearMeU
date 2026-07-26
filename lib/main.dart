@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/auth_gate_screen.dart';
+import 'security/screen_capture_guard.dart';
 import 'security/suspension_guard.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
@@ -43,23 +44,25 @@ class NearMeUApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: rootNavigatorKey,
-      navigatorObservers: ObservabilityService.instance.navigatorObservers,
-      title: 'NearMeU',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xff0B0B0B),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.purpleAccent,
+    return ScreenCaptureGuard(
+      child: MaterialApp(
+        navigatorKey: rootNavigatorKey,
+        navigatorObservers: ObservabilityService.instance.navigatorObservers,
+        title: 'NearMeU',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
           brightness: Brightness.dark,
+          scaffoldBackgroundColor: const Color(0xff0B0B0B),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.purpleAccent,
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
         ),
-        useMaterial3: true,
-      ),
-      home: const AppVersionGate(
-        child: PresenceLifecycle(
-          child: SuspensionGuard(child: AuthGateScreen()),
+        home: const AppVersionGate(
+          child: PresenceLifecycle(
+            child: SuspensionGuard(child: AuthGateScreen()),
+          ),
         ),
       ),
     );
