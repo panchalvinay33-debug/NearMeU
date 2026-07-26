@@ -23,6 +23,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
   String? _localPath;
   bool _isDownloading = false;
   bool _isPreparing = false;
+  bool _isLoaded = false;
 
   @override
   void initState() {
@@ -36,17 +37,23 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.message.id != widget.message.id) {
       _player.stop();
+      _isLoaded = false;
       _localPath = widget.message.localMediaPath;
       _discardMissingFile();
     } else if (widget.message.localMediaPath?.isNotEmpty == true) {
-      _localPath = widget.message.localMediaPath;
+      final nextPath = widget.message.localMediaPath;
+      if (nextPath != _localPath) _isLoaded = false;
+      _localPath = nextPath;
       _discardMissingFile();
     }
   }
 
   void _discardMissingFile() {
     final path = _localPath;
-    if (path != null && !File(path).existsSync()) _localPath = null;
+    if (path != null && !File(path).existsSync()) {
+      _localPath = null;
+      _isLoaded = false;
+    }
   }
 
   @override
@@ -73,7 +80,10 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
         message: widget.message,
       );
       if (!mounted) return downloaded;
-      setState(() => _localPath = downloaded);
+      setState(() {
+        _localPath = downloaded;
+        _isLoaded = false;
+      });
       return downloaded;
     } catch (error) {
       if (mounted) {
@@ -98,14 +108,16 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
     try {
       final path = await _ensureLocalFile();
       if (path == null) return;
-      if (_player.audioSource == null) {
+      if (!_isLoaded) {
         await _player.setFilePath(path);
+        _isLoaded = true;
       }
       if (_player.processingState == ProcessingState.completed) {
         await _player.seek(Duration.zero);
       }
       await _player.play();
     } catch (error) {
+      _isLoaded = false;
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -216,7 +228,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
                               child: Slider(
                                 value: current,
                                 max: maximum,
-                                onChanged: _player.audioSource == null
+                                onChanged: !_isLoaded
                                     ? null
                                     : (value) => _player.seek(
                                         Duration(milliseconds: value.round()),
