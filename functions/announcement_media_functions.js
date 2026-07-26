@@ -8,6 +8,16 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const db = admin.firestore();
 const REGION = "asia-south1";
 const CLEANUP_LIMIT = 100;
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const ALLOWED_PRIORITIES = new Set(["normal", "important", "urgent"]);
+const ALLOWED_TYPES = new Set([
+  "general",
+  "new_feature",
+  "app_update",
+  "maintenance",
+  "important",
+]);
+const ALLOWED_MEDIA = new Set(["image", "video", "voice"]);
 
 function requireUid(request) {
   const uid = request.auth && request.auth.uid;
@@ -24,6 +34,45 @@ async function requireAdmin(uid) {
 
 function validAnnouncementId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_-]{6,160}$/.test(value);
+}
+
+function safeText(value, maximum, fieldName, required = false) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if ((required && !text) || text.length > maximum) {
+    throw new HttpsError("invalid-argument", `${fieldName} is invalid.`);
+  }
+  return text || null;
+}
+
+function normalizeMedia(value, announcementId) {
+  if (value == null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HttpsError("invalid-argument", "Media metadata is invalid.");
+  }
+  const type = value.type;
+  const storagePath = value.storagePath;
+  const contentType = value.contentType;
+  const sizeBytes = value.sizeBytes;
+  const durationMs = value.durationMs;
+  if (
+    !ALLOWED_MEDIA.has(type) ||
+    typeof storagePath !== "string" ||
+    !storagePath.startsWith(`announcementMedia/${announcementId}/`) ||
+    typeof contentType !== "string" ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes <= 0
+  ) {
+    throw new HttpsError("invalid-argument", "Media metadata is invalid.");
+  }
+  const limits = { image: 5 * 1024 * 1024, video: 30 * 1024 * 1024, voice: 8 * 1024 * 1024 };
+  if (sizeBytes > limits[type]) {
+    throw new HttpsError("invalid-argument", "Announcement media is too large.");
+  }
+  if ((type === "video" || type === "voice") &&
+      (!Number.isInteger(durationMs) || durationMs <= 0 || durationMs > 120000)) {
+    throw new HttpsError("invalid-argument", "Announcement media duration is invalid.");
+  }
+  return { type, storagePath, contentType, sizeBytes, durationMs: durationMs || null };
 }
 
 async function deleteStorageObject(path) {
@@ -46,6 +95,66 @@ async function expireAnnouncementDocument(document, reason) {
     { merge: true },
   );
 }
+
+exports.createSupportAnnouncement = onCall(
+  { region: REGION, timeoutSeconds: 120, memory: "256MiB" },
+  async (request) => {
+    const uid = requireUid(request);
+    await requireAdmin(uid);
+    const data = request.data || {};
+    const announcementId = data.announcementId;
+    if (!validAnnouncementId(announcementId)) {
+      throw new HttpsError("invalid-argument", "Announcement ID is invalid.");
+    }
+    const title = safeText(data.title, 80, "Title", true);
+    const message = safeText(data.message, 1000, "Message", true);
+    const priority = data.priority;
+    const announcementType = data.announcementType;
+    if (!ALLOWED_PRIORITIES.has(priority) || !ALLOWED_TYPES.has(announcementType)) {
+      throw new HttpsError("invalid-argument", "Announcement settings are invalid.");
+    }
+    const media = normalizeMedia(data.media, announcementId);
+    const updateVersion = safeText(data.updateVersion, 40, "Version");
+    const updateUrl = safeText(data.updateUrl, 2048, "Update URL");
+    const updateButtonLabel = safeText(data.updateButtonLabel, 40, "Button label");
+    if (announcementType === "app_update" && !updateUrl) {
+      throw new HttpsError("invalid-argument", "An update URL is required.");
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const reference = db.collection("supportAnnouncements").doc(announcementId);
+    if ((await reference.get()).exists) {
+      throw new HttpsError("already-exists", "Announcement already exists.");
+    }
+    await reference.set({
+      title,
+      message,
+      priority,
+      type: "official_announcement",
+      announcementType,
+      targetAudience: "allActiveUsers",
+      isActive: true,
+      createdByAdminId: uid,
+      createdAt: now,
+      expiresAt: null,
+      mediaType: media && media.type,
+      mediaStoragePath: media && media.storagePath,
+      mediaContentType: media && media.contentType,
+      mediaSizeBytes: media && media.sizeBytes,
+      mediaDurationMs: media && media.durationMs,
+      mediaExpiresAt: media
+        ? admin.firestore.Timestamp.fromMillis(now.toMillis() + RETENTION_MS)
+        : null,
+      mediaDeletedAt: null,
+      updateVersion,
+      updateUrl,
+      updateButtonLabel: updateButtonLabel ||
+        (announcementType === "app_update" ? "Update now" : null),
+      isMandatoryUpdate: announcementType === "app_update" && data.isMandatoryUpdate === true,
+    });
+    return { success: true, announcementId };
+  },
+);
 
 exports.expireSupportAnnouncement = onCall(
   { region: REGION, timeoutSeconds: 120, memory: "256MiB" },
