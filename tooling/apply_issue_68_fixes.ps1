@@ -1,20 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-function Replace-Exact {
-    param(
-        [Parameter(Mandatory)] [string] $Path,
-        [Parameter(Mandatory)] [string] $Old,
-        [Parameter(Mandatory)] [string] $New
-    )
-
-    $content = Get-Content -Raw -LiteralPath $Path
-    if (-not $content.Contains($Old)) {
-        throw "Expected source block was not found in $Path. Stop to avoid an unsafe partial patch."
-    }
-    Set-Content -LiteralPath $Path -Value ($content.Replace($Old, $New)) -Encoding utf8
-}
-
 function Replace-RegexOnce {
     param(
         [Parameter(Mandatory)] [string] $Path,
@@ -23,346 +9,66 @@ function Replace-RegexOnce {
     )
 
     $content = Get-Content -Raw -LiteralPath $Path
-    $regex = [regex]::new($Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    $regex = [regex]::new(
+        $Pattern,
+        [System.Text.RegularExpressions.RegexOptions]::Singleline
+    )
     $matches = $regex.Matches($content)
     if ($matches.Count -ne 1) {
-        throw "Expected exactly one regex match in $Path, found $($matches.Count)."
+        throw "Expected exactly one source match in $Path, found $($matches.Count)."
     }
-    Set-Content -LiteralPath $Path -Value ($regex.Replace($content, $Replacement, 1)) -Encoding utf8
+    $updated = $regex.Replace($content, $Replacement, 1)
+    [System.IO.File]::WriteAllText(
+        $Path,
+        $updated,
+        [System.Text.UTF8Encoding]::new($false)
+    )
 }
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$root = if ($env:NEARMEU_PROJECT_ROOT) {
+    (Resolve-Path $env:NEARMEU_PROJECT_ROOT).Path
+} else {
+    (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+}
 Set-Location $root
 
-$branch = (git branch --show-current).Trim()
+$branch = git branch --show-current
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
+    throw "Could not determine the current Git branch in $root."
+}
+$branch = $branch.Trim()
 if ($branch -ne 'fix/release-test-hardening-v1') {
     throw "Run this only on fix/release-test-hardening-v1. Current branch: $branch"
 }
 
 Write-Host 'Applying NearMeU issue #68 fixes...' -ForegroundColor Cyan
 
-# ---------------------------------------------------------------------------
-# 1) Persistent app shell: keep Nearby, Chats and Settings alive.
-# ---------------------------------------------------------------------------
+# 1) Authenticated startup enters the persistent app shell.
 $authGate = Join-Path $root 'lib/screens/auth_gate_screen.dart'
-Replace-Exact $authGate "import 'login_screen.dart';`nimport 'nearby_screen.dart';" "import 'app_shell_screen.dart';`nimport 'login_screen.dart';"
-Replace-Exact $authGate "MaterialPageRoute(builder: (_) => const NearbyScreen())," "MaterialPageRoute(builder: (_) => const AppShellScreen()),"
+Replace-RegexOnce \
+    $authGate \
+    "import 'login_screen\.dart';\s*import 'nearby_screen\.dart';" \
+    "import 'app_shell_screen.dart';`nimport 'login_screen.dart';"
+Replace-RegexOnce \
+    $authGate \
+    "MaterialPageRoute\(builder:\s*\(_\)\s*=>\s*const NearbyScreen\(\)\)," \
+    "MaterialPageRoute(builder: (_) => const AppShellScreen()),"
 
-$nearby = Join-Path $root 'lib/screens/nearby_screen.dart'
-Replace-Exact $nearby @'
-class NearbyScreen extends StatefulWidget {
-  const NearbyScreen({super.key});
-'@ @'
-class NearbyScreen extends StatefulWidget {
-  const NearbyScreen({super.key, this.showBottomNavigationBar = true});
-
-  final bool showBottomNavigationBar;
-'@
-Replace-Exact $nearby @'
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.white54,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const ChatsScreen()),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-          }
-        },
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_rounded),
-            label: 'Nearby',
-          ),
-          BottomNavigationBarItem(
-            icon: UnreadNavIcon(
-              userId: uid,
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: 'Settings',
-          ),
-        ],
-      ),
-'@ @'
-      bottomNavigationBar: widget.showBottomNavigationBar
-          ? BottomNavigationBar(
-              currentIndex: 0,
-              backgroundColor: AppColors.surface,
-              selectedItemColor: AppColors.primary,
-              unselectedItemColor: Colors.white54,
-              type: BottomNavigationBarType.fixed,
-              onTap: (index) {
-                if (index == 1) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ChatsScreen()),
-                  );
-                } else if (index == 2) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                }
-              },
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.location_on_rounded),
-                  label: 'Nearby',
-                ),
-                BottomNavigationBarItem(
-                  icon: UnreadNavIcon(
-                    userId: uid,
-                    icon: Icons.chat_bubble_outline_rounded,
-                  ),
-                  label: 'Chats',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_rounded),
-                  label: 'Settings',
-                ),
-              ],
-            )
-          : null,
-'@
-
-$chats = Join-Path $root 'lib/screens/chats_screen.dart'
-Replace-Exact $chats @'
-class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key});
-'@ @'
-class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, this.showBottomNavigationBar = true});
-
-  final bool showBottomNavigationBar;
-'@
-Replace-Exact $chats @'
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.grey,
-        currentIndex: 1,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const NearbyScreen()),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-          }
-        },
-        items: <BottomNavigationBarItem>[
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Nearby',
-          ),
-          BottomNavigationBarItem(
-            icon: StreamBuilder<int>(
-              stream: _announcementService.watchUnreadCount(currentUser.uid),
-              builder: (context, announcementSnapshot) => _BadgeIcon(
-                count: _privateUnreadCount + (announcementSnapshot.data ?? 0),
-                child: const Icon(Icons.chat_bubble_outline),
-              ),
-            ),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-      ),
-'@ @'
-      bottomNavigationBar: widget.showBottomNavigationBar
-          ? BottomNavigationBar(
-              backgroundColor: const Color(0xFF1A1A1A),
-              selectedItemColor: AppColors.primary,
-              unselectedItemColor: Colors.grey,
-              currentIndex: 1,
-              onTap: (index) {
-                if (index == 0) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NearbyScreen()),
-                  );
-                } else if (index == 2) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                }
-              },
-              items: <BottomNavigationBarItem>[
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.location_on),
-                  label: 'Nearby',
-                ),
-                BottomNavigationBarItem(
-                  icon: StreamBuilder<int>(
-                    stream: _announcementService.watchUnreadCount(currentUser.uid),
-                    builder: (context, announcementSnapshot) => _BadgeIcon(
-                      count: _privateUnreadCount +
-                          (announcementSnapshot.data ?? 0),
-                      child: const Icon(Icons.chat_bubble_outline),
-                    ),
-                  ),
-                  label: 'Chats',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.settings),
-                  label: 'Settings',
-                ),
-              ],
-            )
-          : null,
-'@
-
-# Optimistically clear the row badge immediately, then refresh from backend.
-Replace-Exact $chats @'
-  Future<void> _openChat(ChatPreviewModel chat) async {
-    if (_isNavigating) return;
-    setState(() => _isNavigating = true);
-'@ @'
-  Future<void> _openChat(ChatPreviewModel chat) async {
-    if (_isNavigating) return;
-    setState(() {
-      _isNavigating = true;
-      _chats = _chats
-          .map(
-            (item) => item.chatId == chat.chatId
-                ? item.copyWith(unreadCount: 0)
-                : item,
-          )
-          .toList(growable: false);
-    });
-'@
-
-$settings = Join-Path $root 'lib/screens/settings_screen.dart'
-Replace-Exact $settings @'
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
-'@ @'
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, this.showBottomNavigationBar = true});
-
-  final bool showBottomNavigationBar;
-'@
-Replace-Exact $settings @'
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.grey,
-        currentIndex: 2,
-        onTap: isDeletingAccount
-            ? null
-            : (index) {
-                if (index == 0) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NearbyScreen()),
-                  );
-                } else if (index == 1) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ChatsScreen()),
-                  );
-                }
-              },
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Nearby',
-          ),
-          BottomNavigationBarItem(
-            icon: UnreadNavIcon(userId: uid, icon: Icons.chat_bubble_outline),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-      ),
-'@ @'
-      bottomNavigationBar: widget.showBottomNavigationBar
-          ? BottomNavigationBar(
-              backgroundColor: const Color(0xFF1A1A1A),
-              selectedItemColor: AppColors.primary,
-              unselectedItemColor: Colors.grey,
-              currentIndex: 2,
-              onTap: isDeletingAccount
-                  ? null
-                  : (index) {
-                      if (index == 0) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const NearbyScreen(),
-                          ),
-                        );
-                      } else if (index == 1) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ChatsScreen(),
-                          ),
-                        );
-                      }
-                    },
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.location_on),
-                  label: 'Nearby',
-                ),
-                BottomNavigationBarItem(
-                  icon: UnreadNavIcon(
-                    userId: uid,
-                    icon: Icons.chat_bubble_outline,
-                  ),
-                  label: 'Chats',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.settings),
-                  label: 'Settings',
-                ),
-              ],
-            )
-          : null,
-'@
-
-# ---------------------------------------------------------------------------
-# 2) Encrypted local DB: serialize opening globally across service instances.
-# ---------------------------------------------------------------------------
+# 2) One encrypted SQLCipher database opening per signed-in user, shared across
+# all ChatService / PrivateMediaService instances.
 $localStore = Join-Path $root 'lib/services/local_chat_store.dart'
-Replace-Exact $localStore @'
-  final FlutterSecureStorage _secureStorage;
-  final Map<String, Database> _openDatabases = <String, Database>{};
-'@ @'
-  final FlutterSecureStorage _secureStorage;
+Replace-RegexOnce \
+    $localStore \
+    "final FlutterSecureStorage _secureStorage;\s*final Map<String, Database> _openDatabases = <String, Database>\{\};" \
+    @'
+final FlutterSecureStorage _secureStorage;
   static final Map<String, Database> _openDatabases = <String, Database>{};
   static final Map<String, Future<Database>> _openingDatabases =
       <String, Future<Database>>{};
 '@
 
-$openPattern = '  Future<Database> openForUser\(String uid\) async \{.*?\n  \}\n\n  Future<void> _createIndexes'
 $openReplacement = @'
-  Future<Database> openForUser(String uid) async {
+Future<Database> openForUser(String uid) async {
     if (uid.trim().isEmpty) {
       throw ArgumentError.value(uid, 'uid', 'A signed-in user is required.');
     }
@@ -370,15 +76,15 @@ $openReplacement = @'
     final cached = _openDatabases[uid];
     if (cached != null && cached.isOpen) return cached;
 
-    final inFlight = _openingDatabases[uid];
-    if (inFlight != null) return inFlight;
+    final opening = _openingDatabases[uid];
+    if (opening != null) return opening;
 
-    final opening = _openForUserInternal(uid);
-    _openingDatabases[uid] = opening;
+    final future = _openForUserInternal(uid);
+    _openingDatabases[uid] = future;
     try {
-      return await opening;
+      return await future;
     } finally {
-      if (identical(_openingDatabases[uid], opening)) {
+      if (identical(_openingDatabases[uid], future)) {
         _openingDatabases.remove(uid);
       }
     }
@@ -467,31 +173,36 @@ $openReplacement = @'
 
   Future<void> _createIndexes
 '@
-Replace-RegexOnce $localStore $openPattern $openReplacement
+Replace-RegexOnce \
+    $localStore \
+    "Future<Database> openForUser\(String uid\) async \{.*?Future<void> _createIndexes" \
+    $openReplacement
 
-Replace-Exact $localStore @'
-  Future<void> closeForUser(String uid) async {
-    final database = _openDatabases.remove(uid);
-'@ @'
-  Future<void> closeForUser(String uid) async {
+Replace-RegexOnce \
+    $localStore \
+    "Future<void> closeForUser\(String uid\) async \{\s*final database = _openDatabases\.remove\(uid\);" \
+    @'
+Future<void> closeForUser(String uid) async {
     await _openingDatabases.remove(uid);
     final database = _openDatabases.remove(uid);
 '@
 
-# ---------------------------------------------------------------------------
-# 3) Chat read lifecycle: repeat acknowledgement while chat is visible and
-#    reuse one LocalChatStore for chat + media services.
-# ---------------------------------------------------------------------------
+# 3) Chat detail shares one LocalChatStore and repeatedly acknowledges reads
+# while the conversation remains visible.
 $chatScreen = Join-Path $root 'lib/screens/chat_screen.dart'
-Replace-Exact $chatScreen "import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';" "import 'dart:async';`n`nimport 'package:emoji_picker_flutter/emoji_picker_flutter.dart';"
-Replace-Exact $chatScreen "import '../services/chat_service.dart';" "import '../services/chat_service.dart';`nimport '../services/local_chat_store.dart';"
-Replace-Exact $chatScreen @'
-class _ChatScreenState extends State<ChatScreen> {
-  final ChatService _chatService = ChatService();
-  final PrivateMediaService _mediaService = PrivateMediaService();
-'@ @'
-class _ChatScreenState extends State<ChatScreen> {
-  final LocalChatStore _localChatStore = LocalChatStore();
+Replace-RegexOnce \
+    $chatScreen \
+    "import 'package:emoji_picker_flutter/emoji_picker_flutter\.dart';" \
+    "import 'dart:async';`n`nimport 'package:emoji_picker_flutter/emoji_picker_flutter.dart';"
+Replace-RegexOnce \
+    $chatScreen \
+    "import '../services/chat_service\.dart';" \
+    "import '../services/chat_service.dart';`nimport '../services/local_chat_store.dart';"
+Replace-RegexOnce \
+    $chatScreen \
+    "final ChatService _chatService = ChatService\(\);\s*final PrivateMediaService _mediaService = PrivateMediaService\(\);" \
+    @'
+final LocalChatStore _localChatStore = LocalChatStore();
   late final ChatService _chatService = ChatService(
     localChatStore: _localChatStore,
   );
@@ -499,38 +210,30 @@ class _ChatScreenState extends State<ChatScreen> {
     localChatStore: _localChatStore,
   );
 '@
-Replace-Exact $chatScreen @'
-  bool _isSendingMedia = false;
-  bool _checkingBlock = true;
-'@ @'
-  bool _isSendingMedia = false;
-  bool _checkingBlock = true;
+Replace-RegexOnce \
+    $chatScreen \
+    "bool _checkingBlock = true;" \
+    @'
+bool _checkingBlock = true;
   Timer? _readAcknowledgementTimer;
   bool _isAcknowledgingRead = false;
 '@
-Replace-Exact $chatScreen @'
-    _initChatScreen();
-  }
-'@ @'
-    _initChatScreen();
+Replace-RegexOnce \
+    $chatScreen \
+    "_initChatScreen\(\);\s*\}" \
+    @'
+_initChatScreen();
     _readAcknowledgementTimer = Timer.periodic(
       const Duration(seconds: 3),
       (_) => unawaited(_markChatOpened()),
     );
   }
 '@
-Replace-Exact $chatScreen @'
-  Future<void> _markChatOpened() async {
-    final user = currentUser;
-    if (user == null || _isBlocked) return;
-    await _userService.updateLastSeen(user.uid);
-    await _chatService.markMessagesAsSeen(
-      currentUserId: user.uid,
-      otherUserId: widget.otherUserId,
-    );
-  }
-'@ @'
-  Future<void> _markChatOpened() async {
+Replace-RegexOnce \
+    $chatScreen \
+    "Future<void> _markChatOpened\(\) async \{.*?\n  \}" \
+    @'
+Future<void> _markChatOpened() async {
     final user = currentUser;
     if (user == null || _isBlocked || _isAcknowledgingRead) return;
     _isAcknowledgingRead = true;
@@ -541,40 +244,42 @@ Replace-Exact $chatScreen @'
         otherUserId: widget.otherUserId,
       );
     } catch (_) {
-      // The next periodic acknowledgement retries transient sync failures.
+      // A later acknowledgement retries transient sync failures.
     } finally {
       _isAcknowledgingRead = false;
     }
   }
 '@
-Replace-Exact $chatScreen @'
-    final user = currentUser;
-    if (user != null) _userService.updateLastSeen(user.uid);
-'@ @'
+Replace-RegexOnce \
+    $chatScreen \
+    "void dispose\(\) \{\s*final user = currentUser;" \
+    @'
+void dispose() {
     _readAcknowledgementTimer?.cancel();
     final user = currentUser;
-    if (user != null) _userService.updateLastSeen(user.uid);
 '@
-Replace-Exact $chatScreen @'
-                        final messages = snapshot.data ?? <MessageModel>[];
-                        WidgetsBinding.instance.addPostFrameCallback(
-'@ @'
-                        final messages = snapshot.data ?? <MessageModel>[];
+Replace-RegexOnce \
+    $chatScreen \
+    "final messages = snapshot\.data \?\? <MessageModel>\[\];" \
+    @'
+final messages = snapshot.data ?? <MessageModel>[];
                         if (messages.any(
                           (message) =>
                               message.receiverId == user.uid && !message.isSeen,
                         )) {
                           unawaited(_markChatOpened());
                         }
-                        WidgetsBinding.instance.addPostFrameCallback(
 '@
 
 Write-Host 'Formatting patched Dart files...' -ForegroundColor Cyan
-dart format lib/screens/app_shell_screen.dart lib/screens/auth_gate_screen.dart lib/screens/nearby_screen.dart lib/screens/chats_screen.dart lib/screens/settings_screen.dart lib/screens/chat_screen.dart lib/services/local_chat_store.dart
+dart format \
+    lib/screens/app_shell_screen.dart \
+    lib/screens/auth_gate_screen.dart \
+    lib/screens/chat_screen.dart \
+    lib/services/local_chat_store.dart
 
 Write-Host 'Running Flutter analysis...' -ForegroundColor Cyan
 flutter analyze
 
 Write-Host ''
 Write-Host 'Issue #68 source patch completed successfully.' -ForegroundColor Green
-Write-Host 'Review git diff, then run Flutter tests and a two-account device test.' -ForegroundColor Green
