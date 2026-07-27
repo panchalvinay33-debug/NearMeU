@@ -1,5 +1,9 @@
 # NearMeU — Roadmap and Release Plan
 
+## Documentation synchronization rule
+
+Every product, code, Firebase configuration, deployment, release, security, data-retention or operational change must update the related project records in the same work session. At minimum, review and update the relevant blueprint/baseline document, this roadmap, the backup and recovery plan, the machine-readable project-state manifest and any production deployment record. A change is not considered complete until its documentation and recovery impact are recorded.
+
 ## Phase 0 — Baseline freeze
 
 Status: **Complete in source control**
@@ -11,14 +15,15 @@ Status: **Complete in source control**
 
 ## Phase 1 — Production Firebase preparation
 
-Status: **Operational work required**
+Status: **Core deployment complete; operational verification remains**
 
-- Confirm the correct production Firebase project ID.
-- Confirm Blaze billing is enabled and budget alerts are configured.
-- Deploy Firestore rules, indexes and Storage rules.
-- Deploy Cloud Functions, including private-chat and support-announcement notifications.
-- Verify required service accounts and least-privilege IAM.
-- Enable App Check enforcement only after release App Check testing succeeds.
+- Confirm the correct production Firebase project ID. **Complete**
+- Confirm Blaze billing is enabled and budget alerts are configured. **Owner verification pending**
+- Deploy Firestore rules, indexes and Storage rules. **Complete**
+- Deploy Cloud Functions, including private-chat and support-announcement notifications. **Complete**
+- Publish Firebase Hosting legal/support pages. **Complete**
+- Verify required service accounts and least-privilege IAM. **Pending operational review**
+- Enable App Check enforcement only after release App Check testing succeeds. **Deferred until device testing**
 
 Acceptance criteria:
 
@@ -63,7 +68,7 @@ Status: **Required before publishing**
 - Configure release signing outside source control.
 - Build signed `.aab`.
 - Finalize app icon, feature graphic, phone screenshots and store descriptions.
-- Publish Privacy Policy and account-deletion information on stable public URLs.
+- Publish Privacy Policy and account-deletion information on stable public URLs. **Complete**
 - Complete Data Safety, content rating, target audience and app-access declarations.
 - Create Closed Testing release.
 
