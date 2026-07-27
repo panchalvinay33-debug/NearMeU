@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
+import '../screens/support_announcements_screen.dart';
 import '../security/notification_route.dart';
 import 'user_service.dart';
 
@@ -20,8 +21,8 @@ class NotificationNavigationService {
   final UserService _userService = UserService();
 
   GlobalKey<NavigatorState>? _navigatorKey;
-  String? _pendingChatId;
-  String? _lastOpenedChatId;
+  NotificationDestination? _pendingDestination;
+  String? _lastOpenedKey;
   DateTime? _lastOpenedAt;
   bool _appShellReady = false;
   bool _opening = false;
@@ -39,21 +40,55 @@ class NotificationNavigationService {
   void queueChatId(String? value) {
     final chatId = NotificationRoute.normalizedChatId(value);
     if (chatId == null) return;
-    _pendingChatId = chatId;
+    queueDestination(NotificationDestination.privateChat(chatId));
+  }
+
+  void queueRemoteData(Map<String, dynamic> data) {
+    final destination = NotificationRoute.fromData(data);
+    if (destination != null) queueDestination(destination);
+  }
+
+  void queuePayload(String? payload) {
+    final destination = NotificationRoute.fromPayload(payload);
+    if (destination != null) queueDestination(destination);
+  }
+
+  void queueDestination(NotificationDestination destination) {
+    _pendingDestination = destination;
     unawaited(_flushPendingRoute());
   }
 
   Future<void> _flushPendingRoute() async {
     if (!_appShellReady || _opening) return;
-
-    final chatId = _pendingChatId;
+    final destination = _pendingDestination;
     final currentUser = _auth.currentUser;
     final navigator = _navigatorKey?.currentState;
-    if (chatId == null || currentUser == null || navigator == null) return;
+    if (destination == null || currentUser == null || navigator == null) return;
 
     _opening = true;
-    _pendingChatId = null;
+    _pendingDestination = null;
     try {
+      final key = destination.payload;
+      final now = DateTime.now();
+      if (_lastOpenedKey == key &&
+          _lastOpenedAt != null &&
+          now.difference(_lastOpenedAt!) < const Duration(seconds: 2)) {
+        return;
+      }
+
+      if (destination.isSupportAnnouncement) {
+        _lastOpenedKey = key;
+        _lastOpenedAt = now;
+        await navigator.push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const SupportAnnouncementsScreen(),
+          ),
+        );
+        return;
+      }
+
+      final chatId = destination.value;
+      if (chatId == null) return;
       final chat = await _firestore.collection('chats').doc(chatId).get();
       final participants = chat.data()?['participants'];
       final otherUserId = NotificationRoute.otherParticipant(
@@ -64,7 +99,6 @@ class NotificationNavigationService {
 
       final otherUser = await _userService.getUser(otherUserId);
       if (otherUser == null || otherUser.isSuspended) return;
-
       final blocked = await _userService.isBlockedEitherWay(
         currentUserId: currentUser.uid,
         otherUserId: otherUserId,
@@ -76,48 +110,40 @@ class NotificationNavigationService {
       if (!_appShellReady ||
           currentNavigator == null ||
           authenticatedUid != currentUser.uid) {
-        if (authenticatedUid == currentUser.uid) _pendingChatId = chatId;
+        if (authenticatedUid == currentUser.uid) {
+          _pendingDestination = destination;
+        }
         return;
       }
 
-      final now = DateTime.now();
-      if (_lastOpenedChatId == chatId &&
-          _lastOpenedAt != null &&
-          now.difference(_lastOpenedAt!) < const Duration(seconds: 2)) {
-        return;
-      }
-      _lastOpenedChatId = chatId;
+      _lastOpenedKey = key;
       _lastOpenedAt = now;
-
-      unawaited(
-        currentNavigator
-            .push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => ChatScreen(
-                  otherUserId: otherUserId,
-                  otherUserName: otherUser.nickname.trim().isEmpty
-                      ? 'NearMeU User'
-                      : otherUser.nickname.trim(),
-                ),
-              ),
-            )
-            .then<void>((_) {}),
+      await currentNavigator.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatScreen(
+            otherUserId: otherUserId,
+            otherUserName: otherUser.nickname.trim().isEmpty
+                ? 'NearMeU User'
+                : otherUser.nickname.trim(),
+          ),
+        ),
       );
     } on FirebaseException catch (error, stackTrace) {
-      if (_isTransient(error.code)) _pendingChatId = chatId;
+      if (_isTransient(error.code)) _pendingDestination = destination;
       developer.log(
-        'Notification chat route failed: ${error.code}',
+        'Notification route failed: ${error.code}',
         error: error,
         stackTrace: stackTrace,
       );
     } catch (error, stackTrace) {
       developer.log(
-        'Notification chat route failed',
+        'Notification route failed',
         error: error,
         stackTrace: stackTrace,
       );
     } finally {
       _opening = false;
+      if (_pendingDestination != null) unawaited(_flushPendingRoute());
     }
   }
 
