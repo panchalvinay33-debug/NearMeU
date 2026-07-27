@@ -17,5 +17,6 @@ module.exports = {
   ...require("./private_media_ack_functions.js"),
   ...require("./message_unsend_functions.js"),
   ...require("./announcement_media_functions.js"),
+  ...require("./announcement_push_functions.js"),
   ...require("./app_version_functions.js"),
 };
