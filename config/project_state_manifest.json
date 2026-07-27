@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "project": "NearMeU",
+  "baselineName": "non-calling-final-baseline",
+  "baselineDate": "2026-07-27",
+  "repository": "panchalvinay33-debug/NearMeU",
+  "branch": "fix/release-test-hardening-v1",
+  "verifiedApkCommit": "fe417dd38d06e010d4c521813d0f0959a931b5b4",
+  "calling": {
+    "status": "deferred",
+    "launchBlocker": false
+  },
+  "scope": {
+    "authentication": "complete",
+    "profileOnboarding": "complete",
+    "nearbyDiscovery": "complete",
+    "distanceFilter": "complete",
+    "privateChat": "complete",
+    "textMessages": "complete",
+    "photoMessages": "complete",
+    "videoMessages": "complete",
+    "voiceNotes": "complete",
+    "privateMediaControls": "complete",
+    "blockingAndReporting": "complete",
+    "accountDeletion": "complete",
+    "privateChatPush": "code-complete-deployment-required",
+    "supportAnnouncements": "complete",
+    "announcementPush": "code-complete-deployment-required",
+    "forcedUpdate": "complete",
+    "appCheck": "complete-production-verification-required",
+    "screenshotProtection": "complete",
+    "adminModeration": "complete",
+    "legalScreens": "complete-public-urls-required",
+    "launchPolish": "baseline-complete-device-review-required"
+  },
+  "qualityGate": {
+    "flutterFormat": true,
+    "flutterAnalyze": true,
+    "flutterTests": true,
+    "debugApkBuild": true,
+    "cloudFunctionsTests": true,
+    "firebaseRulesTests": true,
+    "unsignedReleaseRejected": true
+  },
+  "productionActions": [
+    "deploy Firebase functions and rules",
+    "verify production App Check and Play Integrity",
+    "run two-device acceptance tests",
+    "configure cloud budget alerts",
+    "configure and verify Firestore and Storage backups",
+    "protect Android signing keys",
+    "build signed Android App Bundle",
+    "publish stable legal-policy URLs",
+    "complete Play Console declarations",
+    "run Closed Testing"
+  ],
+  "backupPolicy": {
+    "firestoreDailyRetentionDays": 14,
+    "firestoreWeeklyRetentionWeeks": 8,
+    "firestoreMonthlyRetentionMonths": 12,
+    "storageBackupFrequencyHours": 24,
+    "restoreTestFrequency": "monthly-and-before-major-release",
+    "initialRpoHours": 24,
+    "initialRtoHours": 8
+  },
+  "deferred": [
+    "voice-video-calling",
+    "paid-subscriptions",
+    "ios-release",
+    "large-scale-cdn-optimization"
+  ],
+  "documentation": [
+    "docs/final/NEARMEU_FINAL_BASELINE.md",
+    "docs/final/ROADMAP_AND_RELEASE_PLAN.md",
+    "docs/final/BACKUP_AND_RECOVERY_PLAN.md"
+  ]
+}
