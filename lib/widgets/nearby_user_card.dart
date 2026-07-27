@@ -43,13 +43,14 @@ class NearbyUserCard extends StatelessWidget {
         : user.nickname.trim();
     final status = isOnline ? 'online' : 'offline';
     final distance = distanceText?.trim();
+    final age = user.age != null && user.age! > 0 ? '${user.age} years old' : null;
 
     return Semantics(
       container: true,
       button: true,
       label: [
         nickname,
-        '${user.age} years old',
+        if (age != null) age,
         status,
         if (distance != null && distance.isNotEmpty) distance,
         'Open profile',
@@ -98,12 +99,7 @@ class NearbyUserCard extends StatelessWidget {
                         child: UserAvatar(user: user, radius: 35),
                       ),
                       const SizedBox(width: 14),
-                      Expanded(
-                        child: UserInfo(
-                          user: user,
-                          distanceText: distanceText,
-                        ),
-                      ),
+                      UserInfo(user: user, distanceText: distanceText),
                       const SizedBox(width: 6),
                       Container(
                         width: 34,
