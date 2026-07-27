@@ -52,6 +52,7 @@ Test with at least two physical Android devices and separate accounts:
 12. Forced-update gate.
 13. Screenshot protection behavior.
 14. Reinstall and token re-registration.
+15. System, Light and Dark appearance switching, persistence after restart, and readable contrast on every core screen.
 
 Acceptance criteria:
 
@@ -59,6 +60,7 @@ Acceptance criteria:
 - No unauthorized chat/media access.
 - No broken navigation loops.
 - Failed uploads and weak-network states are understandable.
+- Theme changes apply immediately and all text, controls, cards, dialogs and navigation remain readable.
 
 ## Phase 3 — Play Store release preparation
 
@@ -113,6 +115,7 @@ Status: **Future operational action**
 
 ### Priority B — User experience
 
+- Adaptive System/Light/Dark appearance infrastructure and Settings selector are implemented; physical-device contrast review remains part of Phase 2.
 - Continue screen-by-screen polish based on tester recordings and screenshots.
 - Improve accessibility and localization readiness.
 - Refine trust/safety education and reporting feedback.
