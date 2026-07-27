@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nearmeu/security/notification_route.dart';
 
 void main() {
-  group('notification chat route validation', () {
+  group('notification route validation', () {
     test('accepts only bounded private-chat payloads', () {
       expect(
         NotificationRoute.chatIdFromData(const {
@@ -32,6 +32,31 @@ void main() {
         }),
         isNull,
       );
+    });
+
+    test('parses chat and support announcement destinations', () {
+      final chat = NotificationRoute.fromData(const {
+        'type': NotificationRoute.privateChatType,
+        'chatId': 'alice_bob',
+      });
+      expect(chat?.isPrivateChat, isTrue);
+      expect(chat?.value, 'alice_bob');
+      expect(chat?.payload, 'chat:alice_bob');
+
+      final announcement = NotificationRoute.fromData(const {
+        'type': NotificationRoute.supportAnnouncementType,
+        'announcementId': 'announcement_1',
+      });
+      expect(announcement?.isSupportAnnouncement, isTrue);
+      expect(announcement?.payload, 'support:announcements');
+
+      expect(
+        NotificationRoute.fromPayload('support:announcements')
+            ?.isSupportAnnouncement,
+        isTrue,
+      );
+      expect(NotificationRoute.fromPayload('chat: alice_bob ')?.value, 'alice_bob');
+      expect(NotificationRoute.fromPayload('unknown:value'), isNull);
     });
 
     test('normalizes local notification payloads', () {
