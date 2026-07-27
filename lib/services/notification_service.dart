@@ -46,7 +46,6 @@ class NotificationService {
     _initialized = true;
 
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
-
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _localNotifications.initialize(
@@ -57,7 +56,7 @@ class NotificationService {
     const channel = AndroidNotificationChannel(
       'nearmeu_notifications',
       'NearMeU Notifications',
-      description: 'Private chat notifications',
+      description: 'Private messages and official NearMeU updates',
       importance: Importance.high,
     );
     await _localNotifications
@@ -71,33 +70,15 @@ class NotificationService {
     );
     _openedMessageSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleOpenedRemoteMessage,
-      onError: (Object error, StackTrace stackTrace) {
-        developer.log(
-          'Notification-open listener failed',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
+      onError: _logOpenedMessageError,
     );
     _tokenSubscription = _messaging.onTokenRefresh.listen(
       _handleTokenRefresh,
-      onError: (Object error, StackTrace stackTrace) {
-        developer.log(
-          'FCM token refresh listener failed',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
+      onError: _logTokenRefreshError,
     );
     _authSubscription = _auth.authStateChanges().listen(
       _handleAuthState,
-      onError: (Object error, StackTrace stackTrace) {
-        developer.log(
-          'Notification auth listener failed',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
+      onError: _logAuthListenerError,
     );
 
     await _queueInitialNotificationRoute();
@@ -111,16 +92,9 @@ class NotificationService {
       await _revokeLocalToken();
       return;
     }
-
     try {
       await _functions.httpsCallable('unregisterDeviceToken').call<void>(
         <String, dynamic>{'token': token},
-      );
-    } on FirebaseFunctionsException catch (error, stackTrace) {
-      developer.log(
-        'FCM device unregister failed: ${error.code}',
-        error: error,
-        stackTrace: stackTrace,
       );
     } catch (error, stackTrace) {
       developer.log(
@@ -138,23 +112,8 @@ class NotificationService {
       await _revokeLocalToken();
       return;
     }
-
     try {
       await _functions.httpsCallable('unregisterAllDeviceTokens').call<void>();
-    } on FirebaseFunctionsException catch (error, stackTrace) {
-      developer.log(
-        'All-device unregister failed: ${error.code}',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      rethrow;
-    } catch (error, stackTrace) {
-      developer.log(
-        'All-device unregister failed',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      rethrow;
     } finally {
       await _revokeLocalToken();
     }
@@ -164,25 +123,20 @@ class NotificationService {
     final launchDetails = await _localNotifications
         .getNotificationAppLaunchDetails();
     if (launchDetails?.didNotificationLaunchApp == true) {
-      NotificationNavigationService.instance.queueChatId(
+      NotificationNavigationService.instance.queuePayload(
         launchDetails?.notificationResponse?.payload,
       );
     }
-
     final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleOpenedRemoteMessage(initialMessage);
-    }
+    if (initialMessage != null) _handleOpenedRemoteMessage(initialMessage);
   }
 
   void _handleLocalNotificationResponse(NotificationResponse response) {
-    NotificationNavigationService.instance.queueChatId(response.payload);
+    NotificationNavigationService.instance.queuePayload(response.payload);
   }
 
   void _handleOpenedRemoteMessage(RemoteMessage message) {
-    NotificationNavigationService.instance.queueChatId(
-      NotificationRoute.chatIdFromData(message.data),
-    );
+    NotificationNavigationService.instance.queueRemoteData(message.data);
   }
 
   Future<void> _handleAuthState(User? user) async {
@@ -229,7 +183,6 @@ class NotificationService {
   Future<void> _handleTokenRefresh(String token) async {
     final user = _auth.currentUser;
     if (user == null || token.isEmpty) return;
-
     final profile = await _firestore.collection('users').doc(user.uid).get();
     if (!profile.exists || profile.data()?['isSuspended'] == true) return;
 
@@ -241,19 +194,17 @@ class NotificationService {
         );
       } catch (error, stackTrace) {
         developer.log(
-          'Old FCM device token cleanup failed',
+          'Old FCM token cleanup failed',
           error: error,
           stackTrace: stackTrace,
         );
       }
     }
-
     await _registerToken(user.uid, token);
   }
 
   Future<void> _registerToken(String uid, String token) async {
     if (_registeredUid == uid && _registeredToken == token) return;
-
     try {
       await _functions.httpsCallable('registerDeviceToken').call<void>(
         <String, dynamic>{
@@ -264,12 +215,6 @@ class NotificationService {
       _registeredUid = uid;
       _registeredToken = token;
       developer.log('FCM device registered for authenticated user.');
-    } on FirebaseFunctionsException catch (error, stackTrace) {
-      developer.log(
-        'FCM device registration failed: ${error.code}',
-        error: error,
-        stackTrace: stackTrace,
-      );
     } catch (error, stackTrace) {
       developer.log(
         'FCM device registration failed',
@@ -296,8 +241,8 @@ class NotificationService {
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
     final notification = message.notification;
-    final chatId = NotificationRoute.chatIdFromData(message.data);
-    if (notification == null || chatId == null) return;
+    final destination = NotificationRoute.fromData(message.data);
+    if (notification == null || destination == null) return;
 
     await _localNotifications.show(
       notification.hashCode,
@@ -307,12 +252,36 @@ class NotificationService {
         android: AndroidNotificationDetails(
           'nearmeu_notifications',
           'NearMeU Notifications',
-          channelDescription: 'Private chat notifications',
+          channelDescription: 'Private messages and official NearMeU updates',
           importance: Importance.high,
           priority: Priority.high,
         ),
       ),
-      payload: chatId,
+      payload: destination.payload,
+    );
+  }
+
+  void _logOpenedMessageError(Object error, StackTrace stackTrace) {
+    developer.log(
+      'Notification-open listener failed',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  void _logTokenRefreshError(Object error, StackTrace stackTrace) {
+    developer.log(
+      'FCM token refresh listener failed',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  void _logAuthListenerError(Object error, StackTrace stackTrace) {
+    developer.log(
+      'Notification auth listener failed',
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 
