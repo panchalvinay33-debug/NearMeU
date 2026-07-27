@@ -1,17 +1,54 @@
+class NotificationDestination {
+  const NotificationDestination._({required this.type, this.value});
+
+  const NotificationDestination.privateChat(String chatId)
+      : this._(type: NotificationRoute.privateChatType, value: chatId);
+
+  const NotificationDestination.supportAnnouncements()
+      : this._(type: NotificationRoute.supportAnnouncementType);
+
+  final String type;
+  final String? value;
+
+  bool get isPrivateChat => type == NotificationRoute.privateChatType;
+  bool get isSupportAnnouncement =>
+      type == NotificationRoute.supportAnnouncementType;
+
+  String get payload => isPrivateChat ? 'chat:$value' : 'support:announcements';
+}
+
 class NotificationRoute {
   const NotificationRoute._();
 
   static const String privateChatType = 'private_chat';
+  static const String supportAnnouncementType = 'support_announcement';
   static const int maximumChatIdLength = 256;
+
+  static NotificationDestination? fromData(Map<String, dynamic> data) {
+    final type = data['type'];
+    if (type == supportAnnouncementType) {
+      return const NotificationDestination.supportAnnouncements();
+    }
+    final chatId = chatIdFromData(data);
+    return chatId == null ? null : NotificationDestination.privateChat(chatId);
+  }
+
+  static NotificationDestination? fromPayload(String? value) {
+    if (value == null) return null;
+    final payload = value.trim();
+    if (payload == 'support:announcements') {
+      return const NotificationDestination.supportAnnouncements();
+    }
+    if (!payload.startsWith('chat:')) return null;
+    final chatId = normalizedChatId(payload.substring(5));
+    return chatId == null ? null : NotificationDestination.privateChat(chatId);
+  }
 
   static String? chatIdFromData(Map<String, dynamic> data) {
     if (data['type'] != privateChatType) return null;
     final value = data['chatId'];
     if (value is! String) return null;
-
-    final chatId = value.trim();
-    if (chatId.isEmpty || chatId.length > maximumChatIdLength) return null;
-    return chatId;
+    return normalizedChatId(value);
   }
 
   static String? normalizedChatId(String? value) {
