@@ -10,6 +10,7 @@ import 'security/suspension_guard.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
 import 'services/observability_service.dart';
+import 'theme/app_theme.dart';
 import 'widgets/app_version_gate.dart';
 import 'widgets/presence_lifecycle.dart';
 
@@ -50,15 +51,21 @@ class NearMeUApp extends StatelessWidget {
         navigatorObservers: ObservabilityService.instance.navigatorObservers,
         title: 'NearMeU',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: const Color(0xff0B0B0B),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.purpleAccent,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.dark,
+        builder: (context, child) {
+          final mediaQuery = MediaQuery.of(context);
+          final textScaler = mediaQuery.textScaler.clamp(
+            minScaleFactor: 0.85,
+            maxScaleFactor: 1.30,
+          );
+          return MediaQuery(
+            data: mediaQuery.copyWith(textScaler: textScaler),
+            child: ScrollConfiguration(
+              behavior: const _NearMeUScrollBehavior(),
+              child: child ?? const SizedBox.shrink(),
+            ),
+          );
+        },
         home: const AppVersionGate(
           child: PresenceLifecycle(
             child: SuspensionGuard(child: AuthGateScreen()),
@@ -66,5 +73,14 @@ class NearMeUApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _NearMeUScrollBehavior extends MaterialScrollBehavior {
+  const _NearMeUScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
   }
 }
