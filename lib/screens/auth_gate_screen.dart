@@ -6,8 +6,8 @@ import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/presence_service.dart';
 import '../services/user_service.dart';
+import 'app_shell_screen.dart';
 import 'login_screen.dart';
-import 'nearby_screen.dart';
 import 'premium_signup_screen.dart';
 
 class AuthGateScreen extends StatefulWidget {
@@ -94,10 +94,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     }
   }
 
-  void _goToLoginWithMessage(
-    String message, {
-    bool isSuspended = false,
-  }) {
+  void _goToLoginWithMessage(String message, {bool isSuspended = false}) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -125,7 +122,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const NearbyScreen()),
+      MaterialPageRoute(builder: (_) => const AppShellScreen()),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationNavigationService.instance.setAppShellReady(true);
@@ -169,10 +166,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
                 Text(
                   'Checking your account...',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 15),
                 ),
                 SizedBox(height: 28),
                 CircularProgressIndicator(color: Colors.purpleAccent),

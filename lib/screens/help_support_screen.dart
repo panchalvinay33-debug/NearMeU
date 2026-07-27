@@ -7,9 +7,7 @@ class HelpSupportScreen extends StatelessWidget {
     return Card(
       color: const Color(0xFF1E1E1E),
       margin: const EdgeInsets.only(bottom: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ExpansionTile(
         iconColor: Colors.deepPurple,
         collapsedIconColor: Colors.deepPurple,
@@ -53,7 +51,6 @@ class HelpSupportScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             const Text(
               "Frequently Asked Questions",
               style: TextStyle(
@@ -111,7 +108,6 @@ class HelpSupportScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     Text(
                       "Contact Support",
                       style: TextStyle(
@@ -125,11 +121,7 @@ class HelpSupportScreen extends StatelessWidget {
 
                     Row(
                       children: [
-
-                        Icon(
-                          Icons.email,
-                          color: Colors.deepPurple,
-                        ),
+                        Icon(Icons.email, color: Colors.deepPurple),
 
                         SizedBox(width: 10),
 
@@ -142,7 +134,6 @@ class HelpSupportScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-
                       ],
                     ),
 
@@ -150,12 +141,8 @@ class HelpSupportScreen extends StatelessWidget {
 
                     Text(
                       "We usually respond within 24–48 hours.",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        height: 1.6,
-                      ),
+                      style: TextStyle(color: Colors.white70, height: 1.6),
                     ),
-
                   ],
                 ),
               ),
@@ -166,10 +153,7 @@ class HelpSupportScreen extends StatelessWidget {
             Center(
               child: Text(
                 "Thank you for using NearMeU ❤️",
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 16),
               ),
             ),
 
@@ -179,15 +163,11 @@ class HelpSupportScreen extends StatelessWidget {
               child: Text(
                 "© 2026 NearMeU Technologies\nAll Rights Reserved.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: Colors.grey, height: 1.5),
               ),
             ),
 
             const SizedBox(height: 30),
-
           ],
         ),
       ),

@@ -6,14 +6,16 @@ const assert = require("node:assert/strict");
 const {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MAX_VOICE_BYTES,
   MAX_VIDEO_DURATION_MS,
+  MAX_VOICE_DURATION_MS,
   deterministicChatId,
   normalizeDownloadAcknowledgement,
   normalizePrivateMediaRequest,
   validateStoredMedia,
 } = require("./private_media_logic");
 
-function request({ type = "image", durationMs = null } = {}) {
+function request({ type = "image", durationMs = null, caption = "Hello" } = {}) {
   const senderId = "sender-user";
   const receiverId = "receiver-user";
   const messageId = "message_1234567890";
@@ -28,7 +30,7 @@ function request({ type = "image", durationMs = null } = {}) {
       messageId,
       type,
       durationMs,
-      caption: "Hello",
+      caption,
       storagePath:
         `privateChatMedia/${senderId}/${chatId}/${messageId}/upload.bin`,
     },
@@ -69,6 +71,37 @@ test("video duration is capped at two minutes", () => {
   assert.throws(
     () => normalizePrivateMediaRequest(tooLong.payload, tooLong.senderId),
     /two minutes/,
+  );
+});
+
+test("voice duration and caption rules are enforced", () => {
+  const allowed = request({
+    type: "voice",
+    durationMs: MAX_VOICE_DURATION_MS,
+    caption: "",
+  });
+  assert.doesNotThrow(() =>
+    normalizePrivateMediaRequest(allowed.payload, allowed.senderId),
+  );
+
+  const tooLong = request({
+    type: "voice",
+    durationMs: MAX_VOICE_DURATION_MS + 1,
+    caption: "",
+  });
+  assert.throws(
+    () => normalizePrivateMediaRequest(tooLong.payload, tooLong.senderId),
+    /two minutes/,
+  );
+
+  const captioned = request({
+    type: "voice",
+    durationMs: 5000,
+    caption: "not allowed",
+  });
+  assert.throws(
+    () => normalizePrivateMediaRequest(captioned.payload, captioned.senderId),
+    /captions/,
   );
 });
 
@@ -167,5 +200,42 @@ test("compressed videos are capped at 30 MB and MP4", () => {
         messageId: input.messageId,
       }),
     /format/,
+  );
+});
+
+test("voice files are capped at 8 MB and use an allowed audio type", () => {
+  const input = request({ type: "voice", durationMs: 5000, caption: "" });
+  const metadata = {
+    senderId: input.senderId,
+    receiverId: input.receiverId,
+    chatId: input.chatId,
+    messageId: input.messageId,
+    mediaType: "voice",
+  };
+  assert.doesNotThrow(() =>
+    validateStoredMedia({
+      type: "voice",
+      sizeBytes: MAX_VOICE_BYTES,
+      contentType: "audio/mp4",
+      metadata,
+      senderId: input.senderId,
+      receiverId: input.receiverId,
+      chatId: input.chatId,
+      messageId: input.messageId,
+    }),
+  );
+  assert.throws(
+    () =>
+      validateStoredMedia({
+        type: "voice",
+        sizeBytes: MAX_VOICE_BYTES + 1,
+        contentType: "audio/mp4",
+        metadata,
+        senderId: input.senderId,
+        receiverId: input.receiverId,
+        chatId: input.chatId,
+        messageId: input.messageId,
+      }),
+    /8 MB/,
   );
 });

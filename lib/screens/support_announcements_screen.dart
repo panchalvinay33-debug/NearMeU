@@ -2,11 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/support_announcement.dart';
 import '../services/announcement_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_formatters.dart';
+import '../widgets/announcement_media_content.dart';
 import '../widgets/chat/linkified_message_text.dart';
 
 class SupportAnnouncementsScreen extends StatefulWidget {
@@ -33,7 +35,9 @@ class _SupportAnnouncementsScreenState
   DateTime? _effectiveLastReadAt(DateTime? serverValue) {
     final optimistic = _optimisticLastReadAt;
     if (optimistic == null) return serverValue;
-    if (serverValue == null || optimistic.isAfter(serverValue)) return optimistic;
+    if (serverValue == null || optimistic.isAfter(serverValue)) {
+      return optimistic;
+    }
     return serverValue;
   }
 
@@ -49,7 +53,9 @@ class _SupportAnnouncementsScreenState
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          const SnackBar(content: Text('All support announcements marked read.')),
+          const SnackBar(
+            content: Text('All support announcements marked read.'),
+          ),
         );
     } on FirebaseException catch (error) {
       if (kDebugMode) {
@@ -197,6 +203,22 @@ class _AnnouncementList extends StatelessWidget {
   final Color Function(String priority) priorityColor;
   final Future<void> Function() onRefresh;
 
+  Future<void> _openUpdate(
+    BuildContext context,
+    SupportAnnouncement item,
+  ) async {
+    final rawUrl = item.updateUrl?.trim();
+    if (rawUrl == null || rawUrl.isEmpty) return;
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open the update link.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -212,7 +234,9 @@ class _AnnouncementList extends StatelessWidget {
           final unread = service.isUnread(item, lastReadAt);
 
           return Semantics(
-            label: unread ? 'Unread support announcement' : 'Read support announcement',
+            label: unread
+                ? 'Unread support announcement'
+                : 'Read support announcement',
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -263,6 +287,18 @@ class _AnnouncementList extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (item.isUpdate && item.updateVersion?.isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Version ${item.updateVersion}${item.isMandatoryUpdate ? ' • Required update' : ''}',
+                      style: TextStyle(
+                        color: item.isMandatoryUpdate
+                            ? Colors.orangeAccent
+                            : Colors.white54,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   LinkifiedMessageText(
                     text: item.message,
@@ -271,13 +307,26 @@ class _AnnouncementList extends StatelessWidget {
                       height: 1.35,
                     ),
                   ),
+                  AnnouncementMediaContent(announcement: item),
+                  if (item.updateUrl?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openUpdate(context, item),
+                        icon: const Icon(Icons.system_update_alt_rounded),
+                        label: Text(
+                          item.updateButtonLabel?.trim().isNotEmpty == true
+                              ? item.updateButtonLabel!.trim()
+                              : 'Update now',
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     DateFormatters.chatPreview(item.createdAt),
-                    style: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                 ],
               ),

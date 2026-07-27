@@ -1,14 +1,23 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../models/app_user.dart';
 import '../models/message_model.dart';
 import '../services/chat_service.dart';
+import '../services/local_chat_store.dart';
 import '../services/private_media_service.dart';
 import '../services/user_service.dart';
+import '../services/voice_message_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/nearby_user_presenter.dart';
 import '../widgets/chat/chat_app_bar.dart';
@@ -19,10 +28,6 @@ import '../widgets/chat/reply_preview.dart';
 import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String otherUserId;
-  final String otherUserName;
-  final String? initialPhotoUrl;
-
   const ChatScreen({
     super.key,
     required this.otherUserId,
@@ -30,14 +35,30 @@ class ChatScreen extends StatefulWidget {
     this.initialPhotoUrl,
   });
 
+  final String otherUserId;
+  final String otherUserName;
+  final String? initialPhotoUrl;
+
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
-  final ChatService _chatService = ChatService();
-  final PrivateMediaService _mediaService = PrivateMediaService();
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
+  final LocalChatStore _localChatStore = LocalChatStore();
+  late final ChatService _chatService = ChatService(
+    localChatStore: _localChatStore,
+  );
+  late final PrivateMediaService _mediaService = PrivateMediaService(
+    localChatStore: _localChatStore,
+  );
+  late final VoiceMessageService _voiceService = VoiceMessageService(
+    localChatStore: _localChatStore,
+  );
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: 'asia-south1',
+  );
   final UserService _userService = UserService();
+  final AudioRecorder _recorder = AudioRecorder();
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -48,26 +69,62 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _isSendingMedia = false;
   bool _checkingBlock = true;
+  bool _isRecordingVoice = false;
+  bool _isAcknowledgingRead = false;
+  Duration _recordingDuration = Duration.zero;
+  Timer? _readAcknowledgementTimer;
+  Timer? _recordingTimer;
+  String? _recordingPath;
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
     super.initState();
-    _initChatScreen();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_initialize());
+    _readAcknowledgementTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => unawaited(_markChatOpened()),
+    );
   }
 
-  Future<void> _initChatScreen() async {
+  Future<void> _initialize() async {
     await _checkBlockStatus();
     await _markChatOpened();
-
     final user = currentUser;
     if (user != null && !_isBlocked) {
-      await _mediaService.recoverPendingUploads(
-        ownerUid: user.uid,
-        otherUserId: widget.otherUserId,
-      );
+      try {
+        await _mediaService.recoverPendingUploads(
+          ownerUid: user.uid,
+          otherUserId: widget.otherUserId,
+        );
+      } catch (_) {
+        // The outbox is retried the next time this chat opens.
+      }
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _isRecordingVoice) {
+      unawaited(_cancelVoiceRecording());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _readAcknowledgementTimer?.cancel();
+    _recordingTimer?.cancel();
+    if (_isRecordingVoice) unawaited(_recorder.cancel());
+    unawaited(_recorder.dispose());
+    final user = currentUser;
+    if (user != null) unawaited(_userService.updateLastSeen(user.uid));
+    _messageController.dispose();
+    _messageFocusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkBlockStatus() async {
@@ -84,36 +141,44 @@ class _ChatScreenState extends State<ChatScreen> {
         _checkingBlock = false;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _checkingBlock = false);
+      if (mounted) setState(() => _checkingBlock = false);
     }
   }
 
   Future<void> _markChatOpened() async {
     final user = currentUser;
-    if (user == null || _isBlocked) return;
-    await _userService.updateLastSeen(user.uid);
-    await _chatService.markMessagesAsSeen(
-      currentUserId: user.uid,
-      otherUserId: widget.otherUserId,
-    );
-  }
-
-  @override
-  void dispose() {
-    final user = currentUser;
-    if (user != null) _userService.updateLastSeen(user.uid);
-    _messageController.dispose();
-    _messageFocusNode.dispose();
-    _scrollController.dispose();
-    super.dispose();
+    if (user == null || _isBlocked || _isAcknowledgingRead) return;
+    _isAcknowledgingRead = true;
+    try {
+      await Future.wait<void>([
+        _userService.updateLastSeen(user.uid),
+        _functions.httpsCallable('markPrivateChatRead').call<void>(
+          <String, dynamic>{'otherUserId': widget.otherUserId},
+        ),
+      ]);
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'not-found' || error.code == 'unimplemented') {
+        try {
+          await _chatService.markMessagesAsSeen(
+            currentUserId: user.uid,
+            otherUserId: widget.otherUserId,
+          );
+        } catch (_) {}
+      }
+    } catch (_) {
+      // The periodic acknowledgement retries temporary failures.
+    } finally {
+      _isAcknowledgingRead = false;
+    }
   }
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     final user = currentUser;
     if (text.isEmpty || user == null) return;
-    if (_isBlocked || _isSending || _isSendingMedia) return;
+    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+      return;
+    }
 
     setState(() => _isSending = true);
     try {
@@ -128,15 +193,16 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
     } catch (error) {
       await _checkBlockStatus();
-      if (!mounted) return;
-      _showError(error);
+      if (mounted) _showError(error);
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
 
   Future<void> _showAttachmentSheet() async {
-    if (_isBlocked || _isSending || _isSendingMedia) return;
+    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+      return;
+    }
     _messageFocusNode.unfocus();
     if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
 
@@ -146,73 +212,70 @@ class _ChatScreenState extends State<ChatScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(8, 4, 8, 12),
-                  child: Text(
-                    'Send private media',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(8, 4, 8, 12),
+                child: Text(
+                  'Send private media',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                _attachmentTile(
-                  context,
-                  icon: Icons.photo_library_rounded,
-                  title: 'Photo from gallery',
-                  subtitle: 'Compressed before upload',
-                  selection: const _AttachmentSelection(
-                    type: _AttachmentType.image,
-                    source: ImageSource.gallery,
-                  ),
+              ),
+              _attachmentTile(
+                sheetContext,
+                icon: Icons.photo_library_rounded,
+                title: 'Photo from gallery',
+                subtitle: 'Compressed before upload',
+                selection: const _AttachmentSelection(
+                  type: _AttachmentType.image,
+                  source: ImageSource.gallery,
                 ),
-                _attachmentTile(
-                  context,
-                  icon: Icons.camera_alt_rounded,
-                  title: 'Take a photo',
-                  subtitle: 'Saved privately in this chat',
-                  selection: const _AttachmentSelection(
-                    type: _AttachmentType.image,
-                    source: ImageSource.camera,
-                  ),
+              ),
+              _attachmentTile(
+                sheetContext,
+                icon: Icons.camera_alt_rounded,
+                title: 'Take a photo',
+                subtitle: 'Saved privately in this chat',
+                selection: const _AttachmentSelection(
+                  type: _AttachmentType.image,
+                  source: ImageSource.camera,
                 ),
-                _attachmentTile(
-                  context,
-                  icon: Icons.video_library_rounded,
-                  title: 'Video from gallery',
-                  subtitle: 'Maximum 2 minutes • compressed MP4',
-                  selection: const _AttachmentSelection(
-                    type: _AttachmentType.video,
-                    source: ImageSource.gallery,
-                  ),
+              ),
+              _attachmentTile(
+                sheetContext,
+                icon: Icons.video_library_rounded,
+                title: 'Video from gallery',
+                subtitle: 'Maximum 2 minutes, compressed MP4',
+                selection: const _AttachmentSelection(
+                  type: _AttachmentType.video,
+                  source: ImageSource.gallery,
                 ),
-                _attachmentTile(
-                  context,
-                  icon: Icons.videocam_rounded,
-                  title: 'Record a video',
-                  subtitle: 'Maximum 2 minutes',
-                  selection: const _AttachmentSelection(
-                    type: _AttachmentType.video,
-                    source: ImageSource.camera,
-                  ),
+              ),
+              _attachmentTile(
+                sheetContext,
+                icon: Icons.videocam_rounded,
+                title: 'Record a video',
+                subtitle: 'Maximum 2 minutes',
+                selection: const _AttachmentSelection(
+                  type: _AttachmentType.video,
+                  source: ImageSource.camera,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
-    if (selection == null || !mounted) return;
-    await _prepareAndSendMedia(selection);
+    if (selection != null && mounted) await _prepareAndSendMedia(selection);
   }
 
   Widget _attachmentTile(
@@ -241,14 +304,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final user = currentUser;
     if (user == null || _isBlocked || _isSendingMedia) return;
     setState(() => _isSendingMedia = true);
-
     try {
-      final PreparedPrivateMedia? media;
-      if (selection.type == _AttachmentType.image) {
-        media = await _mediaService.pickImage(source: selection.source);
-      } else {
-        media = await _mediaService.pickVideo(source: selection.source);
-      }
+      final PreparedPrivateMedia? media =
+          selection.type == _AttachmentType.image
+          ? await _mediaService.pickImage(source: selection.source)
+          : await _mediaService.pickVideo(source: selection.source);
       if (media == null) return;
 
       await _mediaService.sendPreparedMedia(
@@ -263,10 +323,138 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
     } catch (error) {
       await _checkBlockStatus();
-      if (!mounted) return;
-      _showError(error);
+      if (mounted) _showError(error);
     } finally {
       if (mounted) setState(() => _isSendingMedia = false);
+    }
+  }
+
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecordingVoice) {
+      await _stopAndSendVoice();
+    } else {
+      await _startVoiceRecording();
+    }
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+      return;
+    }
+    final allowed = await _recorder.hasPermission();
+    if (!allowed) {
+      if (mounted) {
+        _showError(
+          const VoiceMessageException(
+            'Microphone permission is required for voice messages.',
+          ),
+        );
+      }
+      return;
+    }
+
+    _messageFocusNode.unfocus();
+    if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+    final temporary = await getTemporaryDirectory();
+    final path = p.join(
+      temporary.path,
+      'nearmeu_voice_${DateTime.now().microsecondsSinceEpoch}.m4a',
+    );
+
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isRecordingVoice = true;
+        _recordingDuration = Duration.zero;
+        _recordingPath = path;
+      });
+      _recordingTimer?.cancel();
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || !_isRecordingVoice) return;
+        final next = _recordingDuration + const Duration(seconds: 1);
+        setState(() => _recordingDuration = next);
+        if (next >= VoiceMessageService.maximumVoiceDuration) {
+          unawaited(_stopAndSendVoice());
+        }
+      });
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _stopAndSendVoice() async {
+    if (!_isRecordingVoice || _isSendingMedia) return;
+    _recordingTimer?.cancel();
+    final measuredDuration = _recordingDuration;
+    final expectedPath = _recordingPath;
+    setState(() {
+      _isRecordingVoice = false;
+      _isSendingMedia = true;
+    });
+
+    try {
+      final stoppedPath = await _recorder.stop();
+      final path = stoppedPath ?? expectedPath;
+      final user = currentUser;
+      if (path == null || user == null) {
+        throw const VoiceMessageException('Could not finish voice recording.');
+      }
+      await _voiceService.sendRecordedVoice(
+        senderId: user.uid,
+        receiverId: widget.otherUserId,
+        sourceFile: File(path),
+        durationMs: measuredDuration.inMilliseconds,
+        replyTo: _replyingTo,
+      );
+      if (mounted) {
+        setState(() {
+          _replyingTo = null;
+          _recordingDuration = Duration.zero;
+          _recordingPath = null;
+        });
+      }
+      _scrollToBottom();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingMedia = false;
+          _recordingDuration = Duration.zero;
+          _recordingPath = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecordingVoice) return;
+    _recordingTimer?.cancel();
+    try {
+      await _recorder.cancel();
+    } catch (_) {}
+    final path = _recordingPath;
+    if (path != null) {
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _isRecordingVoice = false;
+        _recordingDuration = Duration.zero;
+        _recordingPath = null;
+      });
     }
   }
 
@@ -280,8 +468,8 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 120,
-        duration: const Duration(milliseconds: 250),
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 240),
         curve: Curves.easeOut,
       );
     });
@@ -291,6 +479,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (message.isUnsent) return 'This message was unsent';
     if (message.isImage) return 'Photo';
     if (message.isVideo) return 'Video';
+    if (message.isVoice) return 'Voice message';
     final text = message.text.trim();
     if (text.isEmpty) return 'Message';
     return text.length > 60 ? '${text.substring(0, 60)}...' : text;
@@ -302,13 +491,8 @@ class _ChatScreenState extends State<ChatScreen> {
         : widget.otherUserName;
   }
 
-  void _startReply(MessageModel message) {
-    if (_isBlocked) return;
-    setState(() => _replyingTo = message);
-  }
-
   void _toggleEmojiPicker() {
-    if (_isBlocked || _isSendingMedia) return;
+    if (_isBlocked || _isSendingMedia || _isRecordingVoice) return;
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
       _messageFocusNode.requestFocus();
@@ -321,147 +505,134 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _copyMessage(MessageModel message) async {
     if (message.isUnsent || message.text.trim().isEmpty) return;
     await Clipboard.setData(ClipboardData(text: message.text.trim()));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Message copied')));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Message copied')));
+    }
   }
 
   Future<void> _deleteForMe(MessageModel message) async {
     final user = currentUser;
     if (user == null) return;
-    await _chatService.deleteMessageForMe(
-      currentUserId: user.uid,
-      otherUserId: widget.otherUserId,
-      message: message,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Message deleted for you')));
+    try {
+      await _chatService.deleteMessageForMe(
+        currentUserId: user.uid,
+        otherUserId: widget.otherUserId,
+        message: message,
+      );
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _unsend(MessageModel message) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      await _chatService.unsendMessage(
+        currentUserId: user.uid,
+        otherUserId: widget.otherUserId,
+        message: message,
+      );
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   Future<void> _showMessageOptions(MessageModel message) async {
     final user = currentUser;
     if (user == null) return;
-    final canUnsend = message.canUnsend(user.uid);
-    final isMe = message.senderId == user.uid;
-
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Wrap(
-              children: [
-                if (!_isBlocked)
-                  ListTile(
-                    leading: const Icon(
-                      Icons.reply_rounded,
-                      color: Colors.white,
-                    ),
-                    title: const Text(
-                      'Reply',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _startReply(message);
-                    },
-                  ),
-                if (!message.isUnsent && message.text.trim().isNotEmpty)
-                  ListTile(
-                    leading: const Icon(
-                      Icons.copy_rounded,
-                      color: Colors.white,
-                    ),
-                    title: const Text(
-                      'Copy',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _copyMessage(message);
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_outline_rounded,
-                    color: Colors.white,
-                  ),
-                  title: const Text(
-                    'Delete for me',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _deleteForMe(message);
-                  },
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            if (!_isBlocked)
+              ListTile(
+                leading: const Icon(Icons.reply_rounded, color: Colors.white),
+                title: const Text(
+                  'Reply',
+                  style: TextStyle(color: Colors.white),
                 ),
-                if (isMe && canUnsend)
-                  ListTile(
-                    leading: const Icon(
-                      Icons.undo_rounded,
-                      color: Colors.white,
-                    ),
-                    title: const Text(
-                      'Unsend',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: const Text(
-                      'Remove for both users',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await _chatService.unsendMessage(
-                        currentUserId: user.uid,
-                        otherUserId: widget.otherUserId,
-                        message: message,
-                      );
-                    },
-                  ),
-              ],
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  setState(() => _replyingTo = message);
+                },
+              ),
+            if (!message.isUnsent && message.text.trim().isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, color: Colors.white),
+                title: const Text(
+                  'Copy',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_copyMessage(message));
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.white),
+              title: const Text(
+                'Delete for me',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_deleteForMe(message));
+              },
             ),
-          ),
-        );
-      },
+            if (message.canUnsend(user.uid))
+              ListTile(
+                leading: const Icon(
+                  Icons.undo_rounded,
+                  color: Colors.redAccent,
+                ),
+                title: const Text(
+                  'Unsend',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  unawaited(_unsend(message));
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 
-  String _formatLastSeen(DateTime? dateTime) {
-    if (_isBlocked) return 'Unavailable';
-    if (dateTime == null) return 'Last seen recently';
-    final difference = DateTime.now().difference(dateTime);
-    if (difference.inSeconds < 60) return 'Last seen just now';
+  String _formatMessageTime(DateTime value) {
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute ${value.hour >= 12 ? 'PM' : 'AM'}';
+  }
+
+  String _formatLastSeen(DateTime? value) {
+    if (value == null) return 'Offline';
+    final difference = DateTime.now().difference(value);
+    if (difference.inMinutes < 2) return 'Last seen just now';
     if (difference.inMinutes < 60) {
       return 'Last seen ${difference.inMinutes} min ago';
     }
     if (difference.inHours < 24) {
       return 'Last seen ${difference.inHours} hr ago';
     }
-    return 'Last seen ${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    return 'Last seen ${value.day}/${value.month}/${value.year}';
   }
 
-  String _formatMessageTime(DateTime dateTime) {
-    final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
-    return '$hour:$minute $period';
-  }
-
-  String _formatDateHeader(DateTime dateTime) {
+  String _dateLabel(DateTime value) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final messageDay = DateTime(dateTime.year, dateTime.month, dateTime.day);
-    final difference = today.difference(messageDay).inDays;
-    if (difference == 0) return 'Today';
-    if (difference == 1) return 'Yesterday';
+    final date = DateTime(value.year, value.month, value.day);
+    if (date == today) return 'Today';
+    if (date == today.subtract(const Duration(days: 1))) return 'Yesterday';
     const months = <String>[
       'Jan',
       'Feb',
@@ -476,10 +647,10 @@ class _ChatScreenState extends State<ChatScreen> {
       'Nov',
       'Dec',
     ];
-    return '${dateTime.day} ${months[dateTime.month - 1]} ${dateTime.year}';
+    return '${value.day} ${months[value.month - 1]} ${value.year}';
   }
 
-  bool _shouldShowDateHeader(List<MessageModel> messages, int index) {
+  bool _showDateHeader(List<MessageModel> messages, int index) {
     if (index == 0) return true;
     final current = messages[index].timestamp;
     final previous = messages[index - 1].timestamp;
@@ -500,7 +671,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildEmojiPicker() {
-    if (!_showEmojiPicker || _isBlocked) return const SizedBox.shrink();
+    if (!_showEmojiPicker || _isBlocked || _isRecordingVoice) {
+      return const SizedBox.shrink();
+    }
     return SizedBox(
       height: 280,
       child: EmojiPicker(
@@ -534,24 +707,23 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildBlockedBar() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: const Text(
-        'You cannot send messages in this chat.',
-        style: TextStyle(color: Colors.white70, fontSize: 14),
-      ),
-    );
-  }
-
   Widget _buildComposer() {
-    if (_isBlocked) return _buildBlockedBar();
+    if (_isBlocked) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const Text(
+          'You cannot send messages in this chat.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+
     return Column(
       children: [
         ChatComposer(
@@ -559,11 +731,19 @@ class _ChatScreenState extends State<ChatScreen> {
           focusNode: _messageFocusNode,
           showEmojiPicker: _showEmojiPicker,
           isSendingMedia: _isSendingMedia,
+          isRecordingVoice: _isRecordingVoice,
+          recordingDuration: _recordingDuration,
           onEmojiTap: _toggleEmojiPicker,
-          onAttachment: _isSending || _isSendingMedia
+          onAttachment: _isSending || _isSendingMedia || _isRecordingVoice
               ? null
               : _showAttachmentSheet,
-          onSend: _isSending || _isSendingMedia ? null : _sendMessage,
+          onVoiceTap: _isSending || _isSendingMedia
+              ? null
+              : _toggleVoiceRecording,
+          onCancelVoice: _isRecordingVoice ? _cancelVoiceRecording : null,
+          onSend: _isSending || _isSendingMedia || _isRecordingVoice
+              ? null
+              : _sendMessage,
           onTextFieldTap: () {
             if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
           },
@@ -577,101 +757,76 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _showReportDialog() async {
     final user = currentUser;
     if (user == null) return;
-    var selectedReason = 'Spam';
-    final descriptionController = TextEditingController();
-    const reasons = <String>[
-      'Spam',
-      'Fake Profile',
-      'Harassment',
-      'Hate Speech',
-      'Scam/Fraud',
-      'Inappropriate Content',
-      'Other',
-    ];
-
+    var reason = 'Spam';
+    final description = TextEditingController();
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              title: const Text(
-                'Report User',
-                style: TextStyle(color: Colors.white),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('Report User'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButton<String>(
+                value: reason,
+                isExpanded: true,
+                dropdownColor: AppColors.surface,
+                items:
+                    const <String>[
+                          'Spam',
+                          'Fake Profile',
+                          'Harassment',
+                          'Hate Speech',
+                          'Scam/Fraud',
+                          'Inappropriate Content',
+                          'Other',
+                        ]
+                        .map(
+                          (item) =>
+                              DropdownMenuItem(value: item, child: Text(item)),
+                        )
+                        .toList(),
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => reason = value);
+                },
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButton<String>(
-                      value: selectedReason,
-                      dropdownColor: AppColors.surface,
-                      isExpanded: true,
-                      style: const TextStyle(color: Colors.white),
-                      items: reasons
-                          .map(
-                            (reason) => DropdownMenuItem<String>(
-                              value: reason,
-                              child: Text(reason),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() => selectedReason = value);
-                        }
-                      },
-                    ),
-                    if (selectedReason == 'Other') ...[
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: descriptionController,
-                        style: const TextStyle(color: Colors.white),
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          hintText: 'Describe the problem',
-                        ),
-                      ),
-                    ],
-                  ],
+              if (reason == 'Other')
+                TextField(
+                  controller: description,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Describe the problem',
+                  ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(dialogContext);
-                    try {
-                      await _userService.reportUser(
-                        reporterId: user.uid,
-                        reportedUserId: widget.otherUserId,
-                        reason: selectedReason,
-                        description: descriptionController.text.trim(),
-                      );
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('User reported successfully.'),
-                        ),
-                      );
-                    } catch (error) {
-                      if (!mounted) return;
-                      _showError(error);
-                    }
-                  },
-                  child: const Text('Report'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                try {
+                  await _userService.reportUser(
+                    reporterId: user.uid,
+                    reportedUserId: widget.otherUserId,
+                    reason: reason,
+                    description: description.text.trim(),
+                  );
+                } catch (error) {
+                  if (mounted) _showError(error);
+                }
+              },
+              child: const Text('Report'),
+            ),
+          ],
+        ),
+      ),
     );
-    descriptionController.dispose();
+    description.dispose();
   }
 
   Future<void> _openOtherUserProfile() async {
@@ -679,20 +834,15 @@ class _ChatScreenState extends State<ChatScreen> {
       final profile = await _userService.getUser(widget.otherUserId);
       if (!mounted) return;
       if (profile == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile is not available right now.')),
-        );
+        _showError('Profile is not available right now.');
         return;
       }
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => UserProfileScreen(user: profile)),
       );
       await _checkBlockStatus();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open this profile.')),
-      );
+    } catch (error) {
+      if (mounted) _showError(error);
     }
   }
 
@@ -700,55 +850,52 @@ class _ChatScreenState extends State<ChatScreen> {
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
-      isScrollControlled: true,
       backgroundColor: AppColors.surface,
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.flag_rounded, color: Colors.red),
-                title: const Text(
-                  'Report User',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showReportDialog();
-                },
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flag_rounded, color: Colors.redAccent),
+              title: const Text(
+                'Report User',
+                style: TextStyle(color: Colors.white),
               ),
-              ListTile(
-                leading: const Icon(Icons.person, color: Colors.white),
-                title: const Text(
-                  'View Profile',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _openOtherUserProfile();
-                },
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_showReportDialog());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person, color: Colors.white),
+              title: const Text(
+                'View Profile',
+                style: TextStyle(color: Colors.white),
               ),
-              ListTile(
-                leading: const Icon(Icons.block, color: Colors.white),
-                title: const Text(
-                  'Block User',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final user = currentUser;
-                  if (user == null) return;
-                  await _userService.blockUser(
-                    currentUserId: user.uid,
-                    targetUserId: widget.otherUserId,
-                  );
-                  await _checkBlockStatus();
-                },
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_openOtherUserProfile());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block, color: Colors.white),
+              title: const Text(
+                'Block User',
+                style: TextStyle(color: Colors.white),
               ),
-            ],
-          ),
-        );
-      },
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final user = currentUser;
+                if (user == null) return;
+                await _userService.blockUser(
+                  currentUserId: user.uid,
+                  targetUserId: widget.otherUserId,
+                );
+                await _checkBlockStatus();
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -793,7 +940,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 photoUrl: livePhotoUrl != null && livePhotoUrl.isNotEmpty
                     ? livePhotoUrl
                     : widget.initialPhotoUrl,
-                onBack: () => Navigator.pop(context),
+                onBack: () async {
+                  if (_isRecordingVoice) await _cancelVoiceRecording();
+                  if (context.mounted) Navigator.pop(context);
+                },
                 onMenu: _showChatMenu,
               );
             },
@@ -813,57 +963,61 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
+                                ConnectionState.waiting &&
+                            !snapshot.hasData) {
                           return const Center(
                             child: CircularProgressIndicator(
                               color: Colors.purpleAccent,
                             ),
                           );
                         }
-                        if (snapshot.hasError) {
+                        if (snapshot.hasError && !snapshot.hasData) {
                           return Center(
                             child: Text(
-                              'Error: ${snapshot.error}',
-                              style: const TextStyle(color: Colors.white),
+                              'Could not load messages.\n${snapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70),
                             ),
                           );
                         }
 
-                        final messages = snapshot.data ?? <MessageModel>[];
+                        final messages =
+                            snapshot.data ?? const <MessageModel>[];
+                        if (messages.any(
+                          (message) =>
+                              message.receiverId == user.uid && !message.isSeen,
+                        )) {
+                          unawaited(_markChatOpened());
+                        }
                         WidgetsBinding.instance.addPostFrameCallback(
                           (_) => _scrollToBottom(),
                         );
+
                         if (messages.isEmpty) {
                           return const Center(
                             child: Text(
-                              'No messages yet 👋',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
+                              'No messages yet. Say hello!',
+                              style: TextStyle(color: Colors.white54),
                             ),
                           );
                         }
 
                         return ListView.builder(
                           controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
                             final isMe = message.senderId == user.uid;
-                            final repliedToMe =
-                                message.replyToSenderId == user.uid;
                             return Column(
                               children: [
-                                if (_shouldShowDateHeader(messages, index))
-                                  DateChip(
-                                    text: _formatDateHeader(message.timestamp),
-                                  ),
+                                if (_showDateHeader(messages, index))
+                                  DateChip(text: _dateLabel(message.timestamp)),
                                 MessageBubble(
                                   message: message,
                                   isMe: isMe,
-                                  repliedToMe: repliedToMe,
+                                  repliedToMe:
+                                      message.replyToSenderId == user.uid,
                                   otherUserName: widget.otherUserName,
                                   time: _formatMessageTime(message.timestamp),
                                   onLongPress: () =>
@@ -876,7 +1030,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       },
                     ),
                   ),
-                  SafeArea(top: false, child: _buildComposer()),
+                  _buildComposer(),
                 ],
               ),
       ),

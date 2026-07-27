@@ -31,10 +31,9 @@ class ProfilePhotoService {
   }
 
   Future<void> _savePhotoUrl(String uid, String? photoUrl) async {
-    await _firestore.collection('users').doc(uid).set(
-      <String, dynamic>{'photoUrl': photoUrl},
-      SetOptions(merge: true),
-    );
+    await _firestore.collection('users').doc(uid).set(<String, dynamic>{
+      'photoUrl': photoUrl,
+    }, SetOptions(merge: true));
   }
 
   Future<String?> pickAndUpload(String uid) async {

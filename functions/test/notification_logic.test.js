@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildAnnouncementNotification,
   buildChatNotification,
   invalidTokenIndexes,
   sanitizePlatform,
@@ -37,6 +38,39 @@ test("chat notification hides sender identity and private message text", () => {
     type: "private_chat",
     chatId: "alice_bob",
   });
+});
+
+test("announcement notification carries a safe support route", () => {
+  const payload = buildAnnouncementNotification({
+    announcementId: "announcement_1",
+    title: "New NearMeU update",
+    message: "Open support announcements to see what changed.",
+    priority: "important",
+  });
+
+  assert.equal(payload.notification.title, "New NearMeU update");
+  assert.equal(
+    payload.notification.body,
+    "Open support announcements to see what changed.",
+  );
+  assert.deepEqual(payload.data, {
+    type: "support_announcement",
+    announcementId: "announcement_1",
+  });
+  assert.equal(payload.android.notification.visibility, "private");
+});
+
+test("announcement notification applies bounded fallbacks", () => {
+  const payload = buildAnnouncementNotification({
+    announcementId: "announcement_2",
+    title: " ",
+    message: "x".repeat(300),
+    priority: "urgent",
+  });
+
+  assert.equal(payload.notification.title, "NearMeU Update");
+  assert.equal(payload.notification.body.length, 180);
+  assert.equal(payload.android.notification.priority, "max");
 });
 
 test("unknown platforms are normalized", () => {

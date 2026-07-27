@@ -11,7 +11,9 @@
     "start": "npm run shell",
     "test": "node --test",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "project-state:check": "node scripts/store_project_state.js",
+    "project-state:store": "node scripts/store_project_state.js --write"
   },
   "dependencies": {
     "firebase-admin": "^12.5.0",

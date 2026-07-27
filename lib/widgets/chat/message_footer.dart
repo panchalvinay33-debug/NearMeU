@@ -20,10 +20,7 @@ class MessageFooter extends StatelessWidget {
         padding: const EdgeInsets.only(top: 6),
         child: Text(
           time,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 11,
-          ),
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
         ),
       );
     }
@@ -35,18 +32,13 @@ class MessageFooter extends StatelessWidget {
         children: [
           Text(
             time,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 11,
-            ),
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
           const SizedBox(width: 6),
           Icon(
             message.isSeen ? Icons.done_all : Icons.done,
             size: 15,
-            color: message.isSeen
-                ? Colors.lightBlueAccent
-                : Colors.white54,
+            color: message.isSeen ? Colors.lightBlueAccent : Colors.white54,
           ),
         ],
       ),

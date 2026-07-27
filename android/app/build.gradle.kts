@@ -25,6 +25,7 @@ val releaseTaskRequested = gradle.startParameter.taskNames.any {
 android {
     namespace = "com.nearmeu.nearmeu"
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "com.nearmeu.nearmeu"

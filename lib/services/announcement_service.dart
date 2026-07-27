@@ -1,16 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/support_announcement.dart';
 import '../utils/badge_formatters.dart';
+import 'announcement_media_service.dart';
 
 class AnnouncementService {
-  AnnouncementService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  AnnouncementService({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ??
+            FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   final FirebaseFirestore _firestore;
-
-  static final DateTime _legacyDate = DateTime.fromMillisecondsSinceEpoch(0);
+  final FirebaseFunctions _functions;
 
   CollectionReference<Map<String, dynamic>> get _announcements =>
       _firestore.collection('supportAnnouncements');
@@ -22,8 +27,9 @@ class AnnouncementService {
           .collection('privateState')
           .doc('supportAnnouncements');
 
-  DateTime effectiveCreatedAt(SupportAnnouncement item) =>
-      item.createdAt ?? _legacyDate;
+  DateTime effectiveCreatedAt(SupportAnnouncement item) => item.createdAt;
+
+  String newAnnouncementId() => _announcements.doc().id;
 
   Stream<List<SupportAnnouncement>> watchActiveAnnouncements({int limit = 50}) {
     return _announcements
@@ -33,16 +39,19 @@ class AnnouncementService {
         .snapshots()
         .handleError(_debugLogFirebaseException)
         .map((snapshot) {
-      final now = DateTime.now();
-      final items = snapshot.docs
-          .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
-          .toList();
-      items.sort(
-        (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
-      );
-      return items;
-    });
+          final now = DateTime.now();
+          final items = snapshot.docs
+              .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
+              .where(
+                (item) =>
+                    item.expiresAt == null || item.expiresAt!.isAfter(now),
+              )
+              .toList();
+          items.sort(
+            (a, b) => effectiveCreatedAt(b).compareTo(effectiveCreatedAt(a)),
+          );
+          return items;
+        });
   }
 
   Stream<DateTime?> watchLastReadAt(String uid) {
@@ -53,9 +62,7 @@ class AnnouncementService {
   }
 
   bool isUnread(SupportAnnouncement item, DateTime? lastReadAt) {
-    final createdAt = item.createdAt;
-    if (createdAt == null) return false;
-    return lastReadAt == null || createdAt.isAfter(lastReadAt);
+    return lastReadAt == null || item.createdAt.isAfter(lastReadAt);
   }
 
   void _debugLogFirebaseException(Object error) {
@@ -77,14 +84,16 @@ class AnnouncementService {
           .limit(100)
           .get()
           .catchError((Object error) {
-        _debugLogFirebaseException(error);
-        throw error;
-      });
+            _debugLogFirebaseException(error);
+            throw error;
+          });
 
       final now = DateTime.now();
       return snapshot.docs
           .map((doc) => SupportAnnouncement.fromMap(doc.id, doc.data()))
-          .where((item) => item.expiresAt == null || item.expiresAt!.isAfter(now))
+          .where(
+            (item) => item.expiresAt == null || item.expiresAt!.isAfter(now),
+          )
           .where((item) => isUnread(item, lastReadAt))
           .length;
     });
@@ -98,10 +107,17 @@ class AnnouncementService {
   }
 
   Future<void> createAnnouncement({
+    required String announcementId,
     required String adminId,
     required String title,
     required String message,
     required String priority,
+    required String announcementType,
+    UploadedAnnouncementMedia? media,
+    String? updateVersion,
+    String? updateUrl,
+    String? updateButtonLabel,
+    bool isMandatoryUpdate = false,
   }) async {
     final safeTitle = title.trim();
     final safeMessage = message.trim();
@@ -111,27 +127,44 @@ class AnnouncementService {
     if (safeMessage.isEmpty || safeMessage.length > 1000) {
       throw ArgumentError('Enter a message between 1 and 1000 characters.');
     }
-    if (!['normal', 'important', 'urgent'].contains(priority)) {
-      throw ArgumentError('Select a valid priority.');
-    }
-    await _announcements.add({
-      'title': safeTitle,
-      'message': safeMessage,
-      'priority': priority,
-      'type': 'official_announcement',
-      'targetAudience': 'allActiveUsers',
-      'isActive': true,
-      'createdByAdminId': adminId,
-      'createdAt': FieldValue.serverTimestamp(),
-      'expiresAt': null,
-    });
+
+    await _functions.httpsCallable('createSupportAnnouncement').call<void>(
+      <String, dynamic>{
+        'announcementId': announcementId,
+        'adminId': adminId,
+        'title': safeTitle,
+        'message': safeMessage,
+        'priority': priority,
+        'announcementType': announcementType,
+        'media': media == null
+            ? null
+            : <String, dynamic>{
+                'type': media.type,
+                'storagePath': media.storagePath,
+                'contentType': media.contentType,
+                'sizeBytes': media.sizeBytes,
+                'durationMs': media.durationMs,
+              },
+        'updateVersion': updateVersion?.trim(),
+        'updateUrl': updateUrl?.trim(),
+        'updateButtonLabel': updateButtonLabel?.trim(),
+        'isMandatoryUpdate': isMandatoryUpdate,
+      },
+    );
   }
 
   Future<void> expireAnnouncement(String announcementId) async {
-    await _announcements.doc(announcementId).set({
-      'isActive': false,
-      'expiresAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    try {
+      await _functions
+          .httpsCallable('expireSupportAnnouncement')
+          .call<void>(<String, dynamic>{'announcementId': announcementId});
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'not-found' && error.code != 'unimplemented') rethrow;
+      await _announcements.doc(announcementId).set({
+        'isActive': false,
+        'expiresAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
   }
 
   String formatBadge(int count) => BadgeFormatters.unread(count);

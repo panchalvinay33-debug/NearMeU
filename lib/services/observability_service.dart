@@ -28,9 +28,7 @@ class ObservabilityService {
   bool get collectionEnabled => _collectionEnabled;
 
   List<NavigatorObserver> get navigatorObservers => _collectionEnabled
-      ? <NavigatorObserver>[
-          FirebaseAnalyticsObserver(analytics: _analytics),
-        ]
+      ? <NavigatorObserver>[FirebaseAnalyticsObserver(analytics: _analytics)]
       : const <NavigatorObserver>[];
 
   Future<void> initialize({bool? collectionOverride}) async {
@@ -135,10 +133,7 @@ class ObservabilityService {
     }
   }
 
-  Future<void> logEvent(
-    String name, {
-    Map<String, Object>? parameters,
-  }) async {
+  Future<void> logEvent(String name, {Map<String, Object>? parameters}) async {
     if (!_collectionEnabled) return;
 
     final safeParameters = <String, Object>{};

@@ -65,6 +65,36 @@ class ChatPreviewModel {
     );
   }
 
+  ChatPreviewModel copyWith({
+    String? chatId,
+    String? otherUserId,
+    String? otherUserName,
+    String? otherUserPhotoUrl,
+    String? lastMessage,
+    DateTime? lastMessageTime,
+    String? messageType,
+    bool? isUnsent,
+    String? lastMessageSenderId,
+    bool? lastMessageSeen,
+    int? unreadCount,
+    bool? isOtherUserOnline,
+  }) {
+    return ChatPreviewModel(
+      chatId: chatId ?? this.chatId,
+      otherUserId: otherUserId ?? this.otherUserId,
+      otherUserName: otherUserName ?? this.otherUserName,
+      otherUserPhotoUrl: otherUserPhotoUrl ?? this.otherUserPhotoUrl,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageTime: lastMessageTime ?? this.lastMessageTime,
+      messageType: messageType ?? this.messageType,
+      isUnsent: isUnsent ?? this.isUnsent,
+      lastMessageSenderId: lastMessageSenderId ?? this.lastMessageSenderId,
+      lastMessageSeen: lastMessageSeen ?? this.lastMessageSeen,
+      unreadCount: unreadCount ?? this.unreadCount,
+      isOtherUserOnline: isOtherUserOnline ?? this.isOtherUserOnline,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'chatId': chatId,
@@ -86,6 +116,7 @@ class ChatPreviewModel {
     if (isUnsent) return 'This message was unsent';
     if (messageType == 'image') return 'Photo';
     if (messageType == 'video') return 'Video';
+    if (messageType == 'voice') return 'Voice message';
     if (messageType != 'text') return 'Attachment';
     final normalized = lastMessage.trim();
     if (normalized.isEmpty) return 'Start a conversation';

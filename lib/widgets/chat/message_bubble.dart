@@ -5,6 +5,7 @@ import 'linkified_message_text.dart';
 import 'message_footer.dart';
 import 'private_media_content.dart';
 import 'quoted_reply.dart';
+import 'voice_message_content.dart';
 
 class MessageBubble extends StatelessWidget {
   final MessageModel message;
@@ -89,7 +90,12 @@ class MessageBubble extends StatelessWidget {
                       repliedToMe: repliedToMe,
                       otherUserName: otherUserName,
                     ),
-                    if (message.isMedia)
+                    if (message.isVoice)
+                      VoiceMessageContent(
+                        key: ValueKey('voice_${message.id}'),
+                        message: message,
+                      )
+                    else if (message.isImage || message.isVideo)
                       PrivateMediaContent(
                         key: ValueKey(message.id),
                         message: message,

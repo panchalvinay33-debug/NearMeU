@@ -11,8 +11,12 @@ module.exports = {
   ...require("./index.js"),
   ...require("./anti_abuse_functions.js"),
   ...require("./trusted_read_functions.js"),
+  ...require("./chat_read_functions.js"),
   ...require("./message_retention_functions.js"),
   ...require("./private_media_functions.js"),
   ...require("./private_media_ack_functions.js"),
   ...require("./message_unsend_functions.js"),
+  ...require("./announcement_media_functions.js"),
+  ...require("./announcement_push_functions.js"),
+  ...require("./app_version_functions.js"),
 };

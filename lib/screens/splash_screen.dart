@@ -18,9 +18,7 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const AuthGateScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const AuthGateScreen()),
       );
     });
   }
@@ -35,11 +33,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.favorite_rounded,
-              color: Colors.purpleAccent,
-              size: 90,
-            ),
+            Icon(Icons.favorite_rounded, color: Colors.purpleAccent, size: 90),
             SizedBox(height: 25),
             Text(
               "NearMeU",
@@ -55,10 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Text(
                 "Private and safe nearby chatting and dating app",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
             ),
           ],

@@ -32,12 +32,12 @@ class SuspensionService {
         return Stream<AppUser?>.value(null);
       }
 
-      return _firestore.collection('users').doc(user.uid).snapshots().map(
-        (doc) {
-          if (!doc.exists || doc.data() == null) return null;
-          return AppUser.fromMap(doc.data()!, doc.id);
-        },
-      );
+      return _firestore.collection('users').doc(user.uid).snapshots().map((
+        doc,
+      ) {
+        if (!doc.exists || doc.data() == null) return null;
+        return AppUser.fromMap(doc.data()!, doc.id);
+      });
     });
   }
 

@@ -93,9 +93,7 @@ class TrustedReadService {
     final chats = <ChatPreviewModel>[];
     for (final rawChat in rawChats) {
       if (rawChat is! Map) continue;
-      final chat = ChatPreviewModel.fromMap(
-        Map<String, dynamic>.from(rawChat),
-      );
+      final chat = ChatPreviewModel.fromMap(Map<String, dynamic>.from(rawChat));
       if (chat.chatId.isEmpty || chat.otherUserId.isEmpty) continue;
       chats.add(chat);
     }

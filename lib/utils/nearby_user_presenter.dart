@@ -110,10 +110,7 @@ class NearbyUserPresenter {
     return 'Offline';
   }
 
-  static bool matchesCurrentPreference(
-    AppUser currentUser,
-    AppUser otherUser,
-  ) {
+  static bool matchesCurrentPreference(AppUser currentUser, AppUser otherUser) {
     return _preferenceMatches(currentUser.lookingFor, otherUser.gender);
   }
 

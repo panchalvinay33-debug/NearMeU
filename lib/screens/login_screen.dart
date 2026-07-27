@@ -92,11 +92,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       NotificationNavigationService.instance.setAppShellReady(false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login failed: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -134,10 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text(
                 'Private and safe nearby chatting and dating app',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
               const Spacer(),
               SizedBox(

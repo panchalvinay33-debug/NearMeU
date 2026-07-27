@@ -23,10 +23,7 @@ class ReportModel {
     this.reviewedAt,
   });
 
-  factory ReportModel.fromMap(
-    String id,
-    Map<String, dynamic> map,
-  ) {
+  factory ReportModel.fromMap(String id, Map<String, dynamic> map) {
     return ReportModel(
       id: id,
       reporterId: map['reporterId'] ?? '',
@@ -34,11 +31,9 @@ class ReportModel {
       reason: map['reason'] ?? '',
       description: map['description'] ?? '',
       status: map['status'] ?? 'pending',
-      createdAt:
-          (map['createdAt'] as Timestamp?)?.toDate(),
+      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
       reviewedBy: map['reviewedBy'],
-      reviewedAt:
-          (map['reviewedAt'] as Timestamp?)?.toDate(),
+      reviewedAt: (map['reviewedAt'] as Timestamp?)?.toDate(),
     );
   }
 

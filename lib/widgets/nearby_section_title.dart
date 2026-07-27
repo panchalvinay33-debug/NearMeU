@@ -17,11 +17,7 @@ class NearbySectionTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 6, 18, 10),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: AppColors.primary,
-            size: 20,
-          ),
+          Icon(icon, color: AppColors.primary, size: 20),
           const SizedBox(width: 8),
           Text(
             title,

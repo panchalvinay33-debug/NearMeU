@@ -10,6 +10,16 @@ service firebase.storage {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isAdmin() {
+      return signedIn()
+        && firestore.exists(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        )
+        && firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.isAdmin == true;
+    }
+
     function validProfilePhoto() {
       return request.resource != null
         && request.resource.size > 0
@@ -67,6 +77,37 @@ service firebase.storage {
             && request.resource.size <= 30 * 1024 * 1024
             && request.resource.contentType == 'video/mp4'
           )
+          || (
+            metadata.mediaType == 'voice'
+            && request.resource.size <= 8 * 1024 * 1024
+            && request.resource.contentType.matches('audio/(mp4|m4a|aac)')
+          )
+        );
+    }
+
+    function validAnnouncementMedia(announcementId) {
+      let metadata = request.resource.metadata;
+      return request.resource != null
+        && request.resource.size > 0
+        && request.resource.contentType is string
+        && metadata.adminId == request.auth.uid
+        && metadata.announcementId == announcementId
+        && (
+          (
+            metadata.mediaType == 'image'
+            && request.resource.size <= 5 * 1024 * 1024
+            && request.resource.contentType.matches('image/(jpeg|png|webp)')
+          )
+          || (
+            metadata.mediaType == 'video'
+            && request.resource.size <= 30 * 1024 * 1024
+            && request.resource.contentType == 'video/mp4'
+          )
+          || (
+            metadata.mediaType == 'voice'
+            && request.resource.size <= 8 * 1024 * 1024
+            && request.resource.contentType.matches('audio/(mp4|m4a|aac)')
+          )
         );
     }
 
@@ -82,6 +123,13 @@ service firebase.storage {
         && validPrivateChatMedia(senderId, chatId, messageId);
       allow update: if false;
       allow delete: if owns(senderId);
+    }
+
+    match /announcementMedia/{announcementId}/{fileName} {
+      allow read: if signedIn();
+      allow create: if isAdmin() && validAnnouncementMedia(announcementId);
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /{allPaths=**} {
