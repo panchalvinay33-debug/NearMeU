@@ -9,6 +9,7 @@ import '../theme/app_colors.dart';
 import '../widgets/unread_nav_icon.dart';
 import 'about_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'appearance_screen.dart';
 import 'blocked_users_screen.dart';
 import 'chats_screen.dart';
 import 'community_guidelines_screen.dart';
@@ -30,8 +31,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
-  final AccountDeletionService _accountDeletionService =
-      AccountDeletionService();
+  final AccountDeletionService _accountDeletionService = AccountDeletionService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? userData;
@@ -50,7 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) setState(() => isLoading = false);
       return;
     }
-
     try {
       final user = await _userService.getUser(uid);
       if (!mounted) return;
@@ -59,26 +58,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         isLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> _open(Widget screen, {bool reloadUser = false}) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-    if (!mounted) return;
-    if (reloadUser) await _loadUser();
+    if (mounted && reloadUser) await _loadUser();
   }
 
   Future<void> _logout() async {
     await _authService.logout();
-    if (!mounted) return;
-    _goToLogin();
+    if (mounted) _goToLogin();
   }
 
   Future<void> _deleteAccount() async {
     if (isDeletingAccount) return;
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -87,16 +82,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'You will be asked to verify your Google account first. After verification, NearMeU will permanently delete your profile, private account data, and your copy of shared conversations. This cannot be undone.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Verify & Delete',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            child: const Text('Verify & Delete', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -106,26 +95,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => isDeletingAccount = true);
     try {
       await _accountDeletionService.deleteCurrentAccount();
-      if (!mounted) return;
-      _goToLogin();
+      if (mounted) _goToLogin();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() => isDeletingAccount = false);
       final message = error.code == 'reauthentication-cancelled'
           ? 'Account deletion was cancelled. No account data was removed.'
           : 'Could not verify and delete the account. Please retry.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       setState(() => isDeletingAccount = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not finish account deletion. Please retry or contact support.',
-          ),
-        ),
+        const SnackBar(content: Text('Could not finish account deletion. Please retry or contact support.')),
       );
     }
   }
@@ -141,34 +123,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final uid = currentUser?.uid ?? '';
+    final theme = Theme.of(context);
     if (uid.isEmpty) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: Text('User not logged in')),
-      );
+      return const Scaffold(body: Center(child: Text('User not logged in')));
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-        ),
+        title: Text('Settings', style: theme.textTheme.headlineMedium),
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                32 + MediaQuery.paddingOf(context).bottom,
-              ),
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 32 + MediaQuery.paddingOf(context).bottom),
               children: [
                 _ProfileCard(user: userData),
                 const SizedBox(height: 26),
@@ -179,8 +146,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.person_outline_rounded,
                       title: 'Edit Profile',
                       subtitle: 'Update your profile info',
-                      onTap: () =>
-                          _open(const EditProfileScreen(), reloadUser: true),
+                      onTap: () => _open(const EditProfileScreen(), reloadUser: true),
+                    ),
+                  ],
+                ),
+                _Section(
+                  title: 'Appearance',
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.palette_outlined,
+                      title: 'Theme',
+                      subtitle: 'System default, light or dark',
+                      onTap: () => _open(const AppearanceScreen()),
                     ),
                   ],
                 ),
@@ -215,46 +192,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: Colors.amber,
                         title: 'Admin Panel',
                         subtitle: 'Manage users and view app overview',
-                        onTap: () => _open(
-                          const AdminDashboardScreen(),
-                          reloadUser: true,
-                        ),
+                        onTap: () => _open(const AdminDashboardScreen(), reloadUser: true),
                       ),
                     ],
                   ),
                 _Section(
                   title: 'Support & Legal',
                   children: [
-                    _SettingsTile(
-                      icon: Icons.info_outline_rounded,
-                      title: 'About NearMeU',
-                      subtitle: 'App version and information',
-                      onTap: () => _open(const AboutScreen()),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.privacy_tip_outlined,
-                      title: 'Privacy Policy',
-                      subtitle: 'Read how we protect your data',
-                      onTap: () => _open(const PrivacyPolicyScreen()),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.description_outlined,
-                      title: 'Terms & Conditions',
-                      subtitle: 'Application terms of use',
-                      onTap: () => _open(const TermsScreen()),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.groups_outlined,
-                      title: 'Community Guidelines',
-                      subtitle: 'Keep NearMeU safe for everyone',
-                      onTap: () => _open(const CommunityGuidelinesScreen()),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.support_agent_rounded,
-                      title: 'Help & Support',
-                      subtitle: 'FAQ and contact support',
-                      onTap: () => _open(const HelpSupportScreen()),
-                    ),
+                    _SettingsTile(icon: Icons.info_outline_rounded, title: 'About NearMeU', subtitle: 'App version and information', onTap: () => _open(const AboutScreen())),
+                    _SettingsTile(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', subtitle: 'Read how we protect your data', onTap: () => _open(const PrivacyPolicyScreen())),
+                    _SettingsTile(icon: Icons.description_outlined, title: 'Terms & Conditions', subtitle: 'Application terms of use', onTap: () => _open(const TermsScreen())),
+                    _SettingsTile(icon: Icons.groups_outlined, title: 'Community Guidelines', subtitle: 'Keep NearMeU safe for everyone', onTap: () => _open(const CommunityGuidelinesScreen())),
+                    _SettingsTile(icon: Icons.support_agent_rounded, title: 'Help & Support', subtitle: 'FAQ and contact support', onTap: () => _open(const HelpSupportScreen())),
                   ],
                 ),
                 _Section(
@@ -271,9 +220,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsTile(
                       icon: Icons.delete_forever_rounded,
                       iconColor: Colors.redAccent,
-                      title: isDeletingAccount
-                          ? 'Verifying & deleting…'
-                          : 'Delete Account',
+                      title: isDeletingAccount ? 'Verifying & deleting…' : 'Delete Account',
                       subtitle: 'Verify first, then permanently delete',
                       titleColor: Colors.redAccent,
                       onTap: isDeletingAccount ? null : _deleteAccount,
@@ -283,38 +230,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.grey,
         currentIndex: 2,
         onTap: isDeletingAccount
             ? null
             : (index) {
                 if (index == 0) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NearbyScreen()),
-                  );
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NearbyScreen()));
                 } else if (index == 1) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ChatsScreen()),
-                  );
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ChatsScreen()));
                 }
               },
         items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on),
-            label: 'Nearby',
-          ),
-          BottomNavigationBarItem(
-            icon: UnreadNavIcon(userId: uid, icon: Icons.chat_bubble_outline),
-            label: 'Chats',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Nearby'),
+          BottomNavigationBarItem(icon: UnreadNavIcon(userId: uid, icon: Icons.chat_bubble_outline), label: 'Chats'),
+          const BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );
@@ -323,98 +252,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({required this.user});
-
   final AppUser? user;
 
   @override
   Widget build(BuildContext context) {
-    final nickname = user?.nickname.trim().isNotEmpty == true
-        ? user!.nickname.trim()
-        : 'NearMeU User';
-    final gender = user?.gender.trim().isNotEmpty == true
-        ? user!.gender
-        : 'Not set';
-    final lookingFor = user?.lookingFor.trim().isNotEmpty == true
-        ? user!.lookingFor
-        : 'Not set';
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final nickname = user?.nickname.trim().isNotEmpty == true ? user!.nickname.trim() : 'NearMeU User';
+    final gender = user?.gender.trim().isNotEmpty == true ? user!.gender : 'Not set';
+    final lookingFor = user?.lookingFor.trim().isNotEmpty == true ? user!.lookingFor : 'Not set';
     final photoUrl = user?.photoUrl?.trim();
     final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
 
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF24143B), Color(0xFF151821)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: AppColors.primary,
-            foregroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
-            onForegroundImageError: hasPhoto ? (_, __) {} : null,
-            child: Text(
-              nickname.substring(0, 1).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 34,
+              backgroundColor: AppColors.primary,
+              foregroundImage: hasPhoto ? NetworkImage(photoUrl) : null,
+              onForegroundImageError: hasPhoto ? (_, __) {} : null,
+              child: Text(nickname.substring(0, 1).toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Flexible(child: Text(nickname, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleLarge)),
+                    if (user?.isAdmin == true) const Padding(padding: EdgeInsets.only(left: 8), child: Icon(Icons.admin_panel_settings_rounded, color: Colors.amber, size: 20)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text('${user?.age ?? 0} yrs • $gender', style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 4),
+                  Text('Looking for $lookingFor', style: theme.textTheme.bodyMedium),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        nickname,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    if (user?.isAdmin == true) ...[
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.admin_panel_settings_rounded,
-                        color: Colors.amber,
-                        size: 20,
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${user?.age ?? 0} yrs • $gender',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Looking for $lookingFor',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+            Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -422,7 +302,6 @@ class _ProfileCard extends StatelessWidget {
 
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.children});
-
   final String title;
   final List<Widget> children;
 
@@ -435,14 +314,7 @@ class _Section extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(left: 6, bottom: 10),
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            child: Text(title, style: Theme.of(context).textTheme.titleMedium),
           ),
           ...children,
         ],
@@ -457,45 +329,29 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.iconColor = AppColors.primary,
-    this.titleColor = Colors.white,
+    this.iconColor,
+    this.titleColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
-  final Color iconColor;
-  final Color titleColor;
+  final Color? iconColor;
+  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF171717),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: .07)),
-      ),
       child: ListTile(
         minVerticalPadding: 17,
-        leading: Icon(icon, color: iconColor),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: titleColor,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(color: AppColors.textSecondary, height: 1.35),
-        ),
-        trailing: const Icon(
-          Icons.chevron_right_rounded,
-          color: Colors.white54,
-        ),
+        leading: Icon(icon, color: iconColor ?? scheme.primary),
+        title: Text(title, style: theme.textTheme.titleMedium?.copyWith(color: titleColor)),
+        subtitle: Text(subtitle, style: theme.textTheme.bodyMedium),
+        trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
         onTap: onTap,
       ),
     );
