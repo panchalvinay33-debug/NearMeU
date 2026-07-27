@@ -1,25 +1,39 @@
 import 'package:flutter/material.dart';
-import 'screens/auth_gate_screen.dart';
 
-class NearMeUApp extends StatelessWidget {
+import 'screens/auth_gate_screen.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
+
+class NearMeUApp extends StatefulWidget {
   const NearMeUApp({super.key});
 
   @override
+  State<NearMeUApp> createState() => _NearMeUAppState();
+}
+
+class _NearMeUAppState extends State<NearMeUApp> {
+  final ThemeController _themeController = ThemeController.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeController.load();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'NearMeU',
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0B0B0B),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8A2BE2),
-          brightness: Brightness.dark,
-        ),
-        fontFamily: 'Roboto',
-      ),
-      home: const AuthGateScreen(),
+    return AnimatedBuilder(
+      animation: _themeController,
+      builder: (context, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'NearMeU',
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: _themeController.themeMode,
+          home: const AuthGateScreen(),
+        );
+      },
     );
   }
 }
