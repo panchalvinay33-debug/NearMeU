@@ -6,6 +6,7 @@ This is the canonical map for understanding, operating, testing, releasing, and 
 
 - [`final/NEARMEU_FINAL_BASELINE.md`](final/NEARMEU_FINAL_BASELINE.md) — approved non-calling V1 scope and completion status.
 - [`final/ROADMAP_AND_RELEASE_PLAN.md`](final/ROADMAP_AND_RELEASE_PLAN.md) — remaining deployment, testing, and Play Store steps.
+- [`final/PRE_TEST_READINESS.md`](final/PRE_TEST_READINESS.md) — mandatory gate and guarded commands before physical testing begins.
 - [`final/BACKUP_AND_RECOVERY_PLAN.md`](final/BACKUP_AND_RECOVERY_PLAN.md) — backup retention, restore flow, and ownership requirements.
 - [`../config/project_state_manifest.json`](../config/project_state_manifest.json) — machine-readable project status for tools and automation.
 
@@ -26,6 +27,7 @@ This is the canonical map for understanding, operating, testing, releasing, and 
 
 ## 4. Testing
 
+- [`final/PRE_TEST_READINESS.md`](final/PRE_TEST_READINESS.md) — deployment/tooling gate that must pass before device testing.
 - [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical physical-phone smoke test.
 - [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — debug APK, App Check token, and two-device testing.
 - [`REALTIME_STABILITY_TEST_PLAN.md`](REALTIME_STABILITY_TEST_PLAN.md) — presence, notifications, Nearby, and unread validation.
@@ -57,6 +59,19 @@ Canonical records:
 
 - `systemProjectState/current`
 - `systemProjectStateHistory/non-calling-final-baseline`
+
+## 8. Guarded operational commands
+
+```powershell
+# Readiness only; no production changes
+powershell -ExecutionPolicy Bypass -File .\tooling\pre_test_readiness.ps1
+
+# Show exact Firebase deployment plan; no production changes
+powershell -ExecutionPolicy Bypass -File .\tooling\deploy_firebase_production.ps1
+
+# Deploy only after owner confirmation
+powershell -ExecutionPolicy Bypass -File .\tooling\deploy_firebase_production.ps1 -Apply
+```
 
 ## Document precedence
 
