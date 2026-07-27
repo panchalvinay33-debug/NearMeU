@@ -37,6 +37,40 @@ function buildChatNotification({ chatId }) {
   };
 }
 
+function cleanText(value, fallback, maximumLength) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return fallback;
+  return text.slice(0, maximumLength);
+}
+
+function buildAnnouncementNotification({
+  announcementId,
+  title,
+  message,
+  priority,
+}) {
+  const urgent = priority === "urgent";
+  return {
+    notification: {
+      title: cleanText(title, "NearMeU Update", 80),
+      body: cleanText(message, "A new official announcement is available.", 180),
+    },
+    data: {
+      type: "support_announcement",
+      announcementId: String(announcementId),
+    },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "nearmeu_notifications",
+        sound: "default",
+        visibility: "private",
+        ...(urgent ? { priority: "max" } : {}),
+      },
+    },
+  };
+}
+
 function invalidTokenIndexes(responses) {
   const indexes = [];
   responses.forEach((response, index) => {
@@ -47,6 +81,7 @@ function invalidTokenIndexes(responses) {
 }
 
 module.exports = {
+  buildAnnouncementNotification,
   buildChatNotification,
   invalidTokenIndexes,
   sanitizePlatform,
