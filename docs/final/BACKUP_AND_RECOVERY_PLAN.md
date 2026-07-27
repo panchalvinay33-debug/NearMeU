@@ -4,6 +4,24 @@
 
 Protect source code, Firestore data, Firebase Storage media, Firebase configuration and Android signing material. A backup is considered valid only when restoration has been tested.
 
+## Current operational status — 2026-07-27
+
+Completed:
+
+- Source code is stored in GitHub and on the owner's PC.
+- Firebase Hosting, Firestore rules/indexes, Storage rules and Cloud Functions have been deployed to `nearmeu-e82c7`.
+- Public legal/support pages are live.
+- The exact deployment record is stored in `docs/final/PRODUCTION_DEPLOYMENT_RECORD_2026-07-27.md`.
+- Firebase project mapping is versioned in `.firebaserc`.
+
+Still required before public launch:
+
+- Merge the release-readiness branch into `main` and create a protected release tag.
+- Create a private Firestore export bucket and perform the first verified export.
+- Configure Storage backup/versioning or an equivalent controlled copy process.
+- Create the Android release keystore and store encrypted copies in two secure locations.
+- Test restoration into a staging project.
+
 ## 1. Source-code backup
 
 Primary copy:
@@ -19,10 +37,10 @@ Additional copies:
 Recommended release freeze:
 
 ```bash
-git checkout fix/release-test-hardening-v1
+git checkout main
 git pull --ff-only
-git tag -a nearmeu-noncalling-baseline-2026-07-27 -m "NearMeU non-calling final baseline"
-git push origin nearmeu-noncalling-baseline-2026-07-27
+git tag -a nearmeu-pretest-production-baseline-2026-07-27 -m "NearMeU pre-test production baseline"
+git push origin nearmeu-pretest-production-baseline-2026-07-27
 ```
 
 Do not store service-account keys, keystores, passwords or `.env` secrets in Git.
@@ -109,6 +127,7 @@ Keep versioned copies of:
 - Android manifest/Gradle configuration
 - Public policy text
 - Play Console declarations and release notes as private operational records
+- Dated production deployment records under `docs/final/`
 
 Remote Console-only settings must be documented after every production change.
 
@@ -168,10 +187,11 @@ Run at least monthly and before public launch:
 - [ ] Restore into staging succeeds.
 - [ ] Sample users, chats, messages and announcements are correct.
 - [ ] Private media remains private after restore.
-- [ ] Rules and indexes deploy cleanly.
+- [x] Rules and indexes deploy cleanly.
 - [ ] Signing-key encrypted backup is accessible to the owner.
 - [ ] Recovery contacts and access permissions are current.
 - [ ] Backup cost and retention are within budget.
+- [x] Production deployment record is committed with the source.
 
 ## 9. Recovery point and recovery time targets
 
