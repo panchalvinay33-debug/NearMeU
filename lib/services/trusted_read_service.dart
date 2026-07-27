@@ -67,13 +67,18 @@ class TrustedReadService {
 
       final memoryChats = _memoryChatCache[uid];
       if (memoryChats != null && memoryChats.isNotEmpty) {
-        return List<ChatPreviewModel>.unmodifiable(memoryChats);
+        return List<ChatPreviewModel>.unmodifiable(
+          memoryChats.where(_hasStartedConversation),
+        );
       }
 
       final cachedChats = await _previewCache.loadChatPreviews(uid);
-      if (cachedChats.isNotEmpty) {
-        _memoryChatCache[uid] = cachedChats;
-        return cachedChats;
+      final startedCachedChats = cachedChats
+          .where(_hasStartedConversation)
+          .toList(growable: false);
+      if (startedCachedChats.isNotEmpty) {
+        _memoryChatCache[uid] = startedCachedChats;
+        return startedCachedChats;
       }
     }
 
@@ -86,6 +91,10 @@ class TrustedReadService {
     return const <ChatPreviewModel>[];
   }
 
+  static bool _hasStartedConversation(ChatPreviewModel chat) {
+    return chat.lastMessageTime != null || chat.lastMessage.trim().isNotEmpty;
+  }
+
   List<ChatPreviewModel> _parseChatPreviews(Map<String, dynamic> payload) {
     final rawChats = payload['chats'];
     if (rawChats is! List) return const <ChatPreviewModel>[];
@@ -95,6 +104,7 @@ class TrustedReadService {
       if (rawChat is! Map) continue;
       final chat = ChatPreviewModel.fromMap(Map<String, dynamic>.from(rawChat));
       if (chat.chatId.isEmpty || chat.otherUserId.isEmpty) continue;
+      if (!_hasStartedConversation(chat)) continue;
       chats.add(chat);
     }
     _sortChats(chats);
@@ -123,6 +133,13 @@ class TrustedReadService {
       if (rawParticipants is! List) continue;
       final participants = rawParticipants.whereType<String>().toList();
       if (participants.length != 2 || !participants.contains(uid)) continue;
+
+      final lastMessage = data['lastMessage'];
+      final lastMessageTime = data['lastMessageTime'];
+      final hasStartedConversation =
+          (lastMessage is String && lastMessage.trim().isNotEmpty) ||
+          lastMessageTime is Timestamp;
+      if (!hasStartedConversation) continue;
 
       final otherUserId = participants.firstWhere(
         (participant) => participant != uid,
@@ -156,7 +173,6 @@ class TrustedReadService {
       final currentReadState = readStates[uid] is Map
           ? Map<String, dynamic>.from(readStates[uid] as Map)
           : const <String, dynamic>{};
-      final lastMessageTime = data['lastMessageTime'];
 
       chats.add(
         ChatPreviewModel(
@@ -168,9 +184,7 @@ class TrustedReadService {
           otherUserPhotoUrl: otherData['photoUrl'] is String
               ? otherData['photoUrl'] as String
               : null,
-          lastMessage: data['lastMessage'] is String
-              ? data['lastMessage'] as String
-              : '',
+          lastMessage: lastMessage is String ? lastMessage : '',
           lastMessageTime: lastMessageTime is Timestamp
               ? lastMessageTime.toDate()
               : null,
@@ -203,7 +217,10 @@ class TrustedReadService {
     String uid,
     List<ChatPreviewModel> chats,
   ) async {
-    final immutable = List<ChatPreviewModel>.unmodifiable(chats);
+    final startedChats = chats
+        .where(_hasStartedConversation)
+        .toList(growable: false);
+    final immutable = List<ChatPreviewModel>.unmodifiable(startedChats);
     _memoryChatCache[uid] = immutable;
     await _previewCache.saveChatPreviews(uid, immutable);
   }
