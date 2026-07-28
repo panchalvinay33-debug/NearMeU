@@ -33,6 +33,8 @@ Status: active audit on `audit/production-readiness`
 - Account deletion performs trusted backend deletion before best-effort local cache removal and session cleanup.
 - Device tokens are registered and unregistered through trusted callable functions; local FCM tokens are revoked on logout.
 - Flutter analysis/tests, Functions tests and Firestore/Storage emulator rules tests are enforced in CI.
+- Changed Dart files now use formatter exit enforcement, so formatting drift fails CI.
+- PR workflow concurrency is keyed by PR identity so newer commits cleanly supersede older runs.
 
 ## Findings requiring operational verification
 
@@ -55,6 +57,7 @@ These cannot be proven from GitHub source alone and must be checked in the owner
 - Chat preview has a direct Firestore fallback after trusted callable failure. Its safety depends on deployed Firestore rules remaining aligned with the tested repository rules. Production should prefer the callable path and treat fallback behavior as degraded mode.
 - Nearby candidates deliberately do not use a Firestore fallback; this avoids exposing broader location/profile queries when the trusted backend is unavailable.
 - Developer logs contain exception objects and stack traces but no deliberate message body, media bytes, token value or user profile payload in the reviewed paths. Release telemetry remains governed by the telemetry policy.
+- Media confirmation distinguishes definitive rejection from uncertain network state, preserving an outbox record when backend completion cannot be proven.
 
 ## Merge gate
 
