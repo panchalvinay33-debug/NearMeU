@@ -55,6 +55,10 @@ jobs:
             -alias androiddebugkey \
             -keypass android | tee debug-signing-certificate.txt
           grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C8:88:18" debug-signing-certificate.txt
+          echo "NEARMEU_DEBUG_KEYSTORE_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo "NEARMEU_DEBUG_KEYSTORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "NEARMEU_DEBUG_KEY_ALIAS=androiddebugkey" >> "$GITHUB_ENV"
+          echo "NEARMEU_DEBUG_KEY_PASSWORD=android" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: flutter pub get
@@ -62,7 +66,7 @@ jobs:
       - name: Build signed debug APK
         run: flutter build apk --debug
 
-      - name: Verify APK signature
+      - name: Verify APK signer and signature
         shell: bash
         run: |
           set -euo pipefail
@@ -72,6 +76,7 @@ jobs:
             exit 1
           fi
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
+          grep -iF "V2 Signer: certificate SHA-1 digest: 939948bc6f537d7802fd1c7a91f247d57ac88818" apk-signing-certificate.txt
 
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v4
@@ -91,4 +96,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Signature validity is enforced by apksigner; keystore SHA-1 is verified separately.
+# CI forces the verified uploaded debug keystore into Gradle and checks the APK signer SHA-1.
