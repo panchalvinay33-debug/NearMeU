@@ -1,0 +1,88 @@
+name: NearMeU signed debug APK v5
+
+on:
+  push:
+    branches:
+      - ops/pre-test-readiness-v1
+    paths:
+      - '.github/workflows/signed-debug-apk-v5.yml'
+      - 'android/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-signed-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install stable debug signing keystore
+        shell: bash
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.NEARMEU_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEBUG_KEYSTORE_BASE64" ]]; then
+            echo "Missing repository secret: NEARMEU_DEBUG_KEYSTORE_BASE64"
+            exit 1
+          fi
+          mkdir -p "$HOME/.android"
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
+          keytool -list -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android | tee debug-signing-certificate.txt
+          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C6:88:18" debug-signing-certificate.txt
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build signed debug APK
+        run: flutter build apk --debug
+
+      - name: Verify APK signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
+          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C6:88:18" apk-signing-certificate.txt
+
+      - name: Upload signed debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-signed-debug-apk-v5-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload signing certificate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-debug-signing-certificate-v5-${{ github.sha }}
+          path: |
+            debug-signing-certificate.txt
+            apk-signing-certificate.txt
+          if-no-files-found: error
+          retention-days: 14
