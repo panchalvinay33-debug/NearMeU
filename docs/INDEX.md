@@ -17,6 +17,7 @@ This is the canonical map for understanding, operating, testing, releasing, and 
 
 ## 3. Security and Firebase
 
+- [`PRODUCTION_READINESS_AUDIT.md`](PRODUCTION_READINESS_AUDIT.md) — current source-level audit findings, confirmed safeguards, external blockers, and merge gates.
 - [`APP_CHECK_ROLLOUT.md`](APP_CHECK_ROLLOUT.md) — App Check debug and Play Integrity rollout.
 - [`OBSERVABILITY_ROLLOUT.md`](OBSERVABILITY_ROLLOUT.md) — privacy-safe Crashlytics, Analytics, and Performance rollout.
 - [`../firestore.rules`](../firestore.rules) — authoritative Firestore client-access policy.
