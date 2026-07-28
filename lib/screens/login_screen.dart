@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../security/suspension_service.dart';
+import '../services/auth_error_message.dart';
 import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/user_service.dart';
@@ -89,12 +90,14 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (error, stackTrace) {
       NotificationNavigationService.instance.setAppShellReady(false);
+      debugPrint('Google sign-in failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(authErrorMessage(error))),
+      );
     } finally {
       if (mounted) {
         setState(() {
