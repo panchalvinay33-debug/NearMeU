@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,13 +17,15 @@ class _AppVersionGateState extends State<AppVersionGate> {
   final AppVersionService _service = AppVersionService();
   AppVersionPolicy? _policy;
   Object? _error;
-  bool _loading = true;
+  bool _loading = kReleaseMode;
   bool _openingUpdate = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    if (kReleaseMode) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -54,7 +57,8 @@ class _AppVersionGateState extends State<AppVersionGate> {
     setState(() => _openingUpdate = true);
     try {
       final uri = Uri.tryParse(policy.updateUrl);
-      if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('Could not open the update link.');
       }
     } catch (_) {
@@ -73,6 +77,11 @@ class _AppVersionGateState extends State<AppVersionGate> {
 
   @override
   Widget build(BuildContext context) {
+    // Debug/profile builds are for local testing. They must not be blocked by
+    // App Check or remote version-policy failures. Production release builds
+    // still enforce the server-backed version gate.
+    if (!kReleaseMode) return widget.child;
+
     if (_loading) {
       return const Scaffold(
         backgroundColor: Color(0xff0B0B0B),
@@ -110,8 +119,10 @@ class _AppVersionGateState extends State<AppVersionGate> {
           title: 'Update NearMeU to continue',
           message:
               '${policy.message}\n\nInstalled: ${policy.installedVersionName} (${policy.installedVersionCode})\nRequired: ${policy.latestVersionName} (${policy.minimumSupportedVersionCode})',
-          buttonLabel: _openingUpdate ? 'Opening update…' : 'Update latest version',
-          onPressed: policy.updateUrl.isEmpty || _openingUpdate ? null : _openUpdate,
+          buttonLabel:
+              _openingUpdate ? 'Opening update…' : 'Update latest version',
+          onPressed:
+              policy.updateUrl.isEmpty || _openingUpdate ? null : _openUpdate,
           secondaryLabel: 'I updated the app',
           onSecondaryPressed: _load,
         ),
