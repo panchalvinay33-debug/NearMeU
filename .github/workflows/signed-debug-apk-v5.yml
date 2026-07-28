@@ -66,8 +66,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
-          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C8:88:18" apk-signing-certificate.txt
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "apksigner not found"
+            exit 1
+          fi
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
+          tr -d ':' < apk-signing-certificate.txt | grep -iF "939948BC6F537D7802FD1C7A91F247D57AC88818"
 
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v4
@@ -87,4 +92,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Corrected to the verified uploaded keystore SHA-1.
+# Verify Android APK signatures with apksigner, not keytool jar verification.
