@@ -20,22 +20,51 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: kReleaseMode
-        ? AndroidProvider.playIntegrity
-        : AndroidProvider.debug,
-  );
 
   final observability = ObservabilityService.instance;
   await observability.initialize();
   observability.installGlobalErrorHandlers();
 
-  await observability.trace('startup_services', () async {
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    NotificationNavigationService.instance.attachNavigatorKey(rootNavigatorKey);
-    await NotificationService.instance.initialize();
-  });
-  await observability.logEvent('app_services_ready');
+  var appCheckReady = false;
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kReleaseMode
+          ? AndroidProvider.playIntegrity
+          : AndroidProvider.debug,
+    );
+    appCheckReady = true;
+  } catch (error, stackTrace) {
+    await observability.recordNonFatal(
+      error,
+      stackTrace,
+      reason: 'app_check_activation_failed',
+    );
+  }
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  NotificationNavigationService.instance.attachNavigatorKey(rootNavigatorKey);
+
+  var notificationsReady = false;
+  try {
+    await observability.trace('startup_notifications', () async {
+      await NotificationService.instance.initialize();
+    });
+    notificationsReady = true;
+  } catch (error, stackTrace) {
+    await observability.recordNonFatal(
+      error,
+      stackTrace,
+      reason: 'notification_initialization_failed',
+    );
+  }
+
+  await observability.logEvent(
+    'app_services_ready',
+    parameters: <String, Object>{
+      'app_check_ready': appCheckReady ? 1 : 0,
+      'notifications_ready': notificationsReady ? 1 : 0,
+    },
+  );
 
   runApp(const NearMeUApp());
 }
