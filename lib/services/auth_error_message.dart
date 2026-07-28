@@ -21,7 +21,8 @@ String authErrorMessage(Object error) {
   }
 
   if (error is PlatformException) {
-    final details = '${error.code} ${error.message ?? ''} ${error.details ?? ''}';
+    final details =
+        '${error.code} ${error.message ?? ''} ${error.details ?? ''}';
     final isDeveloperConfigurationError =
         details.contains('ApiException: 10') ||
         details.contains('DEVELOPER_ERROR');
