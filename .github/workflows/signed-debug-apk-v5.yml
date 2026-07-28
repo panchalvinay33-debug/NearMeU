@@ -54,7 +54,7 @@ jobs:
             -storepass android \
             -alias androiddebugkey \
             -keypass android | tee debug-signing-certificate.txt
-          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C6:88:18" debug-signing-certificate.txt
+          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C8:88:18" debug-signing-certificate.txt
 
       - name: Install dependencies
         run: flutter pub get
@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           keytool -printcert -jarfile build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
-          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C6:88:18" apk-signing-certificate.txt
+          grep -F "SHA1: 93:99:48:BC:6F:53:7D:78:02:FD:1C:7A:91:F2:47:D5:7A:C8:88:18" apk-signing-certificate.txt
 
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v4
@@ -87,4 +87,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Triggered after signing secret setup.
+# Corrected to the verified uploaded keystore SHA-1.
