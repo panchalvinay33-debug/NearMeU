@@ -22,8 +22,10 @@ String authErrorMessage(Object error) {
 
   if (error is PlatformException) {
     final details = '${error.code} ${error.message ?? ''} ${error.details ?? ''}';
-    if (error.code == 'sign_in_failed' &&
-        (details.contains('ApiException: 10') || details.contains('DEVELOPER_ERROR'))) {
+    final isDeveloperConfigurationError =
+        details.contains('ApiException: 10') ||
+        details.contains('DEVELOPER_ERROR');
+    if (error.code == 'sign_in_failed' && isDeveloperConfigurationError) {
       return 'Google sign-in is temporarily unavailable for this app build. '
           'Please install the latest verified version.';
     }
