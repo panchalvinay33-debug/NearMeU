@@ -1,5 +1,6 @@
 package com.nearmeu.nearmeu
 
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -9,11 +10,14 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val screenSecurityChannel = "com.nearmeu.nearmeu/screen_security"
 
+    private val isDebuggable: Boolean
+        get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Debug/testing builds must allow screenshots for issue reporting.
         // Production release builds remain secure by default.
-        setScreenCaptureBlocked(!BuildConfig.DEBUG)
+        setScreenCaptureBlocked(!isDebuggable)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -25,7 +29,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "setScreenCaptureBlocked" -> {
                     val requestedBlocked = call.argument<Boolean>("blocked") ?: true
-                    val blocked = if (BuildConfig.DEBUG) false else requestedBlocked
+                    val blocked = if (isDebuggable) false else requestedBlocked
                     runOnUiThread { setScreenCaptureBlocked(blocked) }
                     result.success(null)
                 }
