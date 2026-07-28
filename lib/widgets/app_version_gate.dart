@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,6 +19,7 @@ class _AppVersionGateState extends State<AppVersionGate> {
   Object? _error;
   bool _loading = true;
   bool _openingUpdate = false;
+  bool _allowDebugFallback = false;
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _AppVersionGateState extends State<AppVersionGate> {
       setState(() {
         _loading = true;
         _error = null;
+        _allowDebugFallback = false;
       });
     }
     try {
@@ -39,11 +42,14 @@ class _AppVersionGateState extends State<AppVersionGate> {
         _policy = policy;
         _loading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('App version policy check failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
       setState(() {
         _error = error;
         _loading = false;
+        _allowDebugFallback = !kReleaseMode;
       });
     }
   }
@@ -54,7 +60,8 @@ class _AppVersionGateState extends State<AppVersionGate> {
     setState(() => _openingUpdate = true);
     try {
       final uri = Uri.tryParse(policy.updateUrl);
-      if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
         throw StateError('Could not open the update link.');
       }
     } catch (_) {
@@ -78,6 +85,10 @@ class _AppVersionGateState extends State<AppVersionGate> {
         backgroundColor: Color(0xff0B0B0B),
         body: Center(child: CircularProgressIndicator()),
       );
+    }
+
+    if (_allowDebugFallback) {
+      return widget.child;
     }
 
     if (_error != null || _policy == null) {
@@ -110,8 +121,10 @@ class _AppVersionGateState extends State<AppVersionGate> {
           title: 'Update NearMeU to continue',
           message:
               '${policy.message}\n\nInstalled: ${policy.installedVersionName} (${policy.installedVersionCode})\nRequired: ${policy.latestVersionName} (${policy.minimumSupportedVersionCode})',
-          buttonLabel: _openingUpdate ? 'Opening update…' : 'Update latest version',
-          onPressed: policy.updateUrl.isEmpty || _openingUpdate ? null : _openUpdate,
+          buttonLabel:
+              _openingUpdate ? 'Opening update…' : 'Update latest version',
+          onPressed:
+              policy.updateUrl.isEmpty || _openingUpdate ? null : _openUpdate,
           secondaryLabel: 'I updated the app',
           onSecondaryPressed: _load,
         ),
