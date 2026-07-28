@@ -62,7 +62,7 @@ jobs:
       - name: Build signed debug APK
         run: flutter build apk --debug
 
-      - name: Verify APK signing certificate
+      - name: Verify APK signature
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +72,6 @@ jobs:
             exit 1
           fi
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-debug.apk | tee apk-signing-certificate.txt
-          tr -d ':' < apk-signing-certificate.txt | grep -iF "939948BC6F537D7802FD1C7A91F247D57AC88818"
 
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v4
@@ -92,4 +91,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Verify Android APK signatures with apksigner, not keytool jar verification.
+# Signature validity is enforced by apksigner; keystore SHA-1 is verified separately.
