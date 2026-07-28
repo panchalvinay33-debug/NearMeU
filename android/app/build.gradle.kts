@@ -22,6 +22,11 @@ val releaseTaskRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
 
+val ciDebugKeystorePath = System.getenv("NEARMEU_DEBUG_KEYSTORE_PATH")
+val ciDebugKeystorePassword = System.getenv("NEARMEU_DEBUG_KEYSTORE_PASSWORD") ?: "android"
+val ciDebugKeyAlias = System.getenv("NEARMEU_DEBUG_KEY_ALIAS") ?: "androiddebugkey"
+val ciDebugKeyPassword = System.getenv("NEARMEU_DEBUG_KEY_PASSWORD") ?: "android"
+
 android {
     namespace = "com.nearmeu.nearmeu"
     compileSdk = 36
@@ -46,6 +51,15 @@ android {
     }
 
     signingConfigs {
+        getByName("debug") {
+            if (!ciDebugKeystorePath.isNullOrBlank()) {
+                storeFile = file(ciDebugKeystorePath)
+                storePassword = ciDebugKeystorePassword
+                keyAlias = ciDebugKeyAlias
+                keyPassword = ciDebugKeyPassword
+            }
+        }
+
         if (hasReleaseSigning) {
             create("release") {
                 keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -57,6 +71,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+
         release {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
