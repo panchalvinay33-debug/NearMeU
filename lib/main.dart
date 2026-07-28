@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/auth_gate_screen.dart';
-import 'security/screen_capture_guard.dart';
 import 'security/suspension_guard.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
@@ -74,31 +73,29 @@ class NearMeUApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenCaptureGuard(
-      child: MaterialApp(
-        navigatorKey: rootNavigatorKey,
-        navigatorObservers: ObservabilityService.instance.navigatorObservers,
-        title: 'NearMeU',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark,
-        builder: (context, child) {
-          final mediaQuery = MediaQuery.of(context);
-          final textScaler = mediaQuery.textScaler.clamp(
-            minScaleFactor: 0.85,
-            maxScaleFactor: 1.30,
-          );
-          return MediaQuery(
-            data: mediaQuery.copyWith(textScaler: textScaler),
-            child: ScrollConfiguration(
-              behavior: const _NearMeUScrollBehavior(),
-              child: child ?? const SizedBox.shrink(),
-            ),
-          );
-        },
-        home: const AppVersionGate(
-          child: PresenceLifecycle(
-            child: SuspensionGuard(child: AuthGateScreen()),
+    return MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      navigatorObservers: ObservabilityService.instance.navigatorObservers,
+      title: 'NearMeU',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.dark,
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final textScaler = mediaQuery.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.30,
+        );
+        return MediaQuery(
+          data: mediaQuery.copyWith(textScaler: textScaler),
+          child: ScrollConfiguration(
+            behavior: const _NearMeUScrollBehavior(),
+            child: child ?? const SizedBox.shrink(),
           ),
+        );
+      },
+      home: const AppVersionGate(
+        child: PresenceLifecycle(
+          child: SuspensionGuard(child: AuthGateScreen()),
         ),
       ),
     );
