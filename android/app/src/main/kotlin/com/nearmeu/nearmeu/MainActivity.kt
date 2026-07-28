@@ -11,9 +11,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Secure by default. Flutter may remove this only after the signed-in
-        // account has been verified as an administrator.
-        setScreenCaptureBlocked(true)
+        // Debug/testing builds must allow screenshots for issue reporting.
+        // Production release builds remain secure by default.
+        setScreenCaptureBlocked(!BuildConfig.DEBUG)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -24,7 +24,8 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "setScreenCaptureBlocked" -> {
-                    val blocked = call.argument<Boolean>("blocked") ?: true
+                    val requestedBlocked = call.argument<Boolean>("blocked") ?: true
+                    val blocked = if (BuildConfig.DEBUG) false else requestedBlocked
                     runOnUiThread { setScreenCaptureBlocked(blocked) }
                     result.success(null)
                 }
