@@ -86,3 +86,5 @@ jobs:
             apk-signing-certificate.txt
           if-no-files-found: error
           retention-days: 14
+
+# Triggered after signing secret setup.
