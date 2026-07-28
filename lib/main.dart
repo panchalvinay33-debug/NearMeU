@@ -45,34 +45,37 @@ class NearMeUApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenCaptureGuard(
-      child: MaterialApp(
-        navigatorKey: rootNavigatorKey,
-        navigatorObservers: ObservabilityService.instance.navigatorObservers,
-        title: 'NearMeU',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark,
-        builder: (context, child) {
-          final mediaQuery = MediaQuery.of(context);
-          final textScaler = mediaQuery.textScaler.clamp(
-            minScaleFactor: 0.85,
-            maxScaleFactor: 1.30,
-          );
-          return MediaQuery(
-            data: mediaQuery.copyWith(textScaler: textScaler),
-            child: ScrollConfiguration(
-              behavior: const _NearMeUScrollBehavior(),
-              child: child ?? const SizedBox.shrink(),
-            ),
-          );
-        },
-        home: const AppVersionGate(
-          child: PresenceLifecycle(
-            child: SuspensionGuard(child: AuthGateScreen()),
+    final app = MaterialApp(
+      navigatorKey: rootNavigatorKey,
+      navigatorObservers: ObservabilityService.instance.navigatorObservers,
+      title: 'NearMeU',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.dark,
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final textScaler = mediaQuery.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.30,
+        );
+        return MediaQuery(
+          data: mediaQuery.copyWith(textScaler: textScaler),
+          child: ScrollConfiguration(
+            behavior: const _NearMeUScrollBehavior(),
+            child: child ?? const SizedBox.shrink(),
           ),
+        );
+      },
+      home: const AppVersionGate(
+        child: PresenceLifecycle(
+          child: SuspensionGuard(child: AuthGateScreen()),
         ),
       ),
     );
+
+    // Screenshots are intentionally allowed in debug/testing builds so
+    // testers can report visual and authentication issues. Production
+    // release builds remain protected by the native secure-screen guard.
+    return kReleaseMode ? ScreenCaptureGuard(child: app) : app;
   }
 }
 
