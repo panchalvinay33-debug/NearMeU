@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "300204283924-15k8p2pqmmkk7r44mn0tfapfokind1nm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nearmeu.nearmeu",
+            "certificate_hash": "7608c478ac37ea6e028a99178005630a88894afe"
+          }
+        },
+        {
           "client_id": "300204283924-vc28se16dufmnu6ttsbd5lcpojjdrn9g.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
