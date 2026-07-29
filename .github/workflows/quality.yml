@@ -17,7 +17,12 @@ jobs:
   flutter:
     name: Flutter checks
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -42,6 +47,40 @@ jobs:
 
       - name: Validate production release configuration
         run: bash tool/validate_release_config.sh
+
+      - name: Detect permanent Android signing
+        id: signing
+        shell: bash
+        run: |
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_STORE_PASSWORD" && -n "$ANDROID_KEY_PASSWORD" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore permanent Android signing
+        if: steps.signing.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/nearmeu-upload.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=nearmeu-upload.jks
+          EOF
+          chmod 600 android/app/nearmeu-upload.jks android/key.properties
+
+      - name: Verify permanent signing certificate
+        if: steps.signing.outputs.available == 'true'
+        shell: bash
+        run: |
+          keytool -list -v \
+            -keystore android/app/nearmeu-upload.jks \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            | grep -E 'SHA1:|SHA256:'
 
       - name: Upload resolved Flutter lockfile
         uses: actions/upload-artifact@v4
@@ -81,7 +120,7 @@ jobs:
       - name: Run Flutter tests
         run: flutter test
 
-      - name: Build debug APK
+      - name: Build installable debug APK
         shell: bash
         run: |
           set +e
@@ -98,6 +137,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Build permanently signed release APK
+        if: steps.signing.outputs.available == 'true'
+        run: flutter build apk --release
+
+      - name: Upload permanently signed release APK
+        if: steps.signing.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-signed-release-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload Android build diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
@@ -108,6 +160,7 @@ jobs:
           retention-days: 7
 
       - name: Verify unsigned release builds are refused
+        if: steps.signing.outputs.available != 'true'
         shell: bash
         run: |
           set +e
@@ -125,6 +178,11 @@ jobs:
             echo "Release build failed for an unexpected reason."
             exit 1
           fi
+
+      - name: Remove restored signing files
+        if: always() && steps.signing.outputs.available == 'true'
+        shell: bash
+        run: rm -f android/app/nearmeu-upload.jks android/key.properties
 
   functions:
     name: Cloud Functions checks
