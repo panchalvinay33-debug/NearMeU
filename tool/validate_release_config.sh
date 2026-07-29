@@ -19,6 +19,67 @@ grep -Fq 'versionName = flutter.versionName' android/app/build.gradle.kts \
 grep -Fq '"package_name": "com.nearmeu.nearmeu"' android/app/google-services.json \
   || fail "Firebase Android package does not match the applicationId."
 
+python3 - <<'PY'
+import json
+import re
+from pathlib import Path
+
+path = Path("android/app/google-services.json")
+try:
+    config = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Release configuration error: invalid google-services.json: {error}")
+
+clients = config.get("client") or []
+matching = [
+    client
+    for client in clients
+    if client.get("client_info", {})
+    .get("android_client_info", {})
+    .get("package_name")
+    == "com.nearmeu.nearmeu"
+]
+if len(matching) != 1:
+    raise SystemExit(
+        "Release configuration error: google-services.json must contain exactly "
+        "one NearMeU Android client."
+    )
+
+oauth_clients = matching[0].get("oauth_client") or []
+android_clients = [client for client in oauth_clients if client.get("client_type") == 1]
+web_clients = [client for client in oauth_clients if client.get("client_type") == 3]
+
+if not android_clients:
+    raise SystemExit(
+        "Release configuration error: Google Sign-In Android OAuth client is missing."
+    )
+if not web_clients:
+    raise SystemExit(
+        "Release configuration error: Google Sign-In web OAuth client is missing."
+    )
+
+sha1_pattern = re.compile(r"^[0-9a-fA-F]{40}$")
+for client in android_clients:
+    android_info = client.get("android_info") or {}
+    if android_info.get("package_name") != "com.nearmeu.nearmeu":
+        raise SystemExit(
+            "Release configuration error: Android OAuth package does not match NearMeU."
+        )
+    certificate_hash = str(android_info.get("certificate_hash") or "")
+    if not sha1_pattern.fullmatch(certificate_hash):
+        raise SystemExit(
+            "Release configuration error: Android OAuth certificate hash must be a "
+            "40-character SHA-1 value."
+        )
+
+for client in android_clients + web_clients:
+    client_id = str(client.get("client_id") or "")
+    if not client_id.endswith(".apps.googleusercontent.com"):
+        raise SystemExit(
+            "Release configuration error: malformed Google OAuth client ID."
+        )
+PY
+
 grep -Fq 'android:allowBackup="false"' android/app/src/main/AndroidManifest.xml \
   || fail "Android backups must be explicitly disabled."
 grep -Fq 'android:usesCleartextTraffic="false"' android/app/src/main/AndroidManifest.xml \
