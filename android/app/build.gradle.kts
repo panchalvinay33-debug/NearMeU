@@ -57,6 +57,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Trusted CI/local builds use the same permanent key so Android can
+            // install future debug updates without signature mismatches.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
