@@ -2,23 +2,39 @@
 
 NearMeU is an Android-first Flutter application for privacy-aware nearby discovery and private one-to-one messaging. The current product baseline intentionally ships **without voice/video calling, paid subscriptions, or iOS support**.
 
-> **Repository status:** this repository contains the complete non-calling V1 baseline, its Firebase backend, security rules, automated quality gates, release process, database-state manifest, backup plan, and remaining launch checklist.
+> **Verified repository status (2026-07-30):** the permanent-signed Android baseline builds successfully in CI and has been physically tested for installation, Google Sign-In, App Check debug registration and Nearby discovery. Start with the verified-state and recovery documents below before making changes.
 
 ## Start here
 
 | Need | Document |
 |---|---|
-| Understand the final product baseline | [`docs/final/NEARMEU_FINAL_BASELINE.md`](docs/final/NEARMEU_FINAL_BASELINE.md) |
+| See the exact working state, commit, CI run and signing identity | [`docs/final/CURRENT_VERIFIED_STATE.md`](docs/final/CURRENT_VERIFIED_STATE.md) |
+| Recover the last known-good application | [`docs/final/RECOVERY_PLAYBOOK.md`](docs/final/RECOVERY_PLAYBOOK.md) |
+| Understand rules for every future change | [`docs/final/CHANGE_CONTROL.md`](docs/final/CHANGE_CONTROL.md) |
+| Read the final lock, backup and architecture blueprint | [`FINAL_LOCK_BACKUP_BLUEPRINT.md`](FINAL_LOCK_BACKUP_BLUEPRINT.md) |
+| Understand the product baseline | [`docs/final/NEARMEU_FINAL_BASELINE.md`](docs/final/NEARMEU_FINAL_BASELINE.md) |
 | See what is complete and what remains | [`docs/final/ROADMAP_AND_RELEASE_PLAN.md`](docs/final/ROADMAP_AND_RELEASE_PLAN.md) |
 | Back up or recover production data | [`docs/final/BACKUP_AND_RECOVERY_PLAN.md`](docs/final/BACKUP_AND_RECOVERY_PLAN.md) |
 | Read the machine-readable project state | [`config/project_state_manifest.json`](config/project_state_manifest.json) |
 | Deploy Firebase safely | [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md) |
 | Test on physical Android phones | [`docs/ANDROID_PHONE_SMOKE_TEST.md`](docs/ANDROID_PHONE_SMOKE_TEST.md) |
-| Review all documentation by topic | [`docs/INDEX.md`](docs/INDEX.md) |
+| Review documentation by topic | [`docs/INDEX.md`](docs/INDEX.md) |
+| Review security and secret-handling rules | [`SECURITY.md`](SECURITY.md) |
+
+## Golden recovery point
+
+- Commit: `48a290c58a14a71174b921832e516b568b06ba48`
+- Stable branch: `stable/permanent-signed-2026-07-30`
+- Backup branch: `backup/pre-final-lock-2026-07-30`
+- Release branch: `release/permanent-signed-v1`
+- Android package: `com.nearmeu.nearmeu`
+- Permanent signing SHA-1: `7F:B6:4F:DB:90:B7:D1:27:57:5F:A4:F9:EE:69:2A:EC:BE:8E:7E:55`
+
+Do not delete or rewrite these recovery references until a newer release is physically verified and documented.
 
 ## Product scope
 
-### Included
+### Included and working in the current baseline
 
 - Firebase Authentication and adult-only onboarding
 - Public discovery profiles separated from owner-only private account data
@@ -26,22 +42,27 @@ NearMeU is an Android-first Flutter application for privacy-aware nearby discove
 - Presence, last-seen, unread counts, block/report/suspension controls
 - Private text, reply, emoji, photo, compressed video, and voice-message flows
 - Encrypted local-first chat storage and offline recovery
-- Seven-day cloud message/media retention with verified local preservation
+- Seven-day cloud message/media retention design with local preservation
 - Trusted Cloud Function sending, inbox reads, nearby reads, unsend, cleanup, and moderation
-- Privacy-safe private-chat push notifications
+- Privacy-safe private-chat push notification architecture
 - Official NearMeU Support announcements and announcement push routing
-- Screenshot protection, forced-update gate, App Check, Play Integrity, Crashlytics, Analytics, and Performance Monitoring
+- Firebase App Check debug testing, release Play Integrity configuration, Crashlytics, Analytics, and Performance Monitoring
 - Account deletion through a trusted backend with retry-safe cleanup
-- Firebase rules, indexes, Functions tests, Flutter tests, APK CI artifacts, and signed-AAB release safeguards
+- Firebase rules, indexes, Functions tests, Flutter tests, and permanently signed APK CI artifacts
 
-### Deliberately deferred
+### Deliberately deferred or operationally pending
 
 - Voice calling
 - Video calling
 - Paid plans or in-app purchases
 - iOS release
+- Play Store closed-testing and production rollout
+- Release App Check verification through Play Integrity
+- Full two-account/two-device acceptance matrix
+- Screenshot protection redesign (the previous broken wrapper was disabled)
+- Forced-update gate redesign (the previous broken startup gate was disabled)
 
-Deferred items are not partially enabled and must be introduced later as separately designed, costed, tested releases.
+Deferred items are not partially enabled and must be introduced later as separately designed, costed and tested releases.
 
 ## Architecture
 
@@ -96,7 +117,7 @@ Requirements:
 - Android SDK and Java version used by CI
 - Firebase CLI
 - Node.js 20 for Cloud Functions
-- A Firebase Android configuration for the intended project
+- Firebase Android configuration for project `nearmeu-e82c7`
 
 ```powershell
 cd F:\NearMeU
@@ -113,7 +134,7 @@ For a debug APK:
 flutter build apk --debug
 ```
 
-Debug builds use the Firebase App Check debug provider. Register the emitted debug token in Firebase before testing protected backend calls.
+Debug builds use the Firebase App Check debug provider. Register the generated debug token before testing protected backend calls. A reinstall or app-data reset may create a new token.
 
 ## Backend validation
 
@@ -127,7 +148,7 @@ npm ci
 firebase emulators:exec --only firestore,storage "npm run test:rules"
 ```
 
-GitHub Actions is the authoritative quality gate and validates formatting, analysis, Flutter tests, Functions tests, Firebase rules, debug APK creation, and refusal of unsigned production releases.
+GitHub Actions is the authoritative quality gate and validates formatting, analysis, Flutter tests, Functions tests, Firebase rules, permanent signing restoration/certificate verification, and signed debug/release APK creation.
 
 ## Firebase deployment
 
@@ -155,7 +176,7 @@ $env:NEARMEU_EXPECTED_FIREBASE_PROJECT_ID="nearmeu-e82c7"
 npm run project-state:store
 ```
 
-The write command creates/updates the controlled `systemProjectState` records. Run it only from a trusted admin environment.
+The write command creates or updates controlled `systemProjectState` records. Run it only from a trusted admin environment.
 
 ## Release path
 
@@ -163,14 +184,15 @@ The write command creates/updates the controlled `systemProjectState` records. R
 2. Deploy Firebase rules, indexes, Storage policy, and Functions.
 3. Store/update the project-state manifest in Firestore.
 4. Complete the two-account/two-device physical test matrix.
-5. Configure App Check/Play Integrity and production signing.
+5. Test release App Check through Play Integrity on a Play testing track.
 6. Build the signed obfuscated AAB using the protected workflow.
 7. Publish through Play Console Closed Testing first.
 8. Monitor Crashlytics, Functions logs, budget alerts, and user feedback before production rollout.
 
 ## Branch policy
 
-- `main` is the only long-lived source-of-truth branch.
+- `main` is the only active source-of-truth branch.
+- Stable/backup/release branches are recovery references and must not receive feature work.
 - Feature/fix branches must use a focused PR and be deleted after merge or closure.
 - Do not continue work from old closed-PR branches.
 - Release artifacts come from GitHub Actions, not from unverified local builds.
@@ -178,4 +200,4 @@ The write command creates/updates the controlled `systemProjectState` records. R
 
 ## Current definition of complete
 
-The non-calling V1 codebase is considered feature-complete when it is on `main` and the quality gate is green. Production launch still requires external Firebase deployment, real-device acceptance testing, owner-controlled legal/contact values, signing secrets, Play Console configuration, and verified backups. Those remaining operational steps are tracked in the final roadmap rather than hidden as unfinished application code.
+The permanent-signed non-calling V1 baseline is stable for continued development: CI is green, permanent signing is configured, Google Sign-In and App Check debug testing work on a real Android phone, and a deterministic recovery point exists. Public production launch is not yet complete; remaining operational work is explicitly tracked in the roadmap and must not be mistaken for missing hidden code.
