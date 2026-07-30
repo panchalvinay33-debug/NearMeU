@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "300204283924-d25hk1ltvq26radp5ro0nkm1kvfvbvc6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nearmeu.nearmeu",
+            "certificate_hash": "7fb64fdb90b7d127575fa4f9ee692aecbe8e7e55"
+          }
+        },
+        {
           "client_id": "300204283924-vc28se16dufmnu6ttsbd5lcpojjdrn9g.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
