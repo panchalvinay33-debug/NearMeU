@@ -1,0 +1,145 @@
+name: Build recoverable base APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/recovery-base-apk.yml'
+      - 'docs/OFFICIAL_RECOVERABLE_BASE.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-base-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-build:
+    name: Verify and build recoverable base
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Validate permanent signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_STORE_PASSWORD ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "::error::Missing required recovery secret: $required"
+              exit 1
+            fi
+          done
+
+      - name: Restore permanent NearMeU signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/nearmeu-upload.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=nearmeu-upload.jks
+          EOF
+          chmod 600 android/app/nearmeu-upload.jks android/key.properties
+
+      - name: Capture signing fingerprints
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          certificate=$(keytool -list -v \
+            -keystore android/app/nearmeu-upload.jks \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS")
+          sha1=$(awk -F'SHA1: ' '/SHA1:/{print $2; exit}' <<< "$certificate" | tr -d '\r')
+          sha256=$(awk -F'SHA256: ' '/SHA256:/{print $2; exit}' <<< "$certificate" | tr -d '\r')
+          test -n "$sha1"
+          test -n "$sha256"
+          echo "sha1=$sha1" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test
+
+      - name: Build permanently signed debug APK
+        run: flutter build apk --debug
+
+      - name: Verify APK certificate and create recovery manifest
+        shell: bash
+        env:
+          CERT_SHA1: ${{ steps.signing.outputs.sha1 }}
+          CERT_SHA256: ${{ steps.signing.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$apk"
+          build_tools=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$build_tools/apksigner" verify --print-certs "$apk" > build/apk-certificate.txt
+          sha256sum "$apk" > build/app-debug.apk.sha256
+          cat > build/recovery-manifest.txt <<EOF
+          recovery_base_git_sha=$GITHUB_SHA
+          recovery_base_git_ref=$GITHUB_REF
+          build_type=debug
+          signing=permanent-nearmeu-key
+          app_check_provider=debug
+          firebase_project=nearmeu-e82c7
+          android_application_id=com.nearmeu.nearmeu
+          signing_certificate_sha1=$CERT_SHA1
+          signing_certificate_sha256=$CERT_SHA256
+          built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          required_external_state=Firebase App Check debug token for the installed test app must be registered in the NearMeU Android App Check allow-list.
+          EOF
+
+      - name: Upload recoverable base package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-recoverable-base-${{ github.sha }}
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app-debug.apk.sha256
+            build/apk-certificate.txt
+            build/recovery-manifest.txt
+            docs/OFFICIAL_RECOVERABLE_BASE.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/app/nearmeu-upload.jks android/key.properties
