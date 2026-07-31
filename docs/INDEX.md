@@ -1,72 +1,74 @@
 # NearMeU Documentation Index
 
-This is the canonical map for understanding, operating, testing, releasing, and recovering NearMeU. Start with the final baseline and then follow only the section relevant to the task.
+This is the canonical map for understanding, operating, testing, recovering and releasing NearMeU.
 
-## 1. Product and project state
+## Start here
 
-- [`final/NEARMEU_FINAL_BASELINE.md`](final/NEARMEU_FINAL_BASELINE.md) — approved non-calling V1 scope and completion status.
-- [`final/ROADMAP_AND_RELEASE_PLAN.md`](final/ROADMAP_AND_RELEASE_PLAN.md) — remaining deployment, testing, and Play Store steps.
-- [`final/BACKUP_AND_RECOVERY_PLAN.md`](final/BACKUP_AND_RECOVERY_PLAN.md) — backup retention, restore flow, and ownership requirements.
-- [`../config/project_state_manifest.json`](../config/project_state_manifest.json) — machine-readable project status for tools and automation.
+1. [`MASTER_PROJECT_AUDIT.md`](MASTER_PROJECT_AUDIT.md) — current accepted base, PC paths, APK hash, backup blueprint, roadmap, change control and audit result.
+2. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — exact recovery procedure, App Check dependency and physical acceptance rules.
+3. [`../config/project_state_manifest.json`](../config/project_state_manifest.json) — machine-readable current state for tools and automation.
 
-## 2. Development and architecture
+## Current accepted identifiers
 
-- [`../README.md`](../README.md) — repository entry point, stack, architecture, commands, and scope boundaries.
-- [`V1_HARDENING_PLAN.md`](V1_HARDENING_PLAN.md) — historical hardening plan; use the final roadmap for current status.
-- [`LOCAL_FIRST_MEDIA_RELEASE_RUNBOOK.md`](LOCAL_FIRST_MEDIA_RELEASE_RUNBOOK.md) — local-first message/media behavior and release checks.
+- Source branch: `main`
+- Recovery branch: `stable/official-recoverable-base`
+- Accepted commit: `f9bc38572c715a017c8b261a5d805aa125ffe7a5`
+- Android package: `com.nearmeu.nearmeu`
+- Firebase project: `nearmeu-e82c7`
+- Accepted APK SHA-256: `587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C`
 
-## 3. Security and Firebase
+## Product and roadmap
 
-- [`PRODUCTION_READINESS_AUDIT.md`](PRODUCTION_READINESS_AUDIT.md) — current source-level audit findings, confirmed safeguards, external blockers, and merge gates.
-- [`APP_CHECK_ROLLOUT.md`](APP_CHECK_ROLLOUT.md) — App Check debug and Play Integrity rollout.
-- [`OBSERVABILITY_ROLLOUT.md`](OBSERVABILITY_ROLLOUT.md) — privacy-safe Crashlytics, Analytics, and Performance rollout.
-- [`../firestore.rules`](../firestore.rules) — authoritative Firestore client-access policy.
-- [`../storage.rules`](../storage.rules) — authoritative Storage client-access policy.
-- [`../firestore.indexes.json`](../firestore.indexes.json) — required production indexes.
-- [`../functions/bootstrap.js`](../functions/bootstrap.js) — secure Cloud Functions deployment entry point.
+- [`final/NEARMEU_FINAL_BASELINE.md`](final/NEARMEU_FINAL_BASELINE.md) — historical detailed non-calling V1 scope; the master audit takes precedence for current identifiers.
+- [`final/ROADMAP_AND_RELEASE_PLAN.md`](final/ROADMAP_AND_RELEASE_PLAN.md) — detailed release planning; use the master audit for current phase order.
+- Issue `#41 Complete NearMeU production launch setup` — active production checklist.
 
-## 4. Testing
+## Backup and recovery
 
-- [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical physical-phone smoke test.
-- [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — debug APK, App Check token, and two-device testing.
-- [`REALTIME_STABILITY_TEST_PLAN.md`](REALTIME_STABILITY_TEST_PLAN.md) — presence, notifications, Nearby, and unread validation.
-- [`RELEASE_ACCEPTANCE_CHECKLIST.md`](RELEASE_ACCEPTANCE_CHECKLIST.md) — single authoritative pre-distribution and production acceptance checklist.
-- [`../.github/workflows/quality.yml`](../.github/workflows/quality.yml) — authoritative automated quality gate.
+- [`MASTER_PROJECT_AUDIT.md`](MASTER_PROJECT_AUDIT.md) — owner PC details and complete backup set.
+- [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — source/APK/App Check recovery.
+- [`final/BACKUP_AND_RECOVERY_PLAN.md`](final/BACKUP_AND_RECOVERY_PLAN.md) — Firebase retention and restore planning.
+- [`../.github/workflows/recovery-base-apk.yml`](../.github/workflows/recovery-base-apk.yml) — signed recovery APK, checksum, certificate report and manifest generation.
 
-## 5. Production release
+## Development and architecture
 
-- [`PRODUCTION_RELEASE_RUNBOOK.md`](PRODUCTION_RELEASE_RUNBOOK.md) — signing, Firebase deployment, AAB generation, and internal testing.
-- [`PLAYSTORE_READY.md`](PLAYSTORE_READY.md) — readiness notes and external Play Console work.
-- [`CHANGELOG.md`](CHANGELOG.md) — historical release changes, when present.
+- [`../README.md`](../README.md) — concise repository entry point.
+- [`LOCAL_FIRST_MEDIA_RELEASE_RUNBOOK.md`](LOCAL_FIRST_MEDIA_RELEASE_RUNBOOK.md) — local-first message/media behavior.
+- [`V1_HARDENING_PLAN.md`](V1_HARDENING_PLAN.md) — historical plan only; not the current source of truth.
 
-## 6. Legal and store material
+## Security and Firebase
 
-Legal/store drafts may contain owner-controlled placeholders. Never publish them until the owner has supplied and reviewed the real support email, legal identity, jurisdiction, URLs, retention wording, and Play Console declarations.
+- [`PRODUCTION_READINESS_AUDIT.md`](PRODUCTION_READINESS_AUDIT.md) — source-level readiness findings.
+- [`APP_CHECK_ROLLOUT.md`](APP_CHECK_ROLLOUT.md) — debug and Play Integrity rollout.
+- [`OBSERVABILITY_ROLLOUT.md`](OBSERVABILITY_ROLLOUT.md) — privacy-safe observability rollout.
+- [`../firestore.rules`](../firestore.rules) — Firestore client-access policy.
+- [`../storage.rules`](../storage.rules) — Storage client-access policy.
+- [`../firestore.indexes.json`](../firestore.indexes.json) — required indexes.
+- [`../functions/bootstrap.js`](../functions/bootstrap.js) — secure Functions entry point.
 
-## 7. Database project-state record
+## Testing
 
-The project manifest may be written to Firestore from a trusted admin environment:
+- [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical phone smoke test.
+- [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — APK, App Check and two-device testing.
+- [`REALTIME_STABILITY_TEST_PLAN.md`](REALTIME_STABILITY_TEST_PLAN.md) — presence, notifications, Nearby and unread validation.
+- [`RELEASE_ACCEPTANCE_CHECKLIST.md`](RELEASE_ACCEPTANCE_CHECKLIST.md) — pre-distribution acceptance.
+- [`../.github/workflows/quality.yml`](../.github/workflows/quality.yml) — automated quality gate.
 
-```powershell
-cd functions
-npm run project-state:check
-$env:NEARMEU_EXPECTED_FIREBASE_PROJECT_ID="nearmeu-e82c7"
-npm run project-state:store
-```
+## Production release
 
-Canonical records:
-
-- `systemProjectState/current`
-- `systemProjectStateHistory/non-calling-final-baseline`
+- [`PRODUCTION_RELEASE_RUNBOOK.md`](PRODUCTION_RELEASE_RUNBOOK.md) — signing, Firebase deployment, AAB and internal testing.
+- [`PLAYSTORE_READY.md`](PLAYSTORE_READY.md) — Play readiness notes.
 
 ## Document precedence
 
-When documents appear to disagree, use this order:
+When documents disagree, use this order:
 
-1. `config/project_state_manifest.json`
-2. `docs/final/NEARMEU_FINAL_BASELINE.md`
-3. `docs/final/ROADMAP_AND_RELEASE_PLAN.md`
-4. Current source code, Firebase rules, and CI workflows
-5. Older historical plans and PR descriptions
+1. `docs/MASTER_PROJECT_AUDIT.md`
+2. `config/project_state_manifest.json`
+3. `docs/OFFICIAL_RECOVERABLE_BASE.md`
+4. Current `main` source, rules and workflows
+5. `README.md` and this index
+6. Topic-specific runbooks
+7. Historical plans, old PR descriptions and closed issues
 
-Old PR descriptions explain history but are not the current operating contract.
+GitHub intentionally does not store keystores, passwords, App Check tokens, test-account credentials, live Firebase data or Play Console secrets.
