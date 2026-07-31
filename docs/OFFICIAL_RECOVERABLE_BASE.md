@@ -15,6 +15,13 @@ This document is the single source of truth for recovering NearMeU to a known wo
 - App Check provider for test APK: Firebase App Check debug provider
 - Production App Check provider: Play Integrity; production rollout is a separate owner-approved action
 - Production deployment and Play Store publication are not part of recovery
+- Accepted runtime base SHA: `05c75107aa9c8a71e325d02dcbcca0d63d5b031f`
+- Recovery artifact source head SHA: `65e37f6418e5f543062865ab35f06b070aed2d54`
+- Recovery workflow merge ref SHA: `003ff1f5bb696cde9045d9f15214f09e0f6dc3ec`
+- Accepted recovery APK SHA-256: `587cd1b328a1caeb659a0c5d0604609c5e6a381b61efc6d0acd9d3c2b1bde00c`
+- Permanent signing certificate SHA-1: `7F:B6:4F:DB:90:B7:D1:27:57:5F:A4:F9:EE:69:2A:EC:BE:8E:7E:55`
+- Permanent signing certificate SHA-256: `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`
+- Recovery artifact build time: `2026-07-31T08:54:02Z`
 
 The exact official Git SHA, APK SHA-256, signing certificate fingerprints, build timestamp, test devices, and physical acceptance result must be recorded in the workflow artifact `recovery-manifest.txt` and in the acceptance section below whenever the base is promoted.
 
@@ -111,12 +118,16 @@ Record the result below before moving the stable recovery branch.
 ## Current physical acceptance record
 
 - Date: 2026-07-31
-- Result: login, Nearby, and chat restored after registering the actual installed debug secret in Firebase App Check.
-- Source: official `main` state before this recovery-documentation promotion.
-- Limitation: the current debug secret is installation-specific and external to Git. A reinstall or clear-data action may require registering the newly generated secret.
-- Security action: any debug secret exposed outside the owner-controlled environment must be deleted/rotated after testing.
+- Status: **accepted official recoverable test base**
+- Accepted runtime base SHA: `05c75107aa9c8a71e325d02dcbcca0d63d5b031f`
+- Stable branch: `stable/official-recoverable-base`
+- APK SHA-256: `587cd1b328a1caeb659a0c5d0604609c5e6a381b61efc6d0acd9d3c2b1bde00c`
+- Result: permanent-signed debug APK passed Google Sign-In, Nearby loading, existing history, and chat send/receive after the installed App Check debug secret was registered in Firebase.
+- CI evidence: recoverable-base workflow run 2 and canonical quality-gate run 384 completed successfully.
+- External dependency: the App Check debug secret remains installation-specific and is intentionally not stored in Git. Reinstall or clear-data may require registering the newly generated secret.
+- Security action: any debug secret exposed outside the owner-controlled environment must be deleted or rotated after testing.
 
-The final promoted SHA and APK checksum will be produced by the recovery workflow and must replace this provisional record after CI and physical acceptance of the promoted package.
+This record is final for the accepted runtime base. Later documentation-only commits do not change the accepted app runtime unless the stable recovery branch is explicitly promoted after another physical acceptance.
 
 ## Backup blueprint
 
@@ -151,7 +162,7 @@ Never back up private secrets inside the repository.
 - Keep the permanent recovery workflow green.
 - Preserve signing and Firebase ownership backups.
 - Rotate any exposed App Check debug token.
-- Record the final accepted SHA, APK checksum, certificate fingerprints, devices, and results.
+- Keep the accepted SHA, APK checksum, certificate fingerprints, devices, and results current whenever a new base is promoted.
 
 ### Phase 1 — reliability fixes
 
