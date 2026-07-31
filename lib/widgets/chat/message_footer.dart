@@ -25,6 +25,16 @@ class MessageFooter extends StatelessWidget {
       );
     }
 
+    final icon = message.isSeen || message.isDelivered
+        ? Icons.done_all
+        : Icons.done;
+    final color = message.isSeen ? Colors.lightBlueAccent : Colors.white54;
+    final semantics = message.isSeen
+        ? 'Read'
+        : message.isDelivered
+        ? 'Delivered'
+        : 'Sent';
+
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Row(
@@ -35,10 +45,9 @@ class MessageFooter extends StatelessWidget {
             style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
           const SizedBox(width: 6),
-          Icon(
-            message.isSeen ? Icons.done_all : Icons.done,
-            size: 15,
-            color: message.isSeen ? Colors.lightBlueAccent : Colors.white54,
+          Semantics(
+            label: semantics,
+            child: Icon(icon, size: 15, color: color),
           ),
         ],
       ),
