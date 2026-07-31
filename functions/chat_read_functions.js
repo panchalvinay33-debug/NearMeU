@@ -90,6 +90,8 @@ exports.markPrivateChatRead = onCall(
       const batch = db.batch();
       for (const message of unread.docs) {
         batch.update(message.ref, {
+          isDelivered: true,
+          deliveredAt: message.get("deliveredAt") || now,
           isSeen: true,
           seenAt: now,
         });
