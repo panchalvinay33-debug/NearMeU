@@ -2,69 +2,59 @@
 
 NearMeU is an Android-first Flutter application for privacy-aware nearby discovery and private one-to-one messaging.
 
-> **Current repository status (2026-07-30):** the permanent-signed Android baseline builds successfully in CI and has been physically verified for installation, Google Sign-In, App Check debug registration and Nearby discovery. `main` is protected by pull-request and required-check rules.
+## Current accepted state
+
+| Item | Value |
+|---|---|
+| Source of truth | `main` |
+| Recovery branch | `stable/official-recoverable-base` |
+| Accepted commit | `f9bc38572c715a017c8b261a5d805aa125ffe7a5` |
+| Android package | `com.nearmeu.nearmeu` |
+| Firebase project | `nearmeu-e82c7` |
+| Tested APK SHA-256 | `587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C` |
+| Long-lived branches | `main`, `stable/official-recoverable-base` |
+| Production release | Not yet complete |
+
+The accepted base was installed on the owner's Android phone with update mode and verified for the restored login, App Check registration, Nearby access and chat access. `main` and the recovery branch are identical at the accepted state.
 
 ## Start here
 
 | Need | Document |
 |---|---|
-| Canonical base, branch protection and external-state warning | [`docs/final/OFFICIAL_BASE_MARKER.md`](docs/final/OFFICIAL_BASE_MARKER.md) |
-| Exact working state and signing identity | [`docs/final/CURRENT_VERIFIED_STATE.md`](docs/final/CURRENT_VERIFIED_STATE.md) |
-| Recover the last known-good application | [`docs/final/RECOVERY_PLAYBOOK.md`](docs/final/RECOVERY_PLAYBOOK.md) |
-| Rules for every future change | [`docs/final/CHANGE_CONTROL.md`](docs/final/CHANGE_CONTROL.md) |
-| Lock, backup, architecture and roadmap blueprint | [`docs/final/FINAL_LOCK_BACKUP_BLUEPRINT.md`](docs/final/FINAL_LOCK_BACKUP_BLUEPRINT.md) |
-| Product baseline | [`docs/final/NEARMEU_FINAL_BASELINE.md`](docs/final/NEARMEU_FINAL_BASELINE.md) |
-| Remaining release work | [`docs/final/ROADMAP_AND_RELEASE_PLAN.md`](docs/final/ROADMAP_AND_RELEASE_PLAN.md) |
-| Firebase/data backup and recovery | [`docs/final/BACKUP_AND_RECOVERY_PLAN.md`](docs/final/BACKUP_AND_RECOVERY_PLAN.md) |
-| Machine-readable project state | [`config/project_state_manifest.json`](config/project_state_manifest.json) |
-| Production deployment | [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md) |
-| Android smoke testing | [`docs/ANDROID_PHONE_SMOKE_TEST.md`](docs/ANDROID_PHONE_SMOKE_TEST.md) |
-| Documentation index | [`docs/INDEX.md`](docs/INDEX.md) |
+| Complete audit, PC details, backup, roadmap and current truth | [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) |
+| Exact recovery process and acceptance rules | [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) |
+| Documentation map | [`docs/INDEX.md`](docs/INDEX.md) |
+| Machine-readable state | [`config/project_state_manifest.json`](config/project_state_manifest.json) |
+| Production release work | [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md) |
+| Physical Android testing | [`docs/ANDROID_PHONE_SMOKE_TEST.md`](docs/ANDROID_PHONE_SMOKE_TEST.md) |
 | Security and secret handling | [`SECURITY.md`](SECURITY.md) |
 
-## Official recovery point
-
-- Default branch: `main`
-- Recovery branch: `stable/official-base-v1-2026-07-30`
-- Base merge commit: `a743ffa407c145b3852c547d31f33458e8e839b4`
-- Android package: `com.nearmeu.nearmeu`
-- Permanent signing SHA-1: `7F:B6:4F:DB:90:B7:D1:27:57:5F:A4:F9:EE:69:2A:EC:BE:8E:7E:55`
-
-## GitHub protection
-
-Every update to `main` must use a pull request and pass:
-
-- `Flutter checks`
-- `Firebase rules tests`
-- `Cloud Functions checks`
-
-Deletion and force-push are blocked for `main`.
-
-## Product scope
-
-### Included in the current baseline
+## Included in the current base
 
 - Firebase Authentication and adult-only onboarding
-- nearby discovery and filtering
-- presence, last-seen, unread counts, block/report/suspension controls
-- private text, reply, emoji, photo, compressed video and voice-message flows
-- encrypted local-first chat storage and offline recovery
-- trusted Cloud Functions and Firebase security rules
-- private push-notification architecture
-- account deletion backend
-- permanent Android signing and CI APK artifacts
-- Firebase App Check debug testing and release Play Integrity configuration
+- Nearby discovery and distance filtering
+- presence, last-seen, unread, block, report and account controls
+- private text, emoji, reply, photo, video and voice-message flows
+- encrypted local-first chat storage
+- Firestore and Storage security rules and emulator tests
+- Cloud Functions source and tests
+- permanent Android signing through protected GitHub Actions secrets
+- Google Sign-In-compatible signing identity
+- App Check debug testing and Play Integrity release configuration
+- quality-gate and recoverable-APK workflows
 
-### Deferred or operationally pending
+## Known remaining work
 
-- voice/video calling
-- paid plans or in-app purchases
-- iOS release
-- Play Store closed testing and production rollout
-- release App Check verification through Play Integrity
-- full two-account/two-device acceptance
-- screenshot-protection redesign
-- forced-update-gate redesign
+- analyzer warning and technical-debt cleanup
+- full two-device regression testing
+- reliability validation for weak network, restart, logout and account switching
+- premium voice/video calling and one-plan entitlement design
+- production Firebase verification
+- Play Integrity production acceptance
+- legal URLs and Play Console declarations
+- internal/closed testing and controlled production rollout
+
+The active release checklist is tracked in issue #41 and the master audit roadmap.
 
 ## Repository structure
 
@@ -75,7 +65,7 @@ functions/               Firebase Cloud Functions and tests
 lib/                     Flutter application code
 rules_tests/             Firebase emulator security tests
 test/                    Flutter tests
-docs/                    Architecture, release and recovery docs
+docs/                    Audit, architecture, release and recovery docs
 .github/workflows/       CI and signed-build workflows
 ```
 
@@ -83,39 +73,23 @@ docs/                    Architecture, release and recovery docs
 
 ```powershell
 flutter pub get
-dart format --output=none --set-exit-if-changed lib test
-flutter analyze --no-fatal-warnings --no-fatal-infos
+flutter analyze
 flutter test
 ```
 
-Backend checks:
-
-```powershell
-cd functions
-npm ci
-npm test
-
-cd ..
-npm ci
-firebase emulators:exec --only firestore,storage "npm run test:rules"
-```
+The accepted source currently has existing analyzer warnings/informational lints. These are tracked technical debt; tests and required CI gates pass.
 
 ## Safe future workflow
 
 1. Start from current `main`.
-2. Create one focused branch.
+2. Create one focused short-lived branch.
 3. Make the smallest necessary change.
-4. Open a pull request.
-5. Wait for all required checks.
-6. Test runtime changes on a physical Android phone.
-7. Merge only after verification.
-8. Delete the temporary branch after the merged result is stable.
-9. Update verified-state, roadmap and recovery documentation for material changes.
+4. Open a pull request and pass all required checks.
+5. Test runtime/config changes on a physical Android phone.
+6. Obtain owner approval.
+7. Merge, update recovery/audit records and delete the temporary branch.
+8. Move the recovery branch only after accepted device testing.
 
-## Important limitation
+## Important external-state limitation
 
-GitHub is the source of truth for code, architecture, roadmap and recovery instructions, but it intentionally does **not** store secret values, the permanent keystore file, Firebase Console state, App Check debug tokens, Play Console configuration or live production data. Those remain in GitHub Actions secrets, encrypted owner backups and the relevant consoles.
-
-## Current definition of stable
-
-The current permanent-signed non-calling V1 baseline is safe for continued development. Public production launch is not yet complete; the genuine remaining work is tracked in issues #41 and #68 and in the release roadmap.
+GitHub is the source of truth for code, architecture, roadmap and recovery instructions. It intentionally does not store secret values, the permanent keystore file, Firebase Console state, App Check debug tokens, Play Console configuration, test-account credentials or live production data. Those remain in protected secrets, encrypted owner backups and the relevant consoles.

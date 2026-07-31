@@ -1,77 +1,108 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": "NearMeU",
-  "baselineName": "non-calling-final-baseline",
-  "baselineDate": "2026-07-27",
   "repository": "panchalvinay33-debug/NearMeU",
-  "branch": "fix/release-test-hardening-v1",
-  "verifiedApkCommit": "fe417dd38d06e010d4c521813d0f0959a931b5b4",
-  "calling": {
-    "status": "deferred",
-    "launchBlocker": false
+  "organizedAt": "2026-07-31",
+  "acceptedBase": {
+    "name": "official-recoverable-base",
+    "sourceBranch": "main",
+    "recoveryBranch": "stable/official-recoverable-base",
+    "commitSha": "f9bc38572c715a017c8b261a5d805aa125ffe7a5",
+    "branchesIdenticalAtAcceptance": true,
+    "androidApplicationId": "com.nearmeu.nearmeu",
+    "firebaseProjectId": "nearmeu-e82c7",
+    "testedApkSha256": "587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C",
+    "productionDeployedByThisBase": false
+  },
+  "ownerPc": {
+    "repositoryPath": "F:\\NearMeU",
+    "localRecoveryDirectory": "F:\\NearMeU\\local_recovery",
+    "testedApkPath": "F:\\NearMeU\\local_recovery\\NearMeU-Final-Tested-Base.apk",
+    "platformToolsPath": "C:\\Users\\dell\\Downloads\\platform-tools",
+    "downloadedApkPath": "C:\\Users\\dell\\Downloads\\NearMeU-Official-Recoverable-Base.apk",
+    "workingTreeCleanAtAcceptance": true,
+    "localRecoveryExcludedFromGit": true
+  },
+  "acceptance": {
+    "flutterTests": "passed",
+    "qualityWorkflow": "passed",
+    "firebaseRulesTests": "passed",
+    "cloudFunctionsTests": "passed",
+    "signedRecoveryApkBuild": "passed",
+    "apkHashVerifiedOnOwnerPc": true,
+    "adbUpdateInstall": "success",
+    "googleSignIn": "accepted",
+    "appCheckDebugRegistration": "accepted",
+    "nearby": "accepted",
+    "chatAccess": "accepted",
+    "flutterAnalyze": "existing-warnings-and-infos-no-required-ci-failure"
   },
   "scope": {
-    "authentication": "complete",
-    "profileOnboarding": "complete",
-    "nearbyDiscovery": "complete",
-    "distanceFilter": "complete",
-    "privateChat": "complete",
-    "textMessages": "complete",
-    "photoMessages": "complete",
-    "videoMessages": "complete",
-    "voiceNotes": "complete",
-    "privateMediaControls": "complete",
-    "blockingAndReporting": "complete",
-    "accountDeletion": "complete",
-    "privateChatPush": "code-complete-deployment-required",
-    "supportAnnouncements": "complete",
-    "announcementPush": "code-complete-deployment-required",
-    "forcedUpdate": "complete",
-    "appCheck": "complete-production-verification-required",
-    "screenshotProtection": "complete",
-    "adminModeration": "complete",
-    "legalScreens": "complete-public-urls-required",
-    "launchPolish": "baseline-complete-device-review-required"
+    "authentication": "implemented",
+    "profileOnboarding": "implemented",
+    "nearbyDiscovery": "implemented",
+    "distanceFilter": "implemented",
+    "privateChat": "implemented",
+    "textMessages": "implemented",
+    "photoMessages": "implemented",
+    "videoMessages": "implemented",
+    "voiceNotes": "implemented",
+    "blockingAndReporting": "implemented",
+    "accountDeletion": "implemented",
+    "firebaseRules": "implemented-and-tested",
+    "cloudFunctions": "implemented-and-tested",
+    "permanentAndroidSigning": "configured-in-protected-github-secrets",
+    "appCheckDebug": "accepted-installation-specific-token-required",
+    "playIntegrity": "production-verification-required",
+    "voiceVideoCalling": "planned-premium-phase",
+    "paidPlan": "planned-single-plan",
+    "iosRelease": "deferred"
   },
-  "qualityGate": {
-    "flutterFormat": true,
-    "flutterAnalyze": true,
-    "flutterTests": true,
-    "debugApkBuild": true,
-    "cloudFunctionsTests": true,
-    "firebaseRulesTests": true,
-    "unsignedReleaseRejected": true
-  },
-  "productionActions": [
-    "deploy Firebase functions and rules",
-    "verify production App Check and Play Integrity",
-    "run two-device acceptance tests",
-    "configure cloud budget alerts",
-    "configure and verify Firestore and Storage backups",
-    "protect Android signing keys",
-    "build signed Android App Bundle",
-    "publish stable legal-policy URLs",
-    "complete Play Console declarations",
-    "run Closed Testing"
+  "remainingRoadmap": [
+    "analyzer-warning-and-technical-debt-cleanup",
+    "two-device-full-regression-testing",
+    "weak-network-restart-logout-account-switch-validation",
+    "premium-voice-video-calling-provider-and-entitlement-design",
+    "production-firebase-verification",
+    "play-integrity-production-acceptance",
+    "privacy-policy-and-play-console-declarations",
+    "internal-and-closed-testing",
+    "controlled-production-rollout"
   ],
-  "backupPolicy": {
-    "firestoreDailyRetentionDays": 14,
-    "firestoreWeeklyRetentionWeeks": 8,
-    "firestoreMonthlyRetentionMonths": 12,
-    "storageBackupFrequencyHours": 24,
-    "restoreTestFrequency": "monthly-and-before-major-release",
-    "initialRpoHours": 24,
-    "initialRtoHours": 8
-  },
-  "deferred": [
-    "voice-video-calling",
-    "paid-subscriptions",
-    "ios-release",
-    "large-scale-cdn-optimization"
+  "backupRequirements": [
+    "github-repository-and-accepted-sha",
+    "stable-recovery-branch",
+    "accepted-apk-and-sha256",
+    "recovery-manifest-and-certificate-report",
+    "android-keystore-in-two-encrypted-owner-locations",
+    "password-manager-record-separate-from-keystore",
+    "github-actions-signing-secrets",
+    "firebase-owner-and-recovery-access",
+    "rules-indexes-functions-source-and-deployment-records",
+    "play-console-and-play-app-signing-records-when-enabled"
   ],
-  "documentation": [
-    "docs/final/NEARMEU_FINAL_BASELINE.md",
-    "docs/final/ROADMAP_AND_RELEASE_PLAN.md",
-    "docs/final/BACKUP_AND_RECOVERY_PLAN.md"
+  "activeIssue": 41,
+  "documentation": {
+    "masterAudit": "docs/MASTER_PROJECT_AUDIT.md",
+    "officialRecovery": "docs/OFFICIAL_RECOVERABLE_BASE.md",
+    "index": "docs/INDEX.md",
+    "productionRunbook": "docs/PRODUCTION_RELEASE_RUNBOOK.md"
+  },
+  "changeControl": {
+    "pullRequestRequired": true,
+    "requiredCiBeforeMerge": true,
+    "physicalDeviceTestForRuntimeChanges": true,
+    "ownerApprovalBeforeMerge": true,
+    "productionActionsRequireExplicitOwnerApproval": true,
+    "temporaryBranchesDeletedAfterAcceptance": true
+  },
+  "externalSecretsNotStoredInGit": [
+    "android-keystore",
+    "keystore-passwords",
+    "app-check-debug-token",
+    "firebase-console-state",
+    "test-account-credentials",
+    "play-console-secrets",
+    "live-user-data"
   ]
 }
