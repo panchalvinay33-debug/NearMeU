@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PremiumEntitlement {
   const PremiumEntitlement({
@@ -45,15 +46,43 @@ class PremiumEntitlementException implements Exception {
 }
 
 class PremiumEntitlementService {
-  PremiumEntitlementService({FirebaseFunctions? functions})
-    : _functions =
-          functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1');
+  PremiumEntitlementService({
+    FirebaseFunctions? functions,
+    FirebaseAuth? auth,
+  }) : _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1'),
+       _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFunctions _functions;
+  final FirebaseAuth _auth;
   PremiumEntitlement? _cached;
   DateTime? _cachedAt;
 
   static const Duration _cacheLifetime = Duration(seconds: 30);
+
+  Future<HttpsCallableResult<dynamic>> _readCallable() {
+    return _functions
+        .httpsCallable('getMyPremiumEntitlement')
+        .call<dynamic>();
+  }
+
+  Future<HttpsCallableResult<dynamic>> _readWithAuthRetry() async {
+    try {
+      return await _readCallable();
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'unauthenticated') rethrow;
+
+      final user = _auth.currentUser;
+      if (user == null) rethrow;
+
+      // Account close/reactivation revokes old refresh tokens. A process that
+      // stayed alive can briefly retain an auth session whose callable token is
+      // stale even though the UI still has a current user. Force one fresh ID
+      // token and retry exactly once.
+      await user.getIdToken(true);
+      return _readCallable();
+    }
+  }
 
   Future<PremiumEntitlement> getCurrent({bool forceRefresh = false}) async {
     final now = DateTime.now();
@@ -65,9 +94,7 @@ class PremiumEntitlementService {
     }
 
     try {
-      final result = await _functions
-          .httpsCallable('getMyPremiumEntitlement')
-          .call<dynamic>();
+      final result = await _readWithAuthRetry();
       final data = result.data;
       final entitlement = data is Map
           ? PremiumEntitlement.fromMap(data)
@@ -80,6 +107,13 @@ class PremiumEntitlementService {
       throw PremiumEntitlementException(
         message == null || message.isEmpty
             ? 'Could not verify Premium access.'
+            : message,
+      );
+    } on FirebaseAuthException catch (error) {
+      final message = error.message?.trim();
+      throw PremiumEntitlementException(
+        message == null || message.isEmpty
+            ? 'Please sign in again to verify Premium access.'
             : message,
       );
     }
