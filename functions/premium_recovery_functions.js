@@ -66,10 +66,11 @@ async function copyRecoveryMedia({ uid, chatId, messageId, sourcePath }) {
   const bucket = admin.storage().bucket();
   const source = bucket.file(sourcePath);
   const destination = bucket.file(destinationPath);
+  const [destinationExists] = await destination.exists();
+  if (destinationExists) return destinationPath;
   const [sourceExists] = await source.exists();
   if (!sourceExists) throw new Error(`Recovery source media is missing: ${sourcePath}`);
-  const [destinationExists] = await destination.exists();
-  if (!destinationExists) await source.copy(destination);
+  await source.copy(destination);
   return destinationPath;
 }
 
