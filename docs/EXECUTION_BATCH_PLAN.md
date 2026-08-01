@@ -24,15 +24,13 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 ## Current accepted starting point
 
 - Accepted batch: `05`
+- Final promoted main/recovery SHA: `3b749c8d7a320b71446245f99c694fdf85d9ccc4`
 - Accepted runtime merge: `44143f612cbf8b7adf6d591abe74aac2c6397704`
 - Accepted PR: `#94`
 - Version: `1.0.8+9`
 - Package: `com.nearmeu.nearmeu`
 - Tested runtime: `d2868b97dc931a49f625f4711db4b555fecd34ec`
 - Tested signed debug APK SHA-256: `c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406`
-- Recoverable artifact ID/digest: `8818404060` / `sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c`
-- Tested-runtime CI: Build #33 PASS, Quality #430 PASS
-- Acceptance-head CI: Build #36 PASS, Quality #433 PASS
 - Physical owner acceptance: PASS on 2026-08-01
 
 ## Completed batches
@@ -42,24 +40,41 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 - Batch 02 — Photo/video/voice-message reliability — accepted.
 - Batch 03 — Local-first persistence and seven-day delivery cloud — accepted.
 - Batch 04 — Clear Chat and deletion semantics — accepted/promoted.
-- Batch 05 — Identity, account close and reactivation — accepted/promoted. Reversible account closure, unavailable closed identity, messaging refusal while closed, same-account reactivation/profile recreation and retained chat continuity were physically accepted.
+- Batch 05 — Identity, account close and reactivation — accepted/promoted.
 
-## Active / next batch
+## Active batch
 
 ### Batch 06 — Premium entitlement foundation
 
-Planned scope:
+Branch: `batch/06-premium-entitlement-foundation`
 
-- one trusted server-side Premium entitlement model;
-- Free versus Premium authorization exposed through a central client/service layer;
-- no public Premium badge;
-- Premium status cannot be unlocked by a local-only client flag;
-- active/expired entitlement handling is deterministic;
-- Free users keep text, incoming media playback and incoming call receipt according to frozen decisions;
-- outbound photo/video/voice-message and future outbound calling checks use the same entitlement foundation;
-- Batch 07 recovery and Batch 11 owner-admin grants build on this same entitlement truth.
+Target version: `1.0.9+10`
 
-Batch 06 implementation must inspect the current purchase/subscription code and frozen product decisions before modifying runtime behavior. Do not implement Batch 07 backup/restore or Batch 11 admin controls inside Batch 06.
+Implemented/verification scope:
+
+- single private Premium plan with no public badge;
+- server-only `premiumEntitlements/{uid}` truth, evaluated from independent `googlePlay` and `admin` grants;
+- missing, disabled or expired grants resolve to Free;
+- either valid Google Play or admin grant can independently keep Premium active, so future admin revocation cannot silently cancel a valid Play purchase;
+- trusted callable `getMyPremiumEntitlement(asia-south1)` exposes only the current user's effective entitlement;
+- client Premium state is read through the callable, never from a client-writable local/Firestore flag;
+- Free text messaging remains unchanged;
+- chat composer keeps mic and photo/video controls visible but locked for Free users;
+- tapping a locked control refreshes trusted entitlement and only continues the original action if Premium is active;
+- server `sendPrivateMediaMessage` independently enforces Premium for image, video and voice sends;
+- received/local media remains viewable regardless of current Premium status;
+- future Batch 09/10 outbound calling can reuse the same entitlement service;
+- Batch 07 recovery and Batch 11 owner-admin mutation remain separate.
+
+Explicitly not implemented in Batch 06:
+
+- Google Play Billing purchase/receipt verification;
+- six-month backup/restore;
+- owner-facing Premium grant/revoke controls;
+- public Premium badges;
+- multiple Premium tiers/coins/trials.
+
+Focused physical matrix: [`BATCH_06_PHYSICAL_TEST.md`](BATCH_06_PHYSICAL_TEST.md).
 
 ## Later batches
 
