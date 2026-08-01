@@ -4,57 +4,53 @@ Last promoted: 2026-08-01
 
 ## Current official base
 
-Batch 05 is the accepted runtime/recovery starting point for future NearMeU work.
+Batch 06 is the accepted runtime/recovery starting point for future NearMeU work.
 
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `44143f612cbf8b7adf6d591abe74aac2c6397704`
-- Tested runtime commit: `d2868b97dc931a49f625f4711db4b555fecd34ec`
-- Physical acceptance evidence head: `311b8a364d9701c6424cad719c5a5aa50a7c0bf6`
-- Accepted pull request: `#94`
+- Accepted merged runtime commit: `2eea2d3fc0583ace77526bae9a918c940e470d24`
+- Tested runtime commit: `52fe6a52ad117e9eccb922e535b9d6752af7e695`
+- Physical acceptance evidence head: `a626a501db3b1d24573f6002087b2f0d88b16ce3`
+- Accepted pull request: `#96`
 - Android application ID: `com.nearmeu.nearmeu`
 - Firebase project: `nearmeu-e82c7`
-- App version: `1.0.8+9`
-- Physically tested signed debug APK SHA-256: `c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406`
-- Recoverable artifact ID: `8818404060`
-- Recoverable artifact digest: `sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c`
-- Signed release artifact ID: `8818505561`
-- Signed release APK SHA-256: `e648ece943692ae4d7bcc083088f8ecbdde91a5c1fb892344076bff0bf8c1966`
-- Tested-runtime Build workflow: `30699307402` / #33 — passed
-- Tested-runtime Quality workflow: `30699307401` / #430 — passed
-- Acceptance-head Build workflow: `30700741431` / #36 — passed
-- Acceptance-head Quality workflow: `30700741441` / #433 — passed
+- App version: `1.0.9+10`
+- Physically tested signed debug APK SHA-256: `2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f`
+- Recoverable artifact ID: `8820525497`
+- Recoverable artifact digest: `sha256:7a6023c00bc328438efa4135f411286ae98c39485ff2c35f4385697eb78ea4e7`
+- Signed release artifact ID: `8820623151`
+- Signed release APK SHA-256: `4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72`
+- Tested-runtime Build workflow: `30706204824` / #40 — passed
+- Tested-runtime Quality workflow: `30706204828` / #439 — passed
+- Acceptance-head Build workflow: `30709123869` / #44 — passed
+- Acceptance-head Quality workflow: `30709123867` / #443 — passed
 - Permanent signing certificate SHA-256: `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`
 
 ## Owner acceptance
 
 Status: **ACCEPTED OFFICIAL RECOVERABLE BASE**
 
-Owner physically accepted Batch 05 on 2026-08-01 after focused two-account testing. Evidence showed existing chat history preserved, closed identity displayed as `Unavailable user`, messaging to a closed account refused, same-account reactivation routed through public-profile recreation, chat continuity returned after reactivation, and Sign Out / Close Account / Delete Account Permanently remained distinct.
+Owner physically accepted Batch 06 on 2026-08-01. The focused device test confirmed existing chat/media continuity, Free text messaging, visible Premium locks on voice and photo/video controls, and trusted Premium-required responses after the stale-token recovery fix. The earlier pre-deploy `NOT_FOUND` and stale-token `UNAUTHENTICATED` states were resolved before final acceptance.
 
-Accepted Batch 05 behavior adds:
+Accepted Batch 06 behavior adds:
 
-- one verified email maps to one continuing NearMeU identity;
-- reversible Close Account separate from Sign Out and permanent deletion;
-- Close Account removes the active public profile from discovery/authorization while preserving identity continuity and block subcollections;
-- exact private location fields and registered device tokens are cleared as part of account closure cleanup;
-- closed account is unavailable to new messaging and public profile access;
-- same verified account reactivation returns to profile recreation without creating a second active identity;
-- uncleared retained chat continuity survives close/reactivation on the tested device;
-- owner administrator self-close remains blocked;
-- Batch 01–04 accepted behavior remains the inherited base.
-
-The production lifecycle callables exercised by the accepted flow are `ensureIdentityContinuity`, `closeCurrentAccount`, and `reactivateCurrentAccount` in `asia-south1`.
+- one private trusted Premium entitlement model;
+- missing/expired entitlement is Free;
+- independent `googlePlay` and future `admin` grant evaluation;
+- trusted `getMyPremiumEntitlement` callable in `asia-south1`;
+- server-side Premium enforcement in `sendPrivateMediaMessage` for outbound photo/video/voice messages;
+- Free text messaging and incoming/local media remain available;
+- locked outbound media/voice controls remain visible to Free users;
+- Premium status is not publicly exposed;
+- client retries once with a forced Firebase ID-token refresh on an `UNAUTHENTICATED` entitlement read;
+- Google Play purchase verification, six-month Premium recovery and owner-admin grant mutation remain later batches.
 
 ## Canonical local workspace
 
 The owner Windows machine canonical project workspace is `F:\NearMeU`.
 
-- Development, Git operations, Firebase deployment and recovery synchronization use `F:\NearMeU` unless explicitly changed.
-- Temporary Downloads clones are not the long-term project base.
-- After each accepted/promoted batch, `F:\NearMeU` must be synchronized to promoted `main` / `stable/official-recoverable-base`.
-- `F:\NearMeU-OLD` and dated folders are backups only.
+After each accepted/promoted batch, sync this workspace to promoted `main`; temporary Downloads clones and OLD folders are not the active project.
 
 ## Recovery procedure
 
@@ -68,7 +64,7 @@ git reset --hard origin/stable/official-recoverable-base
 Accepted runtime checkpoint:
 
 ```powershell
-git checkout 44143f612cbf8b7adf6d591abe74aac2c6397704
+git checkout 2eea2d3fc0583ace77526bae9a918c940e470d24
 ```
 
 Install only a permanent-certificate-matching APK using update mode (`adb install -r`); never uninstall or wipe for normal upgrades.
@@ -81,10 +77,9 @@ Install only a permanent-certificate-matching APK using update mode (`adb instal
 - Runtime batches require CI, permanently signed APK, physical-device testing and owner approval.
 - `stable/official-recoverable-base` moves only after merged-main acceptance and final documentation are complete.
 - Package ID, signing identity and monotonically increasing versionCode remain compatible.
-- Keystores, passwords, App Check tokens, test credentials and live user data must never be committed.
 
 ## Next approved batch
 
-Batch 06 — Premium entitlement foundation.
+Batch 07 — six-month automatic Premium backup and restore.
 
-Batch 05 is closed and must not be reopened except for a verified regression.
+Batch 06 is closed and must not be reopened except for a verified regression.
