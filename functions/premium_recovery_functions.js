@@ -62,23 +62,14 @@ function recoveryMediaPathAllowed(path, uid, chatId, messageId) {
 
 async function copyRecoveryMedia({ uid, chatId, messageId, sourcePath }) {
   if (typeof sourcePath !== "string" || !sourcePath) return null;
-  const destinationPath = recoveryMediaPath({
-    uid,
-    chatId,
-    messageId,
-    sourcePath,
-  });
+  const destinationPath = recoveryMediaPath({ uid, chatId, messageId, sourcePath });
   const bucket = admin.storage().bucket();
   const source = bucket.file(sourcePath);
   const destination = bucket.file(destinationPath);
   const [sourceExists] = await source.exists();
-  if (!sourceExists) {
-    throw new Error(`Recovery source media is missing: ${sourcePath}`);
-  }
+  if (!sourceExists) throw new Error(`Recovery source media is missing: ${sourcePath}`);
   const [destinationExists] = await destination.exists();
-  if (!destinationExists) {
-    await source.copy(destination);
-  }
+  if (!destinationExists) await source.copy(destination);
   return destinationPath;
 }
 
@@ -118,12 +109,21 @@ async function writeRecoveryCopy({ uid, chatId, messageId, chatData, messageData
     uid,
     entitlement,
     clearCutoffMs: clearCutoffMillis(chatData, uid),
-    message: {
-      ...messageData,
-      timestampMs,
-    },
+    message: { ...messageData, timestampMs },
   });
   if (!decision.eligible) return { written: false, reason: decision.reason };
+
+  const type = typeof messageData.type === "string" ? messageData.type : "text";
+  const isMedia = type !== "text";
+  if (isMedia && uid === messageData.receiverId) {
+    const acknowledgements = messageData.downloadAcknowledgements &&
+      typeof messageData.downloadAcknowledgements === "object"
+      ? messageData.downloadAcknowledgements
+      : {};
+    if (acknowledgements[uid] == null) {
+      return { written: false, reason: "receiver-media-not-downloaded" };
+    }
+  }
 
   const recoveryMediaStoragePath = await copyRecoveryMedia({
     uid,
@@ -147,7 +147,7 @@ async function writeRecoveryCopy({ uid, chatId, messageId, chatData, messageData
     receiverId: messageData.receiverId || null,
     text: typeof messageData.text === "string" ? messageData.text : "",
     timestamp: messageData.timestamp,
-    type: typeof messageData.type === "string" ? messageData.type : "text",
+    type,
     replyToMessageId: messageData.replyToMessageId || null,
     replyToText: messageData.replyToText || null,
     replyToSenderId: messageData.replyToSenderId || null,
@@ -181,16 +181,13 @@ async function purgeRecoveryChatForUser({ uid, chatId }) {
   const chatRef = recoveryChatRef(uid, chatId);
   let cursor = null;
   let deleted = 0;
-
   while (true) {
-    let query = chatRef
-      .collection("messages")
+    let query = chatRef.collection("messages")
       .orderBy(admin.firestore.FieldPath.documentId())
       .limit(CHAT_PURGE_PAGE_LIMIT);
     if (cursor) query = query.startAfter(cursor);
     const snapshot = await query.get();
     if (snapshot.empty) break;
-
     for (const message of snapshot.docs) {
       const data = message.data() || {};
       await deleteRecoveryMedia({
@@ -206,7 +203,6 @@ async function purgeRecoveryChatForUser({ uid, chatId }) {
     deleted += snapshot.size;
     cursor = snapshot.docs[snapshot.docs.length - 1];
   }
-
   await chatRef.delete().catch(() => {});
   return deleted;
 }
@@ -346,13 +342,23 @@ exports.getMyPremiumRecoveryPage = onCall(
     const afterMillis = Number.isFinite(request.data && request.data.afterMillis)
       ? Math.trunc(request.data.afterMillis)
       : null;
+    const afterMessageId = typeof (request.data && request.data.afterMessageId) === "string"
+      ? request.data.afterMessageId
+      : null;
+    if ((afterMillis === null) !== (afterMessageId === null)) {
+      throw new HttpsError("invalid-argument", "Recovery cursor is incomplete.");
+    }
 
     let query = recoveryChatRef(uid, chatId)
       .collection("messages")
       .orderBy("timestamp", "asc")
+      .orderBy(admin.firestore.FieldPath.documentId(), "asc")
       .limit(limit);
     if (afterMillis !== null) {
-      query = query.startAfter(admin.firestore.Timestamp.fromMillis(afterMillis));
+      query = query.startAfter(
+        admin.firestore.Timestamp.fromMillis(afterMillis),
+        afterMessageId,
+      );
     }
     const snapshot = await query.get();
     const messages = snapshot.docs.map((doc) => {
@@ -374,10 +380,16 @@ exports.getMyPremiumRecoveryPage = onCall(
         recoveryExpiresAtMillis: timestampMillis(data.recoveryExpiresAt),
       };
     });
+    const last = snapshot.docs.length > 0
+      ? snapshot.docs[snapshot.docs.length - 1]
+      : null;
+    const lastData = last ? last.data() || {} : {};
     return {
       chatId,
       messages,
       hasMore: snapshot.size === limit,
+      nextAfterMillis: last ? timestampMillis(lastData.timestamp) : null,
+      nextAfterMessageId: last ? last.id : null,
     };
   },
 );
@@ -392,8 +404,7 @@ exports.purgeExpiredPremiumRecovery = onSchedule(
   },
   async () => {
     const now = admin.firestore.Timestamp.now();
-    const snapshot = await db
-      .collectionGroup("messages")
+    const snapshot = await db.collectionGroup("messages")
       .where("recoveryExpiresAt", "<=", now)
       .orderBy("recoveryExpiresAt", "asc")
       .limit(PURGE_LIMIT)
