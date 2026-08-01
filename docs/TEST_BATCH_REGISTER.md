@@ -19,8 +19,8 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 |---|---|---|---|---:|---|
 | 00 | Governance, roadmap and decision freeze | ACCEPTED | merged | No | Documentation foundation |
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded by accepted Batch 02 base |
-| 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Promoted official base after docs merge |
-| 03 | Local-first persistence and seven-day delivery cloud | PLANNED | — | Yes | Next batch |
+| 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Promoted official base |
+| 03 | Local-first persistence and seven-day delivery cloud | IN_PROGRESS | `batch/03-local-first-seven-day-cloud` | Yes | Batch 02 remains recovery base until acceptance |
 | 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | After acceptance |
 | 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
 | 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
@@ -49,32 +49,52 @@ Base documented recovery commit: f75e6131f43bf0e0b60c172885b4ec460731237a
 Final branch commit: bbed8998040099202e50e26c62782a04b6b9fe04
 Pull request: #88
 Merged main commit: d7a8c800d48beb7f646fb4d76d0afd7fbfeafa56
+Final documented/recovery commit: 2c54f6b6677213ac452043d86c0248e5bbfbdd58
 APK filename: NearMeU-Batch-02-v1.0.5-6-Signed.apk
 APK SHA-256: b355c854f210aea3787b937a46ab6714f60e18f7acf471779a4daf2655f43d76
-Artifact ID: 8814680642
-Artifact digest: sha256:929f66eab59f188bd57f4a8ab586f9bacea2185093041b631e1b8df4f0960bd6
 Android package: com.nearmeu.nearmeu
 Version: 1.0.5+6
 Build workflow: 30687614764 / #20 — passed
 Quality workflow: 30687614766 / #411 — passed
-Permanent signing certificate verification: passed
-Cloud Functions checks: passed
-Firebase rules tests: passed
 Physical result: working
 Owner decision: ACCEPTED on 2026-08-01
-Next batch: 03 Local-first persistence and seven-day delivery cloud
 ```
 
-## Batch 02 accepted behavior
+## Batch 03 working record
 
-- Photo/video/voice send/download/play/open paths work through the accepted signed build.
-- Local media is integrity-checked before reuse.
-- Corrupt or partial files are removed instead of opened.
-- Failed downloads expose retry behavior.
-- Pending private media outbox records recover on authentication and app resume.
-- Voice confirmation retries ambiguous outcomes and verifies the exact Firestore message before declaring failure.
-- Existing Batch 01 tick behavior remains part of the accepted base.
+```text
+Batch ID: 03
+Title: Local-first persistence and seven-day delivery cloud
+Status: IN_PROGRESS
+Branch: batch/03-local-first-seven-day-cloud
+Base: 2c54f6b6677213ac452043d86c0248e5bbfbdd58
+Test version: 1.0.6+7
+Recovery branch movement: forbidden until physical acceptance
+
+Implemented in current branch:
+- cloud delivery expiry is explicit at message-model level
+- remote media is never advertised as downloadable at or after cloudExpiresAt
+- a valid local media path remains independent of cloud expiry
+- encrypted local chat history remains the UI source when Firestore history has been purged
+- backend retention purge now deletes the Firestore message only after its private Storage object is safely deleted or confirmed absent
+- unsafe/unexpected media paths are refused instead of deleting outside the scoped private-message folder
+- Storage deletion failures defer Firestore message deletion for a later scheduled retry, preventing silent orphaned media
+- voice metadata is represented correctly in post-purge chat preview fallback
+- focused Flutter retention tests added
+
+Acceptance still required:
+- final quality gate and signed APK build
+- Firebase deployment of updated retention function before expiry testing
+- direct update over accepted 1.0.5+6 without uninstall/data loss
+- local text remains visible after cloud copy is removed/expired
+- downloaded photo/video/voice remains usable locally after cloud expiry
+- media not downloaded before expiry is shown unavailable rather than as a broken download
+- offline app restart still shows local history
+- cloud cleanup must not delete local files
+- Batch 01 tick behavior and Batch 02 media behavior must remain regression-safe
+- owner acceptance
+```
 
 ## Non-negotiable rule
 
-Every later runtime batch starts from the promoted Batch 02 official base. A later batch may not replace the recovery branch until CI, signed build, physical testing, owner acceptance and documentation are complete.
+Every later runtime batch starts from the promoted Batch 02 official base until Batch 03 is accepted. Batch 03 may not replace `stable/official-recoverable-base` until CI, signed build, required backend deployment, physical testing, owner acceptance and final documentation are complete.
