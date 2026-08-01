@@ -28,13 +28,13 @@ Every runtime change is completed as one focused batch. A later batch does not b
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
-- Final documented/recovery commit: `f487be76f958c06966e15f3db9cbbec65f5cfa9c`
-- Accepted merged Batch 03 runtime commit: `e98bd0ebe86dad1f689723a9e96f35095a015a7b`
-- Accepted PR: `#90`
-- Version: `1.0.6+7`
-- APK: `NearMeU-Batch-03-v1.0.6-7-Signed.apk`
-- APK SHA-256: `a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024`
-- Production retention deployment: passed
+- Accepted merged Batch 04 runtime commit: `d387b5cf8db7d9e792673ada4dd1c1d2958c7aee`
+- Accepted PR: `#92`
+- Version: `1.0.7+8`
+- Physically tested APK: `NearMeU-Batch-04-v1.0.7-8-Signed.apk`
+- Physically tested APK SHA-256: `24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8`
+- Production `clearPrivateChat(asia-south1)` deployment: passed
+- Final documented/recovery commit: pending this acceptance-doc merge and recovery fast-forward.
 
 ## Completed batches
 
@@ -50,30 +50,28 @@ Accepted. Includes media integrity checks, safe retry behavior, voice confirmati
 ### Batch 03 — Local-first persistence and seven-day delivery cloud
 Accepted. Successfully synchronized/downloaded chat history remains app-private local while temporary cloud delivery copies expire. Production retention stamping/purge functions were deployed and owner physical regression passed.
 
-## Active batch
-
 ### Batch 04 — Clear Chat and deletion semantics
+Accepted. Trusted per-user Clear Chat cutoff, local encrypted purge, actor-only clearing, chat-list reappearance only for post-clear activity, Delete for Me hardening and Delete for Everyone local-media detachment were physically accepted. Production `clearPrivateChat` was deployed successfully.
 
-Branch: `batch/04-clear-chat-deletion-semantics`
+## Next batch
 
-Target version: `1.0.7+8`
+### Batch 05 — Identity, account close and reactivation
 
-Scope under implementation/verification:
+Status: planned-next. Start only after this Batch 04 acceptance-doc PR merges and `stable/official-recoverable-base` is fast-forwarded to the exact final docs merge.
 
-- trusted per-user Clear Chat cutoff (`clearStates.<uid>.clearedAt`) so cleared content cannot reappear from ordinary cloud/local replay;
-- local encrypted chat rows and referenced downloaded media purged through the clear cutoff;
-- other participant remains unaffected;
-- cleared conversation stays out of the actor's chat list until genuinely newer post-clear activity exists;
-- Delete for Me removes only the current user's copy and does not recreate already-expired delivery-cloud messages;
-- Delete for Everyone continues to use the trusted sender-only 60-minute unsend path, with local media/content detachment hardened;
-- cross-device cloud deletion markers reconcile into local removal while available;
-- one focused physical test after CI, signing and production `clearPrivateChat` deployment pass.
+Approved scope direction:
 
-Batch 04 cannot replace the official recovery base until all acceptance gates are complete.
+- separate logout/session-end semantics from account-close semantics;
+- define trusted account closed/active lifecycle state;
+- prevent duplicate/ghost identity creation on reactivation;
+- preserve or remove local encrypted state according to the approved account-close policy;
+- ensure existing chat identity references remain safe and deterministic;
+- support controlled reactivation of the same identity where permitted;
+- keep direct-update, package/signing and existing accepted chat/media behavior regression-safe;
+- use a short focused physical acceptance pass rather than repeating Batch 01–04 full matrices.
 
 ## Later batches
 
-- Batch 05 — Identity, account close and reactivation
 - Batch 06 — Premium entitlement foundation
 - Batch 07 — Six-month automatic Premium backup and restore
 - Batch 08 — Profile sharing and deep-link recovery

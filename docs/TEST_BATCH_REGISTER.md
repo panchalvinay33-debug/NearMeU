@@ -19,10 +19,10 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 |---|---|---|---|---:|---|
 | 00 | Governance, roadmap and decision freeze | ACCEPTED | merged | No | Documentation foundation |
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded |
-| 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded by Batch 03 |
-| 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Promoted official base |
-| 04 | Clear Chat and deletion semantics | IN_PROGRESS | `batch/04-clear-chat-deletion-semantics` | Yes | Testing/evidence pending |
-| 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
+| 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded |
+| 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Superseded by Batch 04 |
+| 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base after docs merge |
+| 05 | Identity, account close and reactivation | PLANNED | — | Yes | Next batch |
 | 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
 | 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | After acceptance |
 | 08 | Profile sharing and deep-link recovery | PLANNED | — | Yes | After acceptance |
@@ -54,50 +54,58 @@ Batch ID: 03
 Title: Local-first persistence and seven-day delivery cloud
 Status: ACCEPTED
 Branch: batch/03-local-first-seven-day-cloud
-Base: 2c54f6b6677213ac452043d86c0248e5bbfbdd58
 Tested runtime commit: 72e25450a2df38cf44183d994a13f6acd61369e5
-Final evidence head: 075c7e6d4abb05f40e4ed8b116aa20eddecf2c09
 Pull request: #90
 Merged main runtime commit: e98bd0ebe86dad1f689723a9e96f35095a015a7b
 Final documented/recovery commit: f487be76f958c06966e15f3db9cbbec65f5cfa9c
 Version: 1.0.6+7
-Android package: com.nearmeu.nearmeu
-APK filename: NearMeU-Batch-03-v1.0.6-7-Signed.apk
 APK SHA-256: a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024
-Final artifact ID: 8816552470
-Final artifact digest: sha256:ce88dcebc0c38bcae77e32596f22a37d54a2f11a5ef84176282c624c8789e7d1
-Owner physical acceptance: PASSED on 2026-08-01
-Production retention deployment: PASSED
-Owner decision: ACCEPTED on 2026-08-01
+Owner decision: ACCEPTED
 ```
 
-## Batch 04 in-progress record
+## Batch 04 acceptance record
 
 ```text
 Batch ID: 04
 Title: Clear Chat and deletion semantics
-Status: IN_PROGRESS
+Status: ACCEPTED
 Branch: batch/04-clear-chat-deletion-semantics
 Base: f487be76f958c06966e15f3db9cbbec65f5cfa9c
-Target version: 1.0.7+8
+Tested runtime commit: f22b36690b7ca65828ce2db809a89abe9931f83e
+Physical acceptance evidence head: c98f304f5bd4525315d8f5c6c558e2d0dca98b5d
+Pull request: #92
+Merged main runtime commit: d387b5cf8db7d9e792673ada4dd1c1d2958c7aee
+Version: 1.0.7+8
 Android package: com.nearmeu.nearmeu
-Required new backend: clearPrivateChat(asia-south1)
-Production backend deployment: pending CI proof before deployment
-Signed APK: pending CI
-Physical owner test: pending one focused coordinated pass
+Tested APK filename: NearMeU-Batch-04-v1.0.7-8-Signed.apk
+Tested APK SHA-256: 24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8
+Tested artifact ID: 8817336599
+Tested artifact digest: sha256:6a012c299547e7b32f9f76e5c1ece24e2b4110111bae40289372b1624ccbb39a
+Final docs-head recoverable artifact ID: 8817642243
+Final docs-head recoverable artifact digest: sha256:6bbb921fc7f115bd84aaa3ce1979da65271ea77f4cd129b787120096e3bc10d3
+Build #27 / run 30695802197: PASS
+Quality #422 / run 30695802185: PASS
+Docs-head Build #28 / run 30696835582: PASS
+Docs-head Quality #423 / run 30696835612: PASS
+Production clearPrivateChat(asia-south1) deployment: PASS
+Focused physical owner test: PASS
+Clear Chat after production deployment: PASS
+Delete for Me: PASS
+Delete for Everyone: PASS
+Tick regression: PASS
+Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Implemented scope under test:
+Accepted Batch 04 behavior:
 
-- trusted per-user Clear Chat cutoff stored at `clearStates.<uid>.clearedAt`;
-- Clear Chat removes local encrypted rows and referenced local media through the exact cutoff;
-- cleared history stays hidden after restart/sync and chat list remains hidden until newer post-clear activity;
-- the other participant is unaffected by Clear Chat;
-- Delete for Me removes the actor's local row/media and no longer recreates an already-expired cloud message stub;
-- remote `deletedFor` updates are reconciled into local deletion while available;
-- Delete for Everyone uses the existing trusted 60-minute unsend backend and now explicitly detaches local media/content metadata;
-- UI exposes `Clear Chat` in the chat three-dot menu and names sender unsend as `Delete for everyone`;
-- clear operation is blocked while a send/recording is active to avoid ambiguous destructive boundaries.
+- authoritative per-user Clear Chat cutoff at `clearStates.<uid>.clearedAt`;
+- encrypted local rows and referenced local media removed through the clear cutoff;
+- cleared history remains hidden after restart/sync once clear state is observed;
+- chat remains absent from actor list until newer post-clear activity;
+- other participant remains unaffected by actor Clear Chat;
+- Delete for Me does not recreate an expired delivery-cloud stub;
+- Delete for Everyone retains trusted sender-only 60-minute semantics and local media detachment;
+- production `clearPrivateChat` callable deployed successfully.
 
 Focused physical matrix: [`BATCH_04_PHYSICAL_TEST.md`](BATCH_04_PHYSICAL_TEST.md).
 
@@ -107,4 +115,4 @@ The active owner working copy is `F:\NearMeU`. After every accepted/promoted bat
 
 ## Current gate
 
-Batch 04 must pass CI, permanently signed `1.0.7+8` APK build, production `clearPrivateChat` deployment, one focused physical-device pass and owner acceptance before merge/promotion. Batch 03 remains the official recovery base until then.
+Batch 04 is accepted and merged. Final acceptance documentation must merge and `stable/official-recoverable-base` must then fast-forward to that exact docs merge commit. Batch 05 may start only from the promoted Batch 04 base.
