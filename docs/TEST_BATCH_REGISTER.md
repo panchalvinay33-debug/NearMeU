@@ -20,7 +20,7 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 00 | Governance, roadmap and decision freeze | ACCEPTED | merged | No | Documentation foundation |
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded by accepted Batch 02 base |
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Promoted official base |
-| 03 | Local-first persistence and seven-day delivery cloud | IN_PROGRESS | `batch/03-local-first-seven-day-cloud` | Yes | Batch 02 remains recovery base until acceptance |
+| 03 | Local-first persistence and seven-day delivery cloud | OWNER_REVIEW | `batch/03-local-first-seven-day-cloud` | Yes | Batch 02 remains recovery base until acceptance |
 | 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | After acceptance |
 | 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
 | 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
@@ -60,16 +60,33 @@ Physical result: working
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-## Batch 03 working record
+## Batch 03 owner-review record
 
 ```text
 Batch ID: 03
 Title: Local-first persistence and seven-day delivery cloud
-Status: IN_PROGRESS
+Status: OWNER_REVIEW
 Branch: batch/03-local-first-seven-day-cloud
 Base: 2c54f6b6677213ac452043d86c0248e5bbfbdd58
+Final tested branch commit: 72e25450a2df38cf44183d994a13f6acd61369e5
+Pull request: #90 (draft)
 Test version: 1.0.6+7
+Android package: com.nearmeu.nearmeu
+APK filename: NearMeU-Batch-03-v1.0.6-7-Signed.apk
+APK SHA-256: a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024
+Artifact ID: 8815490869
+Artifact digest: sha256:36e57413b16d1b7c39e29ae0cbcd266fc268b0c08e5bdd669c93dd9499fa8b2a
+Build workflow: 30690049491 / #22 — passed
+Quality workflow: 30690049469 / #415 — passed
+Permanent signing certificate SHA-1: 7F:B6:4F:DB:90:B7:D1:27:57:5F:A4:F9:EE:69:2A:EC:BE:8E:7E:55
+Permanent signing certificate SHA-256: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
+Flutter analyze/tests: passed
+Cloud Functions tests: passed
+Firebase rules tests: passed
+Required retention deployment: pending
+Owner physical acceptance: pending
 Recovery branch movement: forbidden until physical acceptance
+```
 
 Implemented in current branch:
 - cloud delivery expiry is explicit at message-model level
@@ -83,8 +100,7 @@ Implemented in current branch:
 - focused Flutter retention tests added
 
 Acceptance still required:
-- final quality gate and signed APK build
-- Firebase deployment of updated retention function before expiry testing
+- Firebase deployment of updated retention functions before expiry testing
 - direct update over accepted 1.0.5+6 without uninstall/data loss
 - local text remains visible after cloud copy is removed/expired
 - downloaded photo/video/voice remains usable locally after cloud expiry
@@ -93,7 +109,6 @@ Acceptance still required:
 - cloud cleanup must not delete local files
 - Batch 01 tick behavior and Batch 02 media behavior must remain regression-safe
 - owner acceptance
-```
 
 ## Non-negotiable rule
 
