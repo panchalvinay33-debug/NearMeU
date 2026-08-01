@@ -20,7 +20,7 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 00 | Governance, roadmap and decision freeze | ACCEPTED | merged | No | Documentation foundation |
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded by accepted Batch 02 base |
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Promoted official base |
-| 03 | Local-first persistence and seven-day delivery cloud | OWNER_REVIEW | `batch/03-local-first-seven-day-cloud` | Yes | Batch 02 remains recovery base until acceptance |
+| 03 | Local-first persistence and seven-day delivery cloud | OWNER_REVIEW | `batch/03-local-first-seven-day-cloud` | Yes | Physical accepted; backend deployment remains before promotion |
 | 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | After acceptance |
 | 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
 | 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
@@ -68,24 +68,33 @@ Title: Local-first persistence and seven-day delivery cloud
 Status: OWNER_REVIEW
 Branch: batch/03-local-first-seven-day-cloud
 Base: 2c54f6b6677213ac452043d86c0248e5bbfbdd58
-Final tested branch commit: 72e25450a2df38cf44183d994a13f6acd61369e5
+Final tested runtime commit: 72e25450a2df38cf44183d994a13f6acd61369e5
+Current branch head after evidence-only commits: 7901ebd0a14826ca38b0fef9cf88123b6c34f9ce
 Pull request: #90 (draft)
 Test version: 1.0.6+7
 Android package: com.nearmeu.nearmeu
 APK filename: NearMeU-Batch-03-v1.0.6-7-Signed.apk
 APK SHA-256: a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024
-Artifact ID: 8815490869
-Artifact digest: sha256:36e57413b16d1b7c39e29ae0cbcd266fc268b0c08e5bdd669c93dd9499fa8b2a
-Build workflow: 30690049491 / #22 — passed
-Quality workflow: 30690049469 / #415 — passed
+Original artifact ID: 8815490869
+Original artifact digest: sha256:36e57413b16d1b7c39e29ae0cbcd266fc268b0c08e5bdd669c93dd9499fa8b2a
+Latest evidence artifact ID: 8815819144
+Latest evidence artifact digest: sha256:aaeaf015ea8816b60b385f3f484b56abfe67aef3bb7e04eaf2015a425b920a1a
+Build workflow: 30691064361 / #23 — passed
+Quality workflow: 30691064349 / #416 — passed
 Permanent signing certificate SHA-1: 7F:B6:4F:DB:90:B7:D1:27:57:5F:A4:F9:EE:69:2A:EC:BE:8E:7E:55
 Permanent signing certificate SHA-256: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
 Flutter analyze/tests: passed
 Cloud Functions tests: passed
 Firebase rules tests: passed
+Owner physical acceptance: PASSED on 2026-08-01
+Direct update without uninstall/data loss: passed
+Login/history/app-state preservation: passed
+Offline/restart local history: passed
+Downloaded photo/video/voice local reuse: passed
+Batch 01 tick regression: passed
+Batch 02 media regression: passed
 Required retention deployment: pending
-Owner physical acceptance: pending
-Recovery branch movement: forbidden until physical acceptance
+Recovery branch movement: forbidden until backend deployment and final acceptance completion
 ```
 
 Implemented in current branch:
@@ -100,15 +109,9 @@ Implemented in current branch:
 - focused Flutter retention tests added
 
 Acceptance still required:
-- Firebase deployment of updated retention functions before expiry testing
-- direct update over accepted 1.0.5+6 without uninstall/data loss
-- local text remains visible after cloud copy is removed/expired
-- downloaded photo/video/voice remains usable locally after cloud expiry
-- media not downloaded before expiry is shown unavailable rather than as a broken download
-- offline app restart still shows local history
-- cloud cleanup must not delete local files
-- Batch 01 tick behavior and Batch 02 media behavior must remain regression-safe
-- owner acceptance
+- deploy the updated Firebase retention functions to project `nearmeu-e82c7`
+- verify the production deployment succeeds
+- then merge and promote Batch 03 through the normal documentation/recovery-base flow
 
 ## Non-negotiable rule
 
