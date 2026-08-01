@@ -21,7 +21,7 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded |
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded by Batch 03 |
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Promoted official base |
-| 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | Next batch |
+| 04 | Clear Chat and deletion semantics | IN_PROGRESS | `batch/04-clear-chat-deletion-semantics` | Yes | Testing/evidence pending |
 | 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
 | 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
 | 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | After acceptance |
@@ -59,43 +59,52 @@ Tested runtime commit: 72e25450a2df38cf44183d994a13f6acd61369e5
 Final evidence head: 075c7e6d4abb05f40e4ed8b116aa20eddecf2c09
 Pull request: #90
 Merged main runtime commit: e98bd0ebe86dad1f689723a9e96f35095a015a7b
+Final documented/recovery commit: f487be76f958c06966e15f3db9cbbec65f5cfa9c
 Version: 1.0.6+7
 Android package: com.nearmeu.nearmeu
 APK filename: NearMeU-Batch-03-v1.0.6-7-Signed.apk
 APK SHA-256: a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024
 Final artifact ID: 8816552470
 Final artifact digest: sha256:ce88dcebc0c38bcae77e32596f22a37d54a2f11a5ef84176282c624c8789e7d1
-Build workflow: 30693343758 / #25 — passed
-Quality workflow: 30693343752 / #418 — passed
-Permanent signing certificate SHA-256: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
 Owner physical acceptance: PASSED on 2026-08-01
-Direct update without uninstall/data loss: passed
-Login/history/app-state preservation: passed
-Offline/restart local history: passed
-Downloaded photo/video/voice local reuse: passed
-Batch 01 tick regression: passed
-Batch 02 media regression: passed
-Production Firebase project: nearmeu-e82c7
-stampPrivateMessageRetention(asia-south1): deployed successfully
-purgeExpiredPrivateMessages(asia-south1): deployed successfully
-Firebase CLI result: Deploy complete!
+Production retention deployment: PASSED
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Accepted Batch 03 behavior:
+## Batch 04 in-progress record
 
-- cloud delivery expiry is explicit at message-model level;
-- remote media is unavailable after expiry unless a valid local copy exists;
-- a valid local copy remains independent of cloud expiry;
-- encrypted local history remains the app source after Firestore delivery history is purged;
-- backend media purge is orphan-safe and scoped to private-message storage;
-- transient Storage deletion failures defer Firestore deletion for retry;
-- production retention functions are deployed.
+```text
+Batch ID: 04
+Title: Clear Chat and deletion semantics
+Status: IN_PROGRESS
+Branch: batch/04-clear-chat-deletion-semantics
+Base: f487be76f958c06966e15f3db9cbbec65f5cfa9c
+Target version: 1.0.7+8
+Android package: com.nearmeu.nearmeu
+Required new backend: clearPrivateChat(asia-south1)
+Production backend deployment: pending CI proof before deployment
+Signed APK: pending CI
+Physical owner test: pending one focused coordinated pass
+```
+
+Implemented scope under test:
+
+- trusted per-user Clear Chat cutoff stored at `clearStates.<uid>.clearedAt`;
+- Clear Chat removes local encrypted rows and referenced local media through the exact cutoff;
+- cleared history stays hidden after restart/sync and chat list remains hidden until newer post-clear activity;
+- the other participant is unaffected by Clear Chat;
+- Delete for Me removes the actor's local row/media and no longer recreates an already-expired cloud message stub;
+- remote `deletedFor` updates are reconciled into local deletion while available;
+- Delete for Everyone uses the existing trusted 60-minute unsend backend and now explicitly detaches local media/content metadata;
+- UI exposes `Clear Chat` in the chat three-dot menu and names sender unsend as `Delete for everyone`;
+- clear operation is blocked while a send/recording is active to avoid ambiguous destructive boundaries.
+
+Focused physical matrix: [`BATCH_04_PHYSICAL_TEST.md`](BATCH_04_PHYSICAL_TEST.md).
 
 ## Canonical local workspace rule
 
 The active owner working copy is `F:\NearMeU`. After every accepted/promoted batch it must be synchronized to the promoted `main` / `stable/official-recoverable-base` state. Downloads clones and `F:\NearMeU-OLD` are not the active project.
 
-## Next batch
+## Current gate
 
-Batch 04 — Clear Chat and deletion semantics.
+Batch 04 must pass CI, permanently signed `1.0.7+8` APK build, production `clearPrivateChat` deployment, one focused physical-device pass and owner acceptance before merge/promotion. Batch 03 remains the official recovery base until then.
