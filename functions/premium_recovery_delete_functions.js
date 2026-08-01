@@ -1,13 +1,11 @@
 "use strict";
 
-const admin = require("firebase-admin");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 
 const {
   deleteRecoveryMessageForUser,
 } = require("./premium_recovery_functions");
 
-const db = admin.firestore();
 const REGION = "asia-south1";
 
 function requireAuthenticatedUid(request) {
@@ -39,23 +37,10 @@ exports.deleteMyPremiumRecoveryMessage = onCall(
       throw new HttpsError("invalid-argument", "Valid message details are required.");
     }
 
+    // The caller can only address a record inside their own recovery root.
+    // Do not depend on the seven-day delivery chat still existing: Delete for
+    // Me must remain authoritative even after the source message has expired.
     const chatId = deterministicChatId(uid, otherUserId);
-    const chatSnapshot = await db.collection("chats").doc(chatId).get();
-    if (!chatSnapshot.exists) {
-      throw new HttpsError("not-found", "This chat is no longer available.");
-    }
-    const participants = Array.isArray(chatSnapshot.get("participants"))
-      ? [...chatSnapshot.get("participants")].sort()
-      : [];
-    const expected = [uid, otherUserId].sort();
-    if (
-      participants.length !== 2 ||
-      participants[0] !== expected[0] ||
-      participants[1] !== expected[1]
-    ) {
-      throw new HttpsError("permission-denied", "Invalid private chat.");
-    }
-
     const deleted = await deleteRecoveryMessageForUser({
       uid,
       chatId,
