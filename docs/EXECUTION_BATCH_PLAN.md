@@ -23,17 +23,11 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 
 ## Current accepted starting point
 
-- Accepted batch: `05`
-- Accepted runtime merge: `44143f612cbf8b7adf6d591abe74aac2c6397704`
-- Accepted PR: `#94`
+The current promoted recovery base remains Batch 05 until Batch 06 final merge/recovery promotion completes:
+
+- Final promoted Batch 05 main/recovery: `3b749c8d7a320b71446245f99c694fdf85d9ccc4`
 - Version: `1.0.8+9`
 - Package: `com.nearmeu.nearmeu`
-- Tested runtime: `d2868b97dc931a49f625f4711db4b555fecd34ec`
-- Tested signed debug APK SHA-256: `c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406`
-- Recoverable artifact ID/digest: `8818404060` / `sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c`
-- Tested-runtime CI: Build #33 PASS, Quality #430 PASS
-- Acceptance-head CI: Build #36 PASS, Quality #433 PASS
-- Physical owner acceptance: PASS on 2026-08-01
 
 ## Completed batches
 
@@ -42,28 +36,46 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 - Batch 02 — Photo/video/voice-message reliability — accepted.
 - Batch 03 — Local-first persistence and seven-day delivery cloud — accepted.
 - Batch 04 — Clear Chat and deletion semantics — accepted/promoted.
-- Batch 05 — Identity, account close and reactivation — accepted/promoted. Reversible account closure, unavailable closed identity, messaging refusal while closed, same-account reactivation/profile recreation and retained chat continuity were physically accepted.
+- Batch 05 — Identity, account close and reactivation — accepted/promoted.
 
-## Active / next batch
+## Accepted / promotion pending
 
 ### Batch 06 — Premium entitlement foundation
 
-Planned scope:
+Owner physically accepted the focused Batch 06 behavior on 2026-08-01.
 
-- one trusted server-side Premium entitlement model;
-- Free versus Premium authorization exposed through a central client/service layer;
-- no public Premium badge;
-- Premium status cannot be unlocked by a local-only client flag;
-- active/expired entitlement handling is deterministic;
-- Free users keep text, incoming media playback and incoming call receipt according to frozen decisions;
-- outbound photo/video/voice-message and future outbound calling checks use the same entitlement foundation;
-- Batch 07 recovery and Batch 11 owner-admin grants build on this same entitlement truth.
+Accepted runtime evidence:
 
-Batch 06 implementation must inspect the current purchase/subscription code and frozen product decisions before modifying runtime behavior. Do not implement Batch 07 backup/restore or Batch 11 admin controls inside Batch 06.
+- PR: `#96`
+- Tested runtime: `52fe6a52ad117e9eccb922e535b9d6752af7e695`
+- Version: `1.0.9+10`
+- Build #40 / run `30706204824`: PASS
+- Quality #439 / run `30706204828`: PASS
+- Signed debug APK SHA-256: `2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f`
+- Signed release APK SHA-256: `4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72`
+- Production `getMyPremiumEntitlement` available and tested.
+- Production `sendPrivateMediaMessage` updated with Premium enforcement.
+- Free text remained usable.
+- Free outbound mic/photo/video controls remained visible and correctly locked.
+- Existing received/local media remained available.
+- Stale-token `UNAUTHENTICATED` behavior was fixed with one forced Firebase ID-token refresh/retry and physically retested successfully.
+
+Batch 06 still requires acceptance-head CI, PR merge, final recovery documentation and recovery-branch promotion before Batch 07 runtime code begins.
+
+## Next batch after promotion
+
+### Batch 07 — Six-month automatic Premium backup and restore
+
+Planned scope remains:
+
+- automatic Premium backup/recovery window up to six months;
+- use Batch 06 trusted entitlement truth rather than a local Premium flag;
+- preserve Clear Chat / deletion tombstone semantics so intentionally cleared/deleted content cannot resurrect;
+- define restore eligibility and retained backup lifecycle precisely before runtime implementation;
+- do not mix profile sharing, calling or owner-admin entitlement controls into this batch.
 
 ## Later batches
 
-- Batch 07 — Six-month automatic Premium backup and restore
 - Batch 08 — Profile sharing and deep-link recovery
 - Batch 09 — Agora audio calling
 - Batch 10 — Agora video calling

@@ -14,6 +14,7 @@ module.exports = {
   ...require("./chat_read_functions.js"),
   ...require("./delivery_receipt_functions.js"),
   ...require("./message_retention_functions.js"),
+  ...require("./premium_entitlement_functions.js"),
   ...require("./private_media_functions.js"),
   ...require("./private_media_ack_functions.js"),
   ...require("./message_unsend_functions.js"),
