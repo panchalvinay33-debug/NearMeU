@@ -71,6 +71,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _checkingBlock = true;
   bool _isRecordingVoice = false;
   bool _isAcknowledgingRead = false;
+  bool _isClearingChat = false;
   Duration _recordingDuration = Duration.zero;
   Timer? _readAcknowledgementTimer;
   Timer? _recordingTimer;
@@ -176,7 +177,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final text = _messageController.text.trim();
     final user = currentUser;
     if (text.isEmpty || user == null) return;
-    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+    if (_isBlocked ||
+        _isSending ||
+        _isSendingMedia ||
+        _isRecordingVoice ||
+        _isClearingChat) {
       return;
     }
 
@@ -200,7 +205,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showAttachmentSheet() async {
-    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+    if (_isBlocked ||
+        _isSending ||
+        _isSendingMedia ||
+        _isRecordingVoice ||
+        _isClearingChat) {
       return;
     }
     _messageFocusNode.unfocus();
@@ -302,7 +311,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _prepareAndSendMedia(_AttachmentSelection selection) async {
     final user = currentUser;
-    if (user == null || _isBlocked || _isSendingMedia) return;
+    if (user == null || _isBlocked || _isSendingMedia || _isClearingChat) {
+      return;
+    }
     setState(() => _isSendingMedia = true);
     try {
       final PreparedPrivateMedia? media =
@@ -338,7 +349,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startVoiceRecording() async {
-    if (_isBlocked || _isSending || _isSendingMedia || _isRecordingVoice) {
+    if (_isBlocked ||
+        _isSending ||
+        _isSendingMedia ||
+        _isRecordingVoice ||
+        _isClearingChat) {
       return;
     }
     final allowed = await _recorder.hasPermission();
@@ -492,7 +507,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _toggleEmojiPicker() {
-    if (_isBlocked || _isSendingMedia || _isRecordingVoice) return;
+    if (_isBlocked || _isSendingMedia || _isRecordingVoice || _isClearingChat) {
+      return;
+    }
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
       _messageFocusNode.requestFocus();
@@ -590,11 +607,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (message.canUnsend(user.uid))
               ListTile(
                 leading: const Icon(
-                  Icons.undo_rounded,
+                  Icons.delete_forever_rounded,
                   color: Colors.redAccent,
                 ),
                 title: const Text(
-                  'Unsend',
+                  'Delete for everyone',
                   style: TextStyle(color: Colors.redAccent),
                 ),
                 onTap: () {
@@ -730,18 +747,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           controller: _messageController,
           focusNode: _messageFocusNode,
           showEmojiPicker: _showEmojiPicker,
-          isSendingMedia: _isSendingMedia,
+          isSendingMedia: _isSendingMedia || _isClearingChat,
           isRecordingVoice: _isRecordingVoice,
           recordingDuration: _recordingDuration,
           onEmojiTap: _toggleEmojiPicker,
-          onAttachment: _isSending || _isSendingMedia || _isRecordingVoice
+          onAttachment:
+              _isSending || _isSendingMedia || _isRecordingVoice || _isClearingChat
               ? null
               : _showAttachmentSheet,
-          onVoiceTap: _isSending || _isSendingMedia
+          onVoiceTap: _isSending || _isSendingMedia || _isClearingChat
               ? null
               : _toggleVoiceRecording,
           onCancelVoice: _isRecordingVoice ? _cancelVoiceRecording : null,
-          onSend: _isSending || _isSendingMedia || _isRecordingVoice
+          onSend:
+              _isSending || _isSendingMedia || _isRecordingVoice || _isClearingChat
               ? null
               : _sendMessage,
           onTextFieldTap: () {
@@ -846,6 +865,57 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _clearChat() async {
+    final user = currentUser;
+    if (user == null || _isClearingChat) return;
+    if (_isSending || _isSendingMedia || _isRecordingVoice) {
+      _showError('Finish the current send or recording before clearing chat.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Clear Chat?'),
+        content: const Text(
+          'This permanently removes this conversation, downloaded media, voice notes and local chat history for you. The other person keeps their copy. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Clear Chat'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _isClearingChat = true;
+      _replyingTo = null;
+      _showEmojiPicker = false;
+    });
+    try {
+      await _chatService.clearChat(
+        currentUserId: user.uid,
+        otherUserId: widget.otherUserId,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isClearingChat = false);
+        _showError(error);
+      }
+    }
+  }
+
   Future<void> _showChatMenu() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -854,6 +924,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       builder: (sheetContext) => SafeArea(
         child: Wrap(
           children: [
+            ListTile(
+              leading: const Icon(
+                Icons.delete_sweep_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Clear Chat',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              subtitle: const Text(
+                'Permanently remove this chat for you',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_clearChat());
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.flag_rounded, color: Colors.redAccent),
               title: const Text(
@@ -944,7 +1032,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   if (_isRecordingVoice) await _cancelVoiceRecording();
                   if (context.mounted) Navigator.pop(context);
                 },
-                onMenu: _showChatMenu,
+                onMenu: _isClearingChat ? null : _showChatMenu,
               );
             },
           ),

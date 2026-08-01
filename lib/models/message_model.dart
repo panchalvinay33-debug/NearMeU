@@ -181,6 +181,7 @@ class MessageModel {
   MessageModel withLocalMedia({
     String? localMediaPath,
     String? localThumbnailPath,
+    bool clearExisting = false,
   }) {
     return MessageModel(
       id: id,
@@ -202,8 +203,12 @@ class MessageModel {
       downloadAcknowledgements: downloadAcknowledgements,
       cloudExpiresAt: cloudExpiresAt,
       cloudMediaDeletedAt: cloudMediaDeletedAt,
-      localMediaPath: localMediaPath ?? this.localMediaPath,
-      localThumbnailPath: localThumbnailPath ?? this.localThumbnailPath,
+      localMediaPath: clearExisting
+          ? null
+          : localMediaPath ?? this.localMediaPath,
+      localThumbnailPath: clearExisting
+          ? null
+          : localThumbnailPath ?? this.localThumbnailPath,
       isDelivered: isDelivered,
       deliveredAt: deliveredAt,
       isSeen: isSeen,

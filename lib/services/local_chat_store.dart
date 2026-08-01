@@ -183,30 +183,42 @@ class LocalChatStore {
       for (final record in existingRecords) record.message.id: record,
     };
 
-    final records = messages.map((message) {
+    final records = <LocalStoredMessage>[];
+    for (final message in messages) {
       final existing = existingById[message.id];
-      final localMediaPath = existing?.localMediaPath;
-      final localThumbnailPath = existing?.localThumbnailPath;
-      return LocalStoredMessage(
-        chatId: chatId,
-        message: message.withLocalMedia(
+      final detachLocalMedia =
+          message.isUnsent || message.deletedFor.contains(ownerUid);
+      if (detachLocalMedia && existing != null) {
+        await _deleteFile(existing.localMediaPath);
+        await _deleteFile(existing.localThumbnailPath);
+      }
+      final localMediaPath = detachLocalMedia ? null : existing?.localMediaPath;
+      final localThumbnailPath = detachLocalMedia
+          ? null
+          : existing?.localThumbnailPath;
+      records.add(
+        LocalStoredMessage(
+          chatId: chatId,
+          message: message.withLocalMedia(
+            localMediaPath: localMediaPath,
+            localThumbnailPath: localThumbnailPath,
+            clearExisting: detachLocalMedia,
+          ),
           localMediaPath: localMediaPath,
           localThumbnailPath: localThumbnailPath,
+          cloudExpiresAt:
+              message.cloudExpiresAt ??
+              existing?.cloudExpiresAt ??
+              message.timestamp.add(cloudMessageRetention),
+          downloadComplete:
+              message.type == 'text' || (existing?.downloadComplete ?? false),
+          cloudMediaDeleted:
+              message.cloudMediaDeletedAt != null ||
+              (existing?.cloudMediaDeleted ?? false),
+          pendingUpload: false,
         ),
-        localMediaPath: localMediaPath,
-        localThumbnailPath: localThumbnailPath,
-        cloudExpiresAt:
-            message.cloudExpiresAt ??
-            existing?.cloudExpiresAt ??
-            message.timestamp.add(cloudMessageRetention),
-        downloadComplete:
-            message.type == 'text' || (existing?.downloadComplete ?? false),
-        cloudMediaDeleted:
-            message.cloudMediaDeletedAt != null ||
-            (existing?.cloudMediaDeleted ?? false),
-        pendingUpload: false,
       );
-    });
+    }
     await upsertMessages(ownerUid: ownerUid, records: records);
   }
 
@@ -459,8 +471,16 @@ class LocalChatStore {
         'reply_to_message_id': null,
         'reply_to_text': null,
         'reply_to_sender_id': null,
+        'message_type': 'text',
         'remote_media_url': null,
         'media_storage_path': null,
+        'media_content_type': null,
+        'media_size_bytes': null,
+        'media_duration_ms': null,
+        'local_media_path': null,
+        'local_thumbnail_path': null,
+        'download_complete': 1,
+        'pending_upload': 0,
         'cloud_media_deleted': 1,
         'cloud_media_deleted_at_ms': unsentAt.millisecondsSinceEpoch,
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
@@ -513,6 +533,42 @@ class LocalChatStore {
       await _deleteFile(rows.first['local_media_path'] as String?);
       await _deleteFile(rows.first['local_thumbnail_path'] as String?);
     }
+  }
+
+  Future<int> clearChatThrough({
+    required String ownerUid,
+    required String chatId,
+    required DateTime clearedAt,
+  }) async {
+    final database = await openForUser(ownerUid);
+    final cutoff = clearedAt.millisecondsSinceEpoch;
+    final rows = await database.query(
+      'messages',
+      columns: const <String>['local_media_path', 'local_thumbnail_path'],
+      where: 'owner_uid = ? AND chat_id = ? AND timestamp_ms <= ?',
+      whereArgs: <Object?>[ownerUid, chatId, cutoff],
+    );
+    final deleted = await database.delete(
+      'messages',
+      where: 'owner_uid = ? AND chat_id = ? AND timestamp_ms <= ?',
+      whereArgs: <Object?>[ownerUid, chatId, cutoff],
+    );
+
+    final paths = <String>{};
+    for (final row in rows) {
+      final mediaPath = row['local_media_path'];
+      final thumbnailPath = row['local_thumbnail_path'];
+      if (mediaPath is String && mediaPath.trim().isNotEmpty) {
+        paths.add(mediaPath);
+      }
+      if (thumbnailPath is String && thumbnailPath.trim().isNotEmpty) {
+        paths.add(thumbnailPath);
+      }
+    }
+    for (final path in paths) {
+      await _deleteFile(path);
+    }
+    return deleted;
   }
 
   Future<void> _deleteFile(String? path) async {
