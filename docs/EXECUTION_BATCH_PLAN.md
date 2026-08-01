@@ -2,90 +2,67 @@
 
 Last updated: 2026-08-01
 
-Every runtime change is completed as one focused batch. A later batch does not begin until the current batch has passed automated tests, signed APK build, physical-device checks, owner review and documentation update.
+Every runtime change is completed as one focused batch. A later batch starts only after automated tests, signed build, focused physical acceptance, owner approval, merge and recovery documentation are complete.
 
 ## Governing rule
 
-1. Start from the current official recovery/main state.
-2. Use the canonical local workspace `F:\NearMeU` on the owner Windows machine.
-3. Create one short-lived branch.
+1. Start from current promoted `main` / recovery state.
+2. Use canonical workspace `F:\NearMeU`.
+3. Use one short-lived runtime branch.
 4. Freeze scope before coding.
 5. Implement only that batch.
 6. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
-7. Build a permanently signed APK for runtime changes.
-8. Install with `adb install -r`; never uninstall/wipe unless an explicitly approved clean-install scenario requires it.
-9. Preserve package `com.nearmeu.nearmeu`, permanent signing identity and monotonically increasing versionCode.
-10. Test on physical Android device(s), using two accounts/devices where behavior crosses users.
-11. Record final commit, artifact, SHA-256, workflow evidence, physical result and known limitations.
-12. Obtain owner acceptance.
-13. Merge through a passing pull request.
-14. Update recovery documentation with the actual merged-main runtime SHA.
-15. Move `stable/official-recoverable-base` only after documentation is complete.
-16. Synchronize `F:\NearMeU` to the promoted `main` / recovery state after each accepted batch.
+7. Build with the permanent Android signing identity.
+8. Install using update mode (`adb install -r`), never uninstall/wipe for normal upgrades.
+9. Preserve package `com.nearmeu.nearmeu` and monotonically increasing versionCode.
+10. Physically test only the focused new behavior plus necessary regression smoke checks.
+11. Record commit/artifact/hash/workflow evidence and owner decision.
+12. Merge through a passing PR.
+13. Update recovery docs and promote `stable/official-recoverable-base`.
+14. Sync `F:\NearMeU` back to promoted `main`.
 
 ## Current accepted starting point
 
-- Repository: `panchalvinay33-debug/NearMeU`
-- Source branch: `main`
-- Recovery branch: `stable/official-recoverable-base`
-- Final documented/recovery commit: `c0a734e3dfbbab61b5c1b008df4e3f09bb011556`
-- Accepted merged Batch 04 runtime commit: `d387b5cf8db7d9e792673ada4dd1c1d2958c7aee`
-- Accepted PR: `#92`
-- Version: `1.0.7+8`
-- Physically tested APK: `NearMeU-Batch-04-v1.0.7-8-Signed.apk`
-- Physically tested APK SHA-256: `24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8`
-- Production `clearPrivateChat(asia-south1)` deployment: passed
+- Accepted batch: `05`
+- Accepted runtime merge: `44143f612cbf8b7adf6d591abe74aac2c6397704`
+- Accepted PR: `#94`
+- Version: `1.0.8+9`
+- Package: `com.nearmeu.nearmeu`
+- Tested runtime: `d2868b97dc931a49f625f4711db4b555fecd34ec`
+- Tested signed debug APK SHA-256: `c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406`
+- Recoverable artifact ID/digest: `8818404060` / `sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c`
+- Tested-runtime CI: Build #33 PASS, Quality #430 PASS
+- Acceptance-head CI: Build #36 PASS, Quality #433 PASS
+- Physical owner acceptance: PASS on 2026-08-01
 
 ## Completed batches
 
-### Batch 00 — Governance, roadmap and decision freeze
-Accepted.
+- Batch 00 — Governance, roadmap and decision freeze — accepted.
+- Batch 01 — Chat reliability and message-state truth — accepted.
+- Batch 02 — Photo/video/voice-message reliability — accepted.
+- Batch 03 — Local-first persistence and seven-day delivery cloud — accepted.
+- Batch 04 — Clear Chat and deletion semantics — accepted/promoted.
+- Batch 05 — Identity, account close and reactivation — accepted/promoted. Reversible account closure, unavailable closed identity, messaging refusal while closed, same-account reactivation/profile recreation and retained chat continuity were physically accepted.
 
-### Batch 01 — Chat reliability and message-state truth
-Accepted. Sent/server-accepted, delivered/synchronized and read/open tick truth physically verified.
+## Active / next batch
 
-### Batch 02 — Photo, video and voice-message reliability
-Accepted. Includes media integrity checks, safe retry behavior, voice confirmation verification, partial-file cleanup and authentication/app-resume outbox recovery.
+### Batch 06 — Premium entitlement foundation
 
-### Batch 03 — Local-first persistence and seven-day delivery cloud
-Accepted. Successfully synchronized/downloaded chat history remains app-private local while temporary cloud delivery copies expire. Production retention stamping/purge functions were deployed and owner physical regression passed.
+Planned scope:
 
-### Batch 04 — Clear Chat and deletion semantics
-Accepted and promoted. Trusted per-user Clear Chat cutoff, local encrypted purge, actor-only clearing, chat-list reappearance only for post-clear activity, Delete for Me hardening and Delete for Everyone local-media detachment were physically accepted. Production `clearPrivateChat` was deployed successfully.
+- one trusted server-side Premium entitlement model;
+- Free versus Premium authorization exposed through a central client/service layer;
+- no public Premium badge;
+- Premium status cannot be unlocked by a local-only client flag;
+- active/expired entitlement handling is deterministic;
+- Free users keep text, incoming media playback and incoming call receipt according to frozen decisions;
+- outbound photo/video/voice-message and future outbound calling checks use the same entitlement foundation;
+- Batch 07 recovery and Batch 11 owner-admin grants build on this same entitlement truth.
 
-## Active batch
-
-### Batch 05 — Identity, account close and reactivation
-
-Branch: `batch/05-identity-account-close-reactivation`
-
-Target version: `1.0.8+9`
-
-Implemented/verification scope:
-
-- one verified email is claimed to one continuing NearMeU Firebase UID through a server-only hashed-email identity mapping;
-- sign-in verifies identity continuity before entering the app;
-- `Close Account` is reversible and remains separate from Sign Out and permanent Delete Account;
-- Close Account requires recent Google reauthentication;
-- Close Account does not delete Firebase Authentication identity, local encrypted chat history, chat relationships or block subcollections;
-- the public `users/{uid}` document is removed on Close Account so Nearby/search and all existing active-user authorization paths immediately treat the account as unavailable;
-- public location/profile data becomes unavailable; exact private location fields are cleared;
-- registered device tokens are removed and Firebase refresh tokens are revoked;
-- login with the same verified email reactivates the same UID and routes the user through public-profile recreation;
-- existing block subcollections survive public-parent deletion and remain when the profile document is recreated;
-- existing permanent Delete Account flow remains visibly separate and irreversible;
-- owner administrator self-close is rejected to avoid silently losing the only owner administration identity;
-- no Batch 01–04 full regression repetition: use one short focused identity lifecycle pass plus direct-update/login/state smoke checks.
-
-New production callables required after CI approval:
-
-- `ensureIdentityContinuity(asia-south1)`
-- `closeCurrentAccount(asia-south1)`
-- `reactivateCurrentAccount(asia-south1)`
+Batch 06 implementation must inspect the current purchase/subscription code and frozen product decisions before modifying runtime behavior. Do not implement Batch 07 backup/restore or Batch 11 admin controls inside Batch 06.
 
 ## Later batches
 
-- Batch 06 — Premium entitlement foundation
 - Batch 07 — Six-month automatic Premium backup and restore
 - Batch 08 — Profile sharing and deep-link recovery
 - Batch 09 — Agora audio calling
@@ -95,6 +72,4 @@ New production callables required after CI approval:
 
 ## Recovery-base movement rule
 
-`main` is accepted development truth after merge. `stable/official-recoverable-base` is the last indisputably recoverable runtime/documentation truth.
-
-The recovery branch moves only when signed artifact/hash, signing identity, CI, required physical tests, owner acceptance, required production deployment, actual merged-main runtime SHA and recovery documentation are all recorded.
+`main` is merged development truth. `stable/official-recoverable-base` is the last fully accepted runtime/documentation truth. It moves only after CI, permanent signing, physical owner acceptance, required production actions and final documentation are complete.
