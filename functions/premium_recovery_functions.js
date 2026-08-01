@@ -298,6 +298,28 @@ exports.syncPremiumRecoveryOnMessageUpdate = onDocumentUpdated(
         deleteRecoveryMessageForUser({ uid, chatId, messageId }),
       ));
     }
+
+    const receiverId = after.receiverId;
+    const type = typeof after.type === "string" ? after.type : "text";
+    if (type !== "text" && typeof receiverId === "string" && receiverId) {
+      const beforeAcks = before.downloadAcknowledgements &&
+        typeof before.downloadAcknowledgements === "object"
+        ? before.downloadAcknowledgements
+        : {};
+      const afterAcks = after.downloadAcknowledgements &&
+        typeof after.downloadAcknowledgements === "object"
+        ? after.downloadAcknowledgements
+        : {};
+      if (beforeAcks[receiverId] == null && afterAcks[receiverId] != null) {
+        await writeRecoveryCopy({
+          uid: receiverId,
+          chatId,
+          messageId,
+          chatData,
+          messageData: after,
+        });
+      }
+    }
   },
 );
 
