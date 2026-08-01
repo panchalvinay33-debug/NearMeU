@@ -5,10 +5,12 @@
   "lastUpdated": "2026-08-01",
   "developmentState": {
     "sourceBranch": "main",
-    "activeBatch": null,
-    "nextBatch": "03",
-    "nextBatchTitle": "local-first-persistence-and-seven-day-delivery-cloud",
-    "runtimeWorkMayStartFromAcceptedBase": true
+    "activeBatch": "03",
+    "activeBatchBranch": "batch/03-local-first-seven-day-cloud",
+    "activeBatchVersion": "1.0.6+7",
+    "nextBatch": "04",
+    "nextBatchTitle": "clear-chat-and-deletion-semantics",
+    "runtimeWorkMayStartFromAcceptedBase": false
   },
   "acceptedRuntimeBase": {
     "name": "official-recoverable-base",
@@ -59,7 +61,8 @@
     "mediaIntegrityAndRetry": "accepted-batch-02",
     "blockingAndReporting": "implemented-requires-full-regression",
     "clearChatPermanentUserSidePurge": "approved-not-yet-accepted",
-    "sevenDayTemporaryDeliveryCloud": "approved-next-batch",
+    "sevenDayTemporaryDeliveryCloud": "batch-03-in-progress",
+    "localFirstPersistenceAfterCloudExpiry": "batch-03-in-progress",
     "sixMonthPremiumAutomaticRecovery": "approved-not-yet-implemented",
     "singlePremiumPlan": "approved-not-yet-implemented",
     "voiceVideoCalling": "agora-selected-planned",
@@ -73,8 +76,8 @@
     {"id":"00","title":"governance-roadmap-and-decision-freeze","status":"accepted","runtimeChange":false},
     {"id":"01","title":"chat-reliability-and-message-state-truth","status":"accepted","runtimeChange":true},
     {"id":"02","title":"photo-video-voice-message-reliability","status":"accepted","runtimeChange":true},
-    {"id":"03","title":"local-first-persistence-and-seven-day-delivery-cloud","status":"planned-next","runtimeChange":true},
-    {"id":"04","title":"clear-chat-and-deletion-semantics","status":"planned","runtimeChange":true},
+    {"id":"03","title":"local-first-persistence-and-seven-day-delivery-cloud","status":"in-progress","runtimeChange":true},
+    {"id":"04","title":"clear-chat-and-deletion-semantics","status":"planned-next","runtimeChange":true},
     {"id":"05","title":"identity-account-close-and-reactivation","status":"planned","runtimeChange":true},
     {"id":"06","title":"premium-entitlement-foundation","status":"planned","runtimeChange":true},
     {"id":"07","title":"six-month-premium-backup-and-restore","status":"planned","runtimeChange":true},
