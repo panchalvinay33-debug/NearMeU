@@ -28,15 +28,12 @@ Every runtime change is completed as one focused batch. A later batch does not b
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `e98bd0ebe86dad1f689723a9e96f35095a015a7b`
-- Tested runtime commit: `72e25450a2df38cf44183d994a13f6acd61369e5`
-- Final evidence head: `075c7e6d4abb05f40e4ed8b116aa20eddecf2c09`
+- Final documented/recovery commit: `f487be76f958c06966e15f3db9cbbec65f5cfa9c`
+- Accepted merged Batch 03 runtime commit: `e98bd0ebe86dad1f689723a9e96f35095a015a7b`
 - Accepted PR: `#90`
 - Version: `1.0.6+7`
 - APK: `NearMeU-Batch-03-v1.0.6-7-Signed.apk`
 - APK SHA-256: `a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024`
-- Build workflow: `30693343758` / #25 — passed
-- Quality workflow: `30693343752` / #418 — passed
 - Production retention deployment: passed
 
 ## Completed batches
@@ -53,20 +50,26 @@ Accepted. Includes media integrity checks, safe retry behavior, voice confirmati
 ### Batch 03 — Local-first persistence and seven-day delivery cloud
 Accepted. Successfully synchronized/downloaded chat history remains app-private local while temporary cloud delivery copies expire. Production retention stamping/purge functions were deployed and owner physical regression passed.
 
-## Next batch
+## Active batch
 
 ### Batch 04 — Clear Chat and deletion semantics
 
-Scope goals:
+Branch: `batch/04-clear-chat-deletion-semantics`
 
-- define and enforce Clear Chat behavior without accidental account/global data loss;
-- distinguish local user-side clearing from any server-side deletion/unsend behavior;
-- ensure local media associated with cleared messages is removed according to the approved rule;
-- preserve the other participant's history unless an explicit cross-user deletion feature applies;
-- keep seven-day cloud retention and local-first behavior consistent with Batch 03;
-- verify restart/offline behavior and no resurrection of locally cleared history.
+Target version: `1.0.7+8`
 
-Physical tests must include two-device behavior, restart/offline cases, media cleanup, regression of ticks/media, and direct-update state preservation.
+Scope under implementation/verification:
+
+- trusted per-user Clear Chat cutoff (`clearStates.<uid>.clearedAt`) so cleared content cannot reappear from ordinary cloud/local replay;
+- local encrypted chat rows and referenced downloaded media purged through the clear cutoff;
+- other participant remains unaffected;
+- cleared conversation stays out of the actor's chat list until genuinely newer post-clear activity exists;
+- Delete for Me removes only the current user's copy and does not recreate already-expired delivery-cloud messages;
+- Delete for Everyone continues to use the trusted sender-only 60-minute unsend path, with local media/content detachment hardened;
+- cross-device cloud deletion markers reconcile into local removal while available;
+- one focused physical test after CI, signing and production `clearPrivateChat` deployment pass.
+
+Batch 04 cannot replace the official recovery base until all acceptance gates are complete.
 
 ## Later batches
 
