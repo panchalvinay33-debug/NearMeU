@@ -14,8 +14,8 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | Superseded |
 | 04 | Clear Chat and deletion semantics | ACCEPTED | Superseded by Batch 05 |
 | 05 | Identity, account close and reactivation | ACCEPTED | Promoted official base |
-| 06 | Premium entitlement foundation | IN_PROGRESS | CI / focused acceptance pending |
-| 07 | Six-month automatic Premium backup and restore | PLANNED | After Batch 06 acceptance |
+| 06 | Premium entitlement foundation | ACCEPTED | Final CI / merge / promotion pending |
+| 07 | Six-month automatic Premium backup and restore | PLANNED | After Batch 06 promotion |
 | 08 | Profile sharing and deep-link recovery | PLANNED | Later |
 | 09 | Agora audio calling | PLANNED | Later |
 | 10 | Agora video calling | PLANNED | Later |
@@ -52,25 +52,38 @@ Version: 1.0.8+9
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-## Batch 06 in-progress record
+## Batch 06 acceptance record
 
 ```text
 Batch ID: 06
 Title: Premium entitlement foundation
-Status: IN_PROGRESS
+Status: ACCEPTED — merge/promotion pending
 Branch: batch/06-premium-entitlement-foundation
 Base: 3b749c8d7a320b71446245f99c694fdf85d9ccc4
-Target version: 1.0.9+10
+Tested runtime commit: 52fe6a52ad117e9eccb922e535b9d6752af7e695
+Pull request: #96
+Version: 1.0.9+10
 Android package: com.nearmeu.nearmeu
-New trusted callable: getMyPremiumEntitlement(asia-south1)
-Updated trusted callable: sendPrivateMediaMessage(asia-south1)
-CI: pending
-Signed artifact: pending
-Production deployment: pending
-Focused physical owner test: pending
+Build #40 / run 30706204824: PASS
+Quality #439 / run 30706204828: PASS
+Recoverable artifact ID: 8820525497
+Recoverable artifact digest: sha256:7a6023c00bc328438efa4135f411286ae98c39485ff2c35f4385697eb78ea4e7
+Tested signed debug APK SHA-256: 2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f
+Signed release artifact ID: 8820623151
+Signed release artifact digest: sha256:0998f97e18470ba2602c5dd84ae173c560f31b86c55f832e1af43200e63af65c
+Signed release APK SHA-256: 4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72
+Permanent signing certificate SHA-256: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
+Production getMyPremiumEntitlement deployment: PASS
+Production sendPrivateMediaMessage update: PASS
+Direct-update/history/media preservation: PASS
+Free text messaging: PASS
+Free outbound voice lock: PASS
+Free outbound photo/video lock: PASS
+Prior received/local media remains accessible: PASS
+Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Implemented scope under verification:
+Accepted scope:
 
 - server evaluates effective Premium from independent Google Play/admin grant slots;
 - missing/expired entitlement is Free;
@@ -78,6 +91,7 @@ Implemented scope under verification:
 - Free text remains available;
 - outbound photo/video/voice controls remain visible with Premium locks;
 - locked taps refresh server truth before allowing the original action;
+- one forced Firebase ID-token refresh/retry hardens stale-token recovery;
 - server independently refuses outbound image/video/voice creation without active Premium;
 - current Premium status remains private from other users;
 - Google Play purchase verification, six-month recovery, and owner-admin grant controls are not falsely claimed as implemented in Batch 06.
@@ -90,4 +104,4 @@ The active owner working copy is `F:\NearMeU`. After every promoted batch it mus
 
 ## Current gate
 
-Batch 06 must pass automated CI, permanent signing, required production callable deployment and focused physical acceptance before merge/promotion. Batch 05 remains the official recovery base until then.
+Batch 06 is physically owner-accepted. Only acceptance-head CI, PR #96 merge, final recovery documentation and `stable/official-recoverable-base` promotion remain before Batch 07 runtime work starts.
