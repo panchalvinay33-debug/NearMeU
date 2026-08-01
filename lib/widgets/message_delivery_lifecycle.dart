@@ -24,7 +24,8 @@ class MessageDeliveryLifecycle extends StatefulWidget {
       _MessageDeliveryLifecycleState();
 }
 
-class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
+class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
+    with WidgetsBindingObserver {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'asia-south1',
@@ -41,6 +42,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
       _handleAuthChanged,
       onError: (Object error, StackTrace stackTrace) {
@@ -51,6 +53,14 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
         );
       },
     );
+    unawaited(_handleAuthChanged(FirebaseAuth.instance.currentUser));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_handleAuthChanged(FirebaseAuth.instance.currentUser));
+    }
   }
 
   Future<void> _handleAuthChanged(User? user) async {
@@ -61,7 +71,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
     _chatSubscription = _firestore
         .collection('chats')
         .where('participants', arrayContains: user.uid)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .listen(
           (snapshot) => _syncChatListeners(user.uid, snapshot.docs),
           onError: (Object error, StackTrace stackTrace) {
@@ -80,8 +90,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
   ) async {
     if (_activeUid != uid) return;
 
-    final visibleChats = chats.take(50).toList(growable: false);
-    final activeChatIds = visibleChats.map((doc) => doc.id).toSet();
+    final activeChatIds = chats.map((doc) => doc.id).toSet();
     final obsoleteChatIds = _messageSubscriptions.keys
         .where((chatId) => !activeChatIds.contains(chatId))
         .toList(growable: false);
@@ -90,7 +99,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
       await _messageSubscriptions.remove(chatId)?.cancel();
     }
 
-    for (final chat in visibleChats) {
+    for (final chat in chats) {
       if (_messageSubscriptions.containsKey(chat.id)) continue;
       final participants = chat.data()['participants'];
       if (participants is! List) continue;
@@ -103,8 +112,8 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
       _messageSubscriptions[chat.id] = chat.reference
           .collection('messages')
           .orderBy('timestamp', descending: true)
-          .limit(100)
-          .snapshots()
+          .limit(200)
+          .snapshots(includeMetadataChanges: true)
           .listen(
             (snapshot) => _acknowledgeDelivered(
               uid: uid,
@@ -139,7 +148,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
               data['isDelivered'] != true;
         })
         .map((message) => message.id)
-        .take(100)
+        .take(200)
         .toList(growable: false);
     if (messageIds.isEmpty) return;
 
@@ -156,6 +165,12 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
     } on FirebaseFunctionsException catch (error, stackTrace) {
       developer.log(
         'Could not acknowledge delivered messages (${error.code})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not acknowledge delivered messages',
         error: error,
         stackTrace: stackTrace,
       );
@@ -177,6 +192,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_authSubscription?.cancel());
     unawaited(_stopChatListeners());
     super.dispose();
