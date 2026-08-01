@@ -19,7 +19,7 @@ This register is updated after every accepted or rejected batch. Physical accept
 |---|---|---|---|---:|---|
 | 00 | Governance, roadmap and decision freeze | ACCEPTED | merged | No | Documentation foundation |
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Promoted official base |
-| 02 | Photo/video/voice-message reliability | PLANNED | — | Yes | Next batch |
+| 02 | Photo/video/voice-message reliability | IN_PROGRESS | `batch/02-media-reliability` | Yes | Must remain on Batch 01 base until physical acceptance |
 | 03 | Local-first persistence and seven-day delivery cloud | PLANNED | — | Yes | After acceptance |
 | 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | After acceptance |
 | 05 | Identity, account close and reactivation | PLANNED | — | Yes | After acceptance |
@@ -77,6 +77,41 @@ Next batch: 02 Photo/video/voice-message reliability
 - Blue double tick means the receiver opened/read the chat.
 - Trusted chat read-state timestamps provide safe convergence for legacy/local-history messages.
 - Existing application identity, signing compatibility, login and encrypted history survive direct updates.
+
+## Batch 02 working record
+
+```text
+Batch ID: 02
+Title: Photo/video/voice-message reliability
+Status: IN_PROGRESS
+Branch: batch/02-media-reliability
+Base: accepted Batch 01 documented recovery base f75e6131f43bf0e0b60c172885b4ec460731237a
+Pull request: #88 (draft)
+Test version: 1.0.5+6
+Recovery branch movement: forbidden until physical acceptance
+
+Implemented so far:
+- voice send confirmation now retries ambiguous callable outcomes and verifies the exact Firestore message before declaring failure
+- ambiguous voice confirmation preserves the local pending outbox instead of deleting a potentially successful upload
+- definitive/pre-upload failures clean pending local/cloud records
+- voice local files are size/integrity checked before reuse; invalid files are removed and redownloaded
+- voice interrupted-download partial files are cleaned and valid on-disk destination files can repair local database state
+- photo/video local media is validated against declared size before display/reuse
+- corrupt/zero-length photo/video local files and broken thumbnails are discarded rather than blindly opened
+- global signed-in lifecycle now retries all pending private media outbox records on authentication and every app resume, not only when a specific chat is reopened
+- the existing generic media outbox recovery handles image, video and voice records because confirmation uses each record's message type and storage path
+
+Still required before owner review:
+- latest CI must pass after final Batch 02 changes
+- signed APK artifact and SHA-256 must be recorded
+- direct update over accepted 1.0.4+5 must succeed without uninstall/data loss
+- physical two-device photo send/download/open/restart test
+- physical two-device video send/download/play/restart test
+- physical two-device voice send/download/play/restart test
+- interrupted/offline/reconnect recovery test
+- no duplicate media messages after retry/resume
+- owner acceptance
+```
 
 ## Non-negotiable rule
 
