@@ -21,9 +21,9 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded |
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded |
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Superseded by Batch 04 |
-| 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base after docs merge |
-| 05 | Identity, account close and reactivation | PLANNED | — | Yes | Next batch |
-| 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
+| 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base |
+| 05 | Identity, account close and reactivation | IN_PROGRESS | `batch/05-identity-account-close-reactivation` | Yes | CI / focused acceptance pending |
+| 06 | Premium entitlement foundation | PLANNED | — | Yes | After Batch 05 acceptance |
 | 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | After acceptance |
 | 08 | Profile sharing and deep-link recovery | PLANNED | — | Yes | After acceptance |
 | 09 | Agora audio calling | PLANNED | — | Yes | After acceptance |
@@ -75,39 +75,45 @@ Tested runtime commit: f22b36690b7ca65828ce2db809a89abe9931f83e
 Physical acceptance evidence head: c98f304f5bd4525315d8f5c6c558e2d0dca98b5d
 Pull request: #92
 Merged main runtime commit: d387b5cf8db7d9e792673ada4dd1c1d2958c7aee
+Final documented/recovery commit: c0a734e3dfbbab61b5c1b008df4e3f09bb011556
 Version: 1.0.7+8
 Android package: com.nearmeu.nearmeu
-Tested APK filename: NearMeU-Batch-04-v1.0.7-8-Signed.apk
 Tested APK SHA-256: 24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8
-Tested artifact ID: 8817336599
-Tested artifact digest: sha256:6a012c299547e7b32f9f76e5c1ece24e2b4110111bae40289372b1624ccbb39a
-Final docs-head recoverable artifact ID: 8817642243
-Final docs-head recoverable artifact digest: sha256:6bbb921fc7f115bd84aaa3ce1979da65271ea77f4cd129b787120096e3bc10d3
-Build #27 / run 30695802197: PASS
-Quality #422 / run 30695802185: PASS
-Docs-head Build #28 / run 30696835582: PASS
-Docs-head Quality #423 / run 30696835612: PASS
 Production clearPrivateChat(asia-south1) deployment: PASS
 Focused physical owner test: PASS
-Clear Chat after production deployment: PASS
-Delete for Me: PASS
-Delete for Everyone: PASS
-Tick regression: PASS
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Accepted Batch 04 behavior:
+## Batch 05 in-progress record
 
-- authoritative per-user Clear Chat cutoff at `clearStates.<uid>.clearedAt`;
-- encrypted local rows and referenced local media removed through the clear cutoff;
-- cleared history remains hidden after restart/sync once clear state is observed;
-- chat remains absent from actor list until newer post-clear activity;
-- other participant remains unaffected by actor Clear Chat;
-- Delete for Me does not recreate an expired delivery-cloud stub;
-- Delete for Everyone retains trusted sender-only 60-minute semantics and local media detachment;
-- production `clearPrivateChat` callable deployed successfully.
+```text
+Batch ID: 05
+Title: Identity, account close and reactivation
+Status: IN_PROGRESS
+Branch: batch/05-identity-account-close-reactivation
+Base: c0a734e3dfbbab61b5c1b008df4e3f09bb011556
+Target version: 1.0.8+9
+Android package: com.nearmeu.nearmeu
+Required production callables: ensureIdentityContinuity, closeCurrentAccount, reactivateCurrentAccount (asia-south1)
+CI: pending
+Signed artifact: pending
+Production lifecycle deployment: pending
+Focused physical owner test: pending
+```
 
-Focused physical matrix: [`BATCH_04_PHYSICAL_TEST.md`](BATCH_04_PHYSICAL_TEST.md).
+Implemented scope under verification:
+
+- server-only SHA-256 verified-email mapping prevents a second UID from claiming the same verified email;
+- account Close requires recent Google reauthentication and preserves the Firebase Auth UID;
+- public `users/{uid}` parent is removed on Close, immediately removing Nearby/search visibility and making existing active-user authorization fail closed;
+- Firestore block subcollections are intentionally preserved when the public parent is removed;
+- exact private location is cleared, device tokens are removed and auth refresh tokens are revoked;
+- current-device encrypted local chat history is not wiped by Close Account;
+- same verified email reactivates the same UID and returns to public-profile recreation;
+- Sign Out, reversible Close Account and irreversible Delete Account remain distinct UI actions;
+- owner administrator self-close is rejected rather than silently destroying the only owner-admin continuity.
+
+Focused physical matrix: [`BATCH_05_PHYSICAL_TEST.md`](BATCH_05_PHYSICAL_TEST.md).
 
 ## Canonical local workspace rule
 
@@ -115,4 +121,4 @@ The active owner working copy is `F:\NearMeU`. After every accepted/promoted bat
 
 ## Current gate
 
-Batch 04 is accepted and merged. Final acceptance documentation must merge and `stable/official-recoverable-base` must then fast-forward to that exact docs merge commit. Batch 05 may start only from the promoted Batch 04 base.
+Batch 05 must pass CI, permanent signing, production lifecycle-callable deployment and the short focused physical matrix before merge/promotion. Batch 04 remains the official recovery base until then.
