@@ -7,33 +7,37 @@ Every runtime change is completed as one focused batch. A later batch does not b
 ## Governing rule
 
 1. Start from the current official recovery/main state.
-2. Create one short-lived branch.
-3. Freeze scope before coding.
-4. Implement only that batch.
-5. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
-6. Build a permanently signed APK for runtime changes.
-7. Install with `adb install -r`; never uninstall/wipe unless an explicitly approved clean-install scenario requires it.
-8. Preserve package `com.nearmeu.nearmeu`, permanent signing identity and monotonically increasing versionCode.
-9. Test on physical Android device(s), using two accounts/devices where behavior crosses users.
-10. Record final commit, artifact, SHA-256, workflow evidence, physical result and known limitations.
-11. Obtain owner acceptance.
-12. Merge through a passing pull request.
-13. Update recovery documentation with the actual merged-main SHA.
-14. Move `stable/official-recoverable-base` only after documentation is complete.
+2. Use the canonical local workspace `F:\NearMeU` on the owner Windows machine.
+3. Create one short-lived branch.
+4. Freeze scope before coding.
+5. Implement only that batch.
+6. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
+7. Build a permanently signed APK for runtime changes.
+8. Install with `adb install -r`; never uninstall/wipe unless an explicitly approved clean-install scenario requires it.
+9. Preserve package `com.nearmeu.nearmeu`, permanent signing identity and monotonically increasing versionCode.
+10. Test on physical Android device(s), using two accounts/devices where behavior crosses users.
+11. Record final commit, artifact, SHA-256, workflow evidence, physical result and known limitations.
+12. Obtain owner acceptance.
+13. Merge through a passing pull request.
+14. Update recovery documentation with the actual merged-main runtime SHA.
+15. Move `stable/official-recoverable-base` only after documentation is complete.
+16. Synchronize `F:\NearMeU` to the promoted `main` / recovery state after each accepted batch.
 
 ## Current accepted starting point
 
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `d7a8c800d48beb7f646fb4d76d0afd7fbfeafa56`
-- Accepted feature commit: `bbed8998040099202e50e26c62782a04b6b9fe04`
-- Accepted PR: `#88`
-- Version: `1.0.5+6`
-- APK: `NearMeU-Batch-02-v1.0.5-6-Signed.apk`
-- APK SHA-256: `b355c854f210aea3787b937a46ab6714f60e18f7acf471779a4daf2655f43d76`
-- Build workflow: `30687614764` / #20 — passed
-- Quality workflow: `30687614766` / #411 — passed
+- Accepted merged runtime commit: `e98bd0ebe86dad1f689723a9e96f35095a015a7b`
+- Tested runtime commit: `72e25450a2df38cf44183d994a13f6acd61369e5`
+- Final evidence head: `075c7e6d4abb05f40e4ed8b116aa20eddecf2c09`
+- Accepted PR: `#90`
+- Version: `1.0.6+7`
+- APK: `NearMeU-Batch-03-v1.0.6-7-Signed.apk`
+- APK SHA-256: `a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024`
+- Build workflow: `30693343758` / #25 — passed
+- Quality workflow: `30693343752` / #418 — passed
+- Production retention deployment: passed
 
 ## Completed batches
 
@@ -44,24 +48,28 @@ Accepted.
 Accepted. Sent/server-accepted, delivered/synchronized and read/open tick truth physically verified.
 
 ### Batch 02 — Photo, video and voice-message reliability
-Accepted. Includes media integrity checks, safe retry behavior, voice confirmation verification, partial-file cleanup and authentication/app-resume outbox recovery. Physical owner result: working.
+Accepted. Includes media integrity checks, safe retry behavior, voice confirmation verification, partial-file cleanup and authentication/app-resume outbox recovery.
+
+### Batch 03 — Local-first persistence and seven-day delivery cloud
+Accepted. Successfully synchronized/downloaded chat history remains app-private local while temporary cloud delivery copies expire. Production retention stamping/purge functions were deployed and owner physical regression passed.
 
 ## Next batch
 
-### Batch 03 — Local-first persistence and seven-day delivery cloud
+### Batch 04 — Clear Chat and deletion semantics
 
-Product rule:
+Scope goals:
 
-- Successfully downloaded text/media remains in app-private local storage until Clear Chat, applicable message deletion, app-data clear or uninstall.
-- Seven days applies to the temporary cloud delivery copy, not to the valid local copy.
-- Cloud cleanup must never remove a valid local copy.
-- No expired placeholder is shown while a valid local file exists.
+- define and enforce Clear Chat behavior without accidental account/global data loss;
+- distinguish local user-side clearing from any server-side deletion/unsend behavior;
+- ensure local media associated with cleared messages is removed according to the approved rule;
+- preserve the other participant's history unless an explicit cross-user deletion feature applies;
+- keep seven-day cloud retention and local-first behavior consistent with Batch 03;
+- verify restart/offline behavior and no resurrection of locally cleared history.
 
-Required tests include cloud-expiry simulation, offline replay after expiry, app restart, receiver delivery timing, local-media survival, and a new-device/non-Premium recovery boundary.
+Physical tests must include two-device behavior, restart/offline cases, media cleanup, regression of ticks/media, and direct-update state preservation.
 
 ## Later batches
 
-- Batch 04 — Clear Chat and deletion semantics
 - Batch 05 — Identity, account close and reactivation
 - Batch 06 — Premium entitlement foundation
 - Batch 07 — Six-month automatic Premium backup and restore
@@ -75,4 +83,4 @@ Required tests include cloud-expiry simulation, offline replay after expiry, app
 
 `main` is accepted development truth after merge. `stable/official-recoverable-base` is the last indisputably recoverable runtime/documentation truth.
 
-The recovery branch moves only when the signed artifact/hash, signing identity, CI, required physical tests, owner acceptance, actual merged-main SHA and recovery documentation are all recorded.
+The recovery branch moves only when signed artifact/hash, signing identity, CI, required physical tests, owner acceptance, required production deployment, actual merged-main runtime SHA and recovery documentation are all recorded.
