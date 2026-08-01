@@ -28,13 +28,13 @@ Every runtime change is completed as one focused batch. A later batch does not b
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
+- Final documented/recovery commit: `c0a734e3dfbbab61b5c1b008df4e3f09bb011556`
 - Accepted merged Batch 04 runtime commit: `d387b5cf8db7d9e792673ada4dd1c1d2958c7aee`
 - Accepted PR: `#92`
 - Version: `1.0.7+8`
 - Physically tested APK: `NearMeU-Batch-04-v1.0.7-8-Signed.apk`
 - Physically tested APK SHA-256: `24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8`
 - Production `clearPrivateChat(asia-south1)` deployment: passed
-- Final documented/recovery commit: pending this acceptance-doc merge and recovery fast-forward.
 
 ## Completed batches
 
@@ -51,24 +51,37 @@ Accepted. Includes media integrity checks, safe retry behavior, voice confirmati
 Accepted. Successfully synchronized/downloaded chat history remains app-private local while temporary cloud delivery copies expire. Production retention stamping/purge functions were deployed and owner physical regression passed.
 
 ### Batch 04 — Clear Chat and deletion semantics
-Accepted. Trusted per-user Clear Chat cutoff, local encrypted purge, actor-only clearing, chat-list reappearance only for post-clear activity, Delete for Me hardening and Delete for Everyone local-media detachment were physically accepted. Production `clearPrivateChat` was deployed successfully.
+Accepted and promoted. Trusted per-user Clear Chat cutoff, local encrypted purge, actor-only clearing, chat-list reappearance only for post-clear activity, Delete for Me hardening and Delete for Everyone local-media detachment were physically accepted. Production `clearPrivateChat` was deployed successfully.
 
-## Next batch
+## Active batch
 
 ### Batch 05 — Identity, account close and reactivation
 
-Status: planned-next. Start only after this Batch 04 acceptance-doc PR merges and `stable/official-recoverable-base` is fast-forwarded to the exact final docs merge.
+Branch: `batch/05-identity-account-close-reactivation`
 
-Approved scope direction:
+Target version: `1.0.8+9`
 
-- separate logout/session-end semantics from account-close semantics;
-- define trusted account closed/active lifecycle state;
-- prevent duplicate/ghost identity creation on reactivation;
-- preserve or remove local encrypted state according to the approved account-close policy;
-- ensure existing chat identity references remain safe and deterministic;
-- support controlled reactivation of the same identity where permitted;
-- keep direct-update, package/signing and existing accepted chat/media behavior regression-safe;
-- use a short focused physical acceptance pass rather than repeating Batch 01–04 full matrices.
+Implemented/verification scope:
+
+- one verified email is claimed to one continuing NearMeU Firebase UID through a server-only hashed-email identity mapping;
+- sign-in verifies identity continuity before entering the app;
+- `Close Account` is reversible and remains separate from Sign Out and permanent Delete Account;
+- Close Account requires recent Google reauthentication;
+- Close Account does not delete Firebase Authentication identity, local encrypted chat history, chat relationships or block subcollections;
+- the public `users/{uid}` document is removed on Close Account so Nearby/search and all existing active-user authorization paths immediately treat the account as unavailable;
+- public location/profile data becomes unavailable; exact private location fields are cleared;
+- registered device tokens are removed and Firebase refresh tokens are revoked;
+- login with the same verified email reactivates the same UID and routes the user through public-profile recreation;
+- existing block subcollections survive public-parent deletion and remain when the profile document is recreated;
+- existing permanent Delete Account flow remains visibly separate and irreversible;
+- owner administrator self-close is rejected to avoid silently losing the only owner administration identity;
+- no Batch 01–04 full regression repetition: use one short focused identity lifecycle pass plus direct-update/login/state smoke checks.
+
+New production callables required after CI approval:
+
+- `ensureIdentityContinuity(asia-south1)`
+- `closeCurrentAccount(asia-south1)`
+- `reactivateCurrentAccount(asia-south1)`
 
 ## Later batches
 
