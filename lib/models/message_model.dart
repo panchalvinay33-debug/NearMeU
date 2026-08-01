@@ -29,6 +29,8 @@ class MessageModel {
   final String? localMediaPath;
   final String? localThumbnailPath;
 
+  final bool isDelivered;
+  final DateTime? deliveredAt;
   final bool isSeen;
   final DateTime? seenAt;
   final List<String> deletedFor;
@@ -55,6 +57,8 @@ class MessageModel {
     this.cloudMediaDeletedAt,
     this.localMediaPath,
     this.localThumbnailPath,
+    this.isDelivered = false,
+    this.deliveredAt,
     this.isSeen = false,
     this.seenAt,
     this.deletedFor = const <String>[],
@@ -109,6 +113,10 @@ class MessageModel {
       'cloudMediaDeletedAt': cloudMediaDeletedAt != null
           ? Timestamp.fromDate(cloudMediaDeletedAt!)
           : null,
+      'isDelivered': isDelivered,
+      'deliveredAt': deliveredAt != null
+          ? Timestamp.fromDate(deliveredAt!)
+          : null,
       'isSeen': isSeen,
       'seenAt': seenAt != null ? Timestamp.fromDate(seenAt!) : null,
       'deletedFor': deletedFor,
@@ -116,6 +124,7 @@ class MessageModel {
   }
 
   factory MessageModel.fromMap(String id, Map<String, dynamic> map) {
+    final seen = map['isSeen'] == true;
     return MessageModel(
       id: id,
       senderId: map['senderId'] is String ? map['senderId'] as String : '',
@@ -160,7 +169,10 @@ class MessageModel {
       localThumbnailPath: map['localThumbnailPath'] is String
           ? map['localThumbnailPath'] as String
           : null,
-      isSeen: map['isSeen'] == true,
+      isDelivered: map['isDelivered'] == true || seen,
+      deliveredAt: _dateTime(map['deliveredAt']) ??
+          (seen ? _dateTime(map['seenAt']) : null),
+      isSeen: seen,
       seenAt: _dateTime(map['seenAt']),
       deletedFor: List<String>.from(map['deletedFor'] ?? const <String>[]),
     );
@@ -192,6 +204,8 @@ class MessageModel {
       cloudMediaDeletedAt: cloudMediaDeletedAt,
       localMediaPath: localMediaPath ?? this.localMediaPath,
       localThumbnailPath: localThumbnailPath ?? this.localThumbnailPath,
+      isDelivered: isDelivered,
+      deliveredAt: deliveredAt,
       isSeen: isSeen,
       seenAt: seenAt,
       deletedFor: deletedFor,

@@ -77,28 +77,42 @@ exports.markPrivateChatRead = onCall(
       );
     });
 
-    let updatedMessages = 0;
-    while (true) {
-      const unread = await chatRef
-        .collection("messages")
-        .where("receiverId", "==", uid)
-        .where("isSeen", "==", false)
-        .limit(BATCH_LIMIT)
-        .get();
-      if (unread.empty) break;
+    // Fetch by receiver only, then filter in trusted backend code. This covers
+    // legacy messages where isSeen/isDelivered fields are missing and avoids a
+    // fragile compound query that can leave chat-level unread state at zero
+    // while message-level receipts remain unchanged.
+    const incomingSnapshot = await chatRef
+      .collection("messages")
+      .where("receiverId", "==", uid)
+      .get();
 
+    const unreadMessages = incomingSnapshot.docs.filter((message) => {
+      const data = message.data();
+      return data.senderId === otherUserId && data.isSeen !== true;
+    });
+
+    let updatedMessages = 0;
+    for (let start = 0; start < unreadMessages.length; start += BATCH_LIMIT) {
       const batch = db.batch();
-      for (const message of unread.docs) {
+      const chunk = unreadMessages.slice(start, start + BATCH_LIMIT);
+      for (const message of chunk) {
+        const data = message.data();
         batch.update(message.ref, {
+          isDelivered: true,
+          deliveredAt: data.deliveredAt || now,
           isSeen: true,
           seenAt: now,
         });
       }
       await batch.commit();
-      updatedMessages += unread.size;
-      if (unread.size < BATCH_LIMIT) break;
+      updatedMessages += chunk.length;
     }
 
-    return { success: true, chatId, updatedMessages };
+    return {
+      success: true,
+      chatId,
+      scannedMessages: incomingSnapshot.size,
+      updatedMessages,
+    };
   },
 );
