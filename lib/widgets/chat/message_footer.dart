@@ -44,6 +44,12 @@ class MessageFooter extends StatelessWidget {
     );
   }
 
+  DateTime? _timestampDate(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!isMe || message.isUnsent) {
@@ -65,20 +71,54 @@ class MessageFooter extends StatelessWidget {
       return _footer(delivered: fallbackDelivered, read: fallbackRead);
     }
 
-    final messageRef = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(_chatId)
-        .collection('messages')
-        .doc(message.id);
+    final firestore = FirebaseFirestore.instance;
+    final chatRef = firestore.collection('chats').doc(_chatId);
+    final messageRef = chatRef.collection('messages').doc(message.id);
+    final receiverRef = firestore.collection('users').doc(message.receiverId);
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: messageRef.snapshots(includeMetadataChanges: true),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data();
-        final read = data?['isSeen'] == true || fallbackRead;
-        final delivered =
-            data?['isDelivered'] == true || read || fallbackDelivered;
-        return _footer(delivered: delivered, read: read);
+      builder: (context, messageSnapshot) {
+        final messageData = messageSnapshot.data?.data();
+        final remoteRead = messageData?['isSeen'] == true;
+        final remoteDelivered = messageData?['isDelivered'] == true;
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: chatRef.snapshots(includeMetadataChanges: true),
+          builder: (context, chatSnapshot) {
+            final chatData = chatSnapshot.data?.data();
+            final readStates = chatData?['readStates'];
+            final receiverReadState = readStates is Map
+                ? readStates[message.receiverId]
+                : null;
+            final lastReadAt = receiverReadState is Map
+                ? _timestampDate(receiverReadState['lastReadAt'])
+                : null;
+            final readFromChatState =
+                lastReadAt != null && !lastReadAt.isBefore(message.timestamp);
+            final read = remoteRead || readFromChatState || fallbackRead;
+
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: receiverRef.snapshots(includeMetadataChanges: true),
+              builder: (context, receiverSnapshot) {
+                final receiverData = receiverSnapshot.data?.data();
+                final receiverLastSeen = _timestampDate(
+                  receiverData?['lastSeen'] ?? receiverData?['lastSeenAt'],
+                );
+                final receiverActiveAfterSend =
+                    receiverData?['isOnline'] == true ||
+                    (receiverLastSeen != null &&
+                        !receiverLastSeen.isBefore(message.timestamp));
+                final delivered =
+                    remoteDelivered ||
+                    read ||
+                    receiverActiveAfterSend ||
+                    fallbackDelivered;
+                return _footer(delivered: delivered, read: read);
+              },
+            );
+          },
+        );
       },
     );
   }
