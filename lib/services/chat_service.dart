@@ -9,6 +9,7 @@ import '../models/chat_preview_model.dart';
 import '../models/message_model.dart';
 import '../security/chat_security.dart';
 import '../security/suspension_service.dart';
+import 'chat_clear_policy.dart';
 import 'local_chat_store.dart';
 import 'user_service.dart';
 
@@ -168,9 +169,15 @@ class ChatService {
         .collection('messages')
         .doc(message.id);
 
-    await messageRef.set(<String, Object?>{
-      'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
-    }, SetOptions(merge: true));
+    try {
+      await messageRef.update(<String, Object?>{
+        'deletedFor': FieldValue.arrayUnion(<String>[currentUserId]),
+      });
+    } on FirebaseException catch (error) {
+      // A delivery-cloud message may already have expired. Never recreate an
+      // expired message just to store a delete-for-me marker.
+      if (error.code != 'not-found') rethrow;
+    }
 
     try {
       await _localChatStore.deleteMessageForOwner(
@@ -184,6 +191,31 @@ class ChatService {
         error: error,
         stackTrace: stackTrace,
       );
+    }
+  }
+
+  Future<DateTime> clearChat({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    final chatId = getChatId(currentUserId, otherUserId);
+    try {
+      final result = await _functions.httpsCallable('clearPrivateChat').call(
+        <String, dynamic>{'otherUserId': otherUserId},
+      );
+      final data = result.data;
+      final clearedAtMillis = data is Map ? data['clearedAtMillis'] : null;
+      final clearedAt = clearedAtMillis is num
+          ? DateTime.fromMillisecondsSinceEpoch(clearedAtMillis.toInt())
+          : DateTime.now();
+      await _localChatStore.clearChatThrough(
+        ownerUid: currentUserId,
+        chatId: chatId,
+        clearedAt: clearedAt,
+      );
+      return clearedAt;
+    } on FirebaseFunctionsException catch (error) {
+      throw ChatSecurityException(_functionsErrorMessage(error));
     }
   }
 
@@ -248,13 +280,65 @@ class ChatService {
     }
   }
 
+  Future<DateTime?> _readClearCutoff({
+    required DocumentReference<Map<String, dynamic>> chatRef,
+    required String ownerUid,
+  }) async {
+    final snapshot = await chatRef.get();
+    if (!snapshot.exists) return null;
+    return ChatClearPolicy.clearedAtForUser(snapshot.data() ?? <String, dynamic>{}, ownerUid);
+  }
+
+  Future<void> _reconcileRemoteHiddenMessages({
+    required QuerySnapshot<Map<String, dynamic>> snapshot,
+    required String ownerUid,
+    required String chatId,
+  }) async {
+    for (final document in snapshot.docs) {
+      try {
+        final message = MessageModel.fromMap(document.id, document.data());
+        if (!message.deletedFor.contains(ownerUid)) continue;
+        await _localChatStore.deleteMessageForOwner(
+          ownerUid: ownerUid,
+          chatId: chatId,
+          messageId: message.id,
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not reconcile a remotely hidden message locally',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+  }
+
   Stream<List<MessageModel>> getMessages({
     required String user1,
     required String user2,
   }) async* {
     await _suspensionService.ensureUserAllowed(user1);
     final chatId = getChatId(user1, user2);
+    final chatRef = _firestore.collection('chats').doc(chatId);
     var hasUsableLocalHistory = false;
+    DateTime? clearCutoff;
+
+    try {
+      clearCutoff = await _readClearCutoff(chatRef: chatRef, ownerUid: user1);
+      if (clearCutoff != null) {
+        await _localChatStore.clearChatThrough(
+          ownerUid: user1,
+          chatId: chatId,
+          clearedAt: clearCutoff,
+        );
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not synchronize clear-chat cutoff before local replay',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
 
     try {
       await _localChatStore.clearExpiredRemoteReferences(ownerUid: user1);
@@ -262,8 +346,16 @@ class ChatService {
         ownerUid: user1,
         chatId: chatId,
       );
-      hasUsableLocalHistory = localMessages.isNotEmpty;
-      if (hasUsableLocalHistory) yield localMessages;
+      final visibleLocalMessages = localMessages
+          .where(
+            (message) => ChatClearPolicy.isVisibleAfterClear(
+              messageTimestamp: message.timestamp,
+              clearedAt: clearCutoff,
+            ),
+          )
+          .toList(growable: false);
+      hasUsableLocalHistory = visibleLocalMessages.isNotEmpty;
+      if (hasUsableLocalHistory) yield visibleLocalMessages;
     } catch (error, stackTrace) {
       developer.log(
         'Encrypted local chat history is unavailable; using cloud only',
@@ -273,18 +365,44 @@ class ChatService {
     }
 
     try {
-      final remoteStream = _firestore
-          .collection('chats')
-          .doc(chatId)
+      final remoteStream = chatRef
           .collection('messages')
           .orderBy('timestamp', descending: true)
           .limit(200)
           .snapshots(includeMetadataChanges: false);
 
       await for (final snapshot in remoteStream) {
+        try {
+          final latestCutoff = await _readClearCutoff(
+            chatRef: chatRef,
+            ownerUid: user1,
+          );
+          if (latestCutoff != null &&
+              (clearCutoff == null || latestCutoff.isAfter(clearCutoff))) {
+            clearCutoff = latestCutoff;
+            await _localChatStore.clearChatThrough(
+              ownerUid: user1,
+              chatId: chatId,
+              clearedAt: latestCutoff,
+            );
+          }
+        } catch (error, stackTrace) {
+          developer.log(
+            'Could not refresh clear-chat cutoff during cloud sync',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+
+        await _reconcileRemoteHiddenMessages(
+          snapshot: snapshot,
+          ownerUid: user1,
+          chatId: chatId,
+        );
         final remoteMessages = _messagesFromSnapshot(
           snapshot: snapshot,
           ownerUid: user1,
+          clearedAt: clearCutoff,
         );
 
         try {
@@ -298,8 +416,16 @@ class ChatService {
             ownerUid: user1,
             chatId: chatId,
           );
-          hasUsableLocalHistory = mergedMessages.isNotEmpty;
-          yield mergedMessages;
+          final visibleMergedMessages = mergedMessages
+              .where(
+                (message) => ChatClearPolicy.isVisibleAfterClear(
+                  messageTimestamp: message.timestamp,
+                  clearedAt: clearCutoff,
+                ),
+              )
+              .toList(growable: false);
+          hasUsableLocalHistory = visibleMergedMessages.isNotEmpty;
+          yield visibleMergedMessages;
         } catch (error, stackTrace) {
           developer.log(
             'Could not persist the latest cloud messages locally',
@@ -330,12 +456,17 @@ class ChatService {
   List<MessageModel> _messagesFromSnapshot({
     required QuerySnapshot<Map<String, dynamic>> snapshot,
     required String ownerUid,
+    DateTime? clearedAt,
   }) {
     final latestMessages = <MessageModel>[];
     for (final document in snapshot.docs) {
       try {
         final message = MessageModel.fromMap(document.id, document.data());
-        if (!message.deletedFor.contains(ownerUid)) {
+        if (!message.deletedFor.contains(ownerUid) &&
+            ChatClearPolicy.isVisibleAfterClear(
+              messageTimestamp: message.timestamp,
+              clearedAt: clearedAt,
+            )) {
           latestMessages.add(message);
         }
       } catch (error, stackTrace) {
@@ -376,6 +507,20 @@ class ChatService {
                 orElse: () => '',
               );
               if (otherUserId.isEmpty) continue;
+
+              final lastMessageTime = data['lastMessageTime'] is Timestamp
+                  ? (data['lastMessageTime'] as Timestamp).toDate()
+                  : null;
+              final clearCutoff = ChatClearPolicy.clearedAtForUser(
+                data,
+                currentUserId,
+              );
+              if (!ChatClearPolicy.shouldShowChatPreview(
+                lastMessageTime: lastMessageTime,
+                clearedAt: clearCutoff,
+              )) {
+                continue;
+              }
 
               var isBlocked = false;
               try {
@@ -474,9 +619,7 @@ class ChatService {
                   lastMessage: data['lastMessage'] is String
                       ? data['lastMessage'] as String
                       : '',
-                  lastMessageTime: data['lastMessageTime'] is Timestamp
-                      ? (data['lastMessageTime'] as Timestamp).toDate()
-                      : null,
+                  lastMessageTime: lastMessageTime,
                   messageType: messageType,
                   isUnsent: isUnsent,
                   lastMessageSenderId: data['lastMessageSenderId'] is String
