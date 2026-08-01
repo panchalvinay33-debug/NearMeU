@@ -231,29 +231,14 @@ exports.capturePremiumRecoveryOnMessageCreate = onDocumentCreated(
 
     const outcomes = await Promise.all(participants.map(async (uid) => {
       try {
-        return await writeRecoveryCopy({
-          uid,
-          chatId,
-          messageId,
-          chatData,
-          messageData,
-        });
+        return await writeRecoveryCopy({ uid, chatId, messageId, chatData, messageData });
       } catch (error) {
-        logger.error("Premium recovery capture failed", {
-          uid,
-          chatId,
-          messageId,
-          error,
-        });
+        logger.error("Premium recovery capture failed", { uid, chatId, messageId, error });
         throw error;
       }
     }));
 
-    logger.info("Premium recovery capture processed", {
-      chatId,
-      messageId,
-      outcomes,
-    });
+    logger.info("Premium recovery capture processed", { chatId, messageId, outcomes });
   },
 );
 
@@ -335,6 +320,18 @@ exports.getMyPremiumRecoveryPage = onCall(
     if (typeof chatId !== "string" || !chatId || chatId.length > 200) {
       throw new HttpsError("invalid-argument", "A valid chatId is required.");
     }
+
+    const liveChatSnapshot = await db.collection("chats").doc(chatId).get();
+    if (!liveChatSnapshot.exists) {
+      throw new HttpsError("not-found", "This chat is no longer available.");
+    }
+    const liveChatData = liveChatSnapshot.data() || {};
+    const liveParticipants = normalizedParticipants(liveChatData);
+    if (liveParticipants.length !== 2 || !liveParticipants.includes(uid)) {
+      throw new HttpsError("permission-denied", "Invalid private chat.");
+    }
+    const authoritativeClearCutoffMs = clearCutoffMillis(liveChatData, uid);
+
     const requestedLimit = Number.isInteger(request.data && request.data.limit)
       ? request.data.limit
       : RESTORE_PAGE_LIMIT;
@@ -349,8 +346,15 @@ exports.getMyPremiumRecoveryPage = onCall(
       throw new HttpsError("invalid-argument", "Recovery cursor is incomplete.");
     }
 
-    let query = recoveryChatRef(uid, chatId)
-      .collection("messages")
+    let query = recoveryChatRef(uid, chatId).collection("messages");
+    if (authoritativeClearCutoffMs !== null) {
+      query = query.where(
+        "timestamp",
+        ">",
+        admin.firestore.Timestamp.fromMillis(authoritativeClearCutoffMs),
+      );
+    }
+    query = query
       .orderBy("timestamp", "asc")
       .orderBy(admin.firestore.FieldPath.documentId(), "asc")
       .limit(limit);
@@ -360,6 +364,7 @@ exports.getMyPremiumRecoveryPage = onCall(
         afterMessageId,
       );
     }
+
     const snapshot = await query.get();
     const messages = snapshot.docs.map((doc) => {
       const data = doc.data() || {};
@@ -390,6 +395,7 @@ exports.getMyPremiumRecoveryPage = onCall(
       hasMore: snapshot.size === limit,
       nextAfterMillis: last ? timestampMillis(lastData.timestamp) : null,
       nextAfterMessageId: last ? last.id : null,
+      clearCutoffMillis: authoritativeClearCutoffMs,
     };
   },
 );
@@ -418,9 +424,7 @@ exports.purgeExpiredPremiumRecovery = onSchedule(
       const chatId = data.chatId;
       const messageId = data.messageId || message.id;
       if (typeof uid !== "string" || typeof chatId !== "string") {
-        logger.error("Invalid Premium recovery record skipped", {
-          path: message.ref.path,
-        });
+        logger.error("Invalid Premium recovery record skipped", { path: message.ref.path });
         continue;
       }
       await deleteRecoveryMedia({
