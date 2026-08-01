@@ -158,13 +158,11 @@ class VoiceMessageService {
           );
           return message;
         case _VoiceConfirmation.rejected:
-          try {
-            await reference.delete();
-          } catch (_) {}
-          await _localChatStore.deleteMessageForOwner(
+          await _removeRejectedPending(
             ownerUid: senderId,
             chatId: chatId,
             messageId: messageId,
+            reference: reference,
           );
           throw VoiceMessageException(_friendlyError(confirmationError));
         case _VoiceConfirmation.unknown:
@@ -176,15 +174,13 @@ class VoiceMessageService {
             'Voice message is saved securely and will be confirmed when this chat reconnects.',
           );
       }
-    } catch (error) {
+    } catch (_) {
       if (!uploadCompleted) {
-        try {
-          await reference.delete();
-        } catch (_) {}
-        await _localChatStore.deleteMessageForOwner(
+        await _removeRejectedPending(
           ownerUid: senderId,
           chatId: chatId,
           messageId: messageId,
+          reference: reference,
         );
       }
       rethrow;
@@ -195,6 +191,22 @@ class VoiceMessageService {
         } catch (_) {}
       }
     }
+  }
+
+  Future<void> _removeRejectedPending({
+    required String ownerUid,
+    required String chatId,
+    required String messageId,
+    required Reference reference,
+  }) async {
+    try {
+      await reference.delete();
+    } catch (_) {}
+    await _localChatStore.deleteMessageForOwner(
+      ownerUid: ownerUid,
+      chatId: chatId,
+      messageId: messageId,
+    );
   }
 
   Future<_VoiceConfirmation> _confirmCloudMessage({
@@ -291,10 +303,20 @@ class VoiceMessageService {
       throw const VoiceMessageException('This is not a voice message.');
     }
 
-    final existing = message.localMediaPath;
-    if (existing != null && await File(existing).exists()) {
-      await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
-      return existing;
+    final declaredPath = message.localMediaPath;
+    if (declaredPath != null) {
+      final declaredFile = File(declaredPath);
+      if (await _isValidLocalFile(declaredFile, message.mediaSizeBytes)) {
+        await _persistDownloadedVoice(
+          ownerUid: ownerUid,
+          chatId: chatId,
+          message: message,
+          file: declaredFile,
+        );
+        await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
+        return declaredPath;
+      }
+      await _deleteIfExists(declaredFile);
     }
 
     final storagePath = message.mediaStoragePath;
@@ -307,44 +329,77 @@ class VoiceMessageService {
     final directory = await _mediaDirectory(ownerUid: ownerUid, chatId: chatId);
     final destination = File(p.join(directory.path, '${message.id}.m4a'));
     final partial = File('${destination.path}.part');
-    if (await partial.exists()) await partial.delete();
+    await _deleteIfExists(partial);
+
+    if (await _isValidLocalFile(destination, message.mediaSizeBytes)) {
+      await _persistDownloadedVoice(
+        ownerUid: ownerUid,
+        chatId: chatId,
+        message: message,
+        file: destination,
+      );
+      await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
+      return destination.path;
+    }
+    await _deleteIfExists(destination);
 
     try {
       await _storage.ref().child(storagePath).writeToFile(partial);
-      final actualBytes = await partial.length();
-      if (actualBytes <= 0 ||
-          (message.mediaSizeBytes != null &&
-              actualBytes != message.mediaSizeBytes)) {
-        await partial.delete();
+      if (!await _isValidLocalFile(partial, message.mediaSizeBytes)) {
+        await _deleteIfExists(partial);
         throw const VoiceMessageException(
           'The downloaded voice message did not pass verification.',
         );
       }
-      if (await destination.exists()) await destination.delete();
       await partial.rename(destination.path);
-
-      final downloaded = message.withLocalMedia(
-        localMediaPath: destination.path,
-      );
-      await _localChatStore.upsertMessages(
+      await _persistDownloadedVoice(
         ownerUid: ownerUid,
-        records: <LocalStoredMessage>[
-          LocalStoredMessage(
-            chatId: chatId,
-            message: downloaded,
-            localMediaPath: destination.path,
-            cloudExpiresAt: message.cloudExpiresAt,
-            downloadComplete: true,
-            cloudMediaDeleted: message.cloudMediaDeletedAt != null,
-          ),
-        ],
+        chatId: chatId,
+        message: message,
+        file: destination,
       );
       await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
       return destination.path;
     } catch (_) {
-      if (await partial.exists()) await partial.delete();
+      await _deleteIfExists(partial);
       rethrow;
     }
+  }
+
+  Future<bool> _isValidLocalFile(File file, int? expectedBytes) async {
+    if (!await file.exists()) return false;
+    final actualBytes = await file.length();
+    if (actualBytes <= 0 || actualBytes > maximumVoiceBytes) return false;
+    return expectedBytes == null || expectedBytes <= 0 || actualBytes == expectedBytes;
+  }
+
+  Future<void> _persistDownloadedVoice({
+    required String ownerUid,
+    required String chatId,
+    required MessageModel message,
+    required File file,
+  }) async {
+    final downloaded = message.withLocalMedia(localMediaPath: file.path);
+    await _localChatStore.upsertMessages(
+      ownerUid: ownerUid,
+      records: <LocalStoredMessage>[
+        LocalStoredMessage(
+          chatId: chatId,
+          message: downloaded,
+          localMediaPath: file.path,
+          cloudExpiresAt: message.cloudExpiresAt,
+          downloadComplete: true,
+          cloudMediaDeleted: message.cloudMediaDeletedAt != null,
+          pendingUpload: false,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteIfExists(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   Future<void> _acknowledge({
