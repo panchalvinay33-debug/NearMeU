@@ -326,8 +326,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _SettingsTile(
                       icon: Icons.pause_circle_outline_rounded,
                       iconColor: Colors.orangeAccent,
-                      title: isClosingAccount ? 'Verifying & closing…' : 'Close Account',
-                      subtitle: 'Reversible; same verified email reactivates this identity',
+                      title: isClosingAccount
+                          ? 'Verifying & closing…'
+                          : 'Close Account',
+                      subtitle:
+                          'Reversible; same verified email reactivates this identity',
                       titleColor: Colors.orangeAccent,
                       onTap: _accountActionBusy ? null : _closeAccount,
                     ),
