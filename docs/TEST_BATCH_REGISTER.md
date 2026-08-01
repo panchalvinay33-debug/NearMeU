@@ -22,8 +22,8 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded |
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Superseded by Batch 04 |
 | 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base |
-| 05 | Identity, account close and reactivation | IN_PROGRESS | `batch/05-identity-account-close-reactivation` | Yes | CI / focused acceptance pending |
-| 06 | Premium entitlement foundation | PLANNED | — | Yes | After Batch 05 acceptance |
+| 05 | Identity, account close and reactivation | ACCEPTED | `batch/05-identity-account-close-reactivation` | Yes | Awaiting merge/final promotion |
+| 06 | Premium entitlement foundation | PLANNED | — | Yes | Next batch after Batch 05 promotion |
 | 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | After acceptance |
 | 08 | Profile sharing and deep-link recovery | PLANNED | — | Yes | After acceptance |
 | 09 | Agora audio calling | PLANNED | — | Yes | After acceptance |
@@ -84,36 +84,35 @@ Focused physical owner test: PASS
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-## Batch 05 in-progress record
+## Batch 05 acceptance record
 
 ```text
 Batch ID: 05
 Title: Identity, account close and reactivation
-Status: IN_PROGRESS
+Status: ACCEPTED
 Branch: batch/05-identity-account-close-reactivation
 Base: c0a734e3dfbbab61b5c1b008df4e3f09bb011556
-Target version: 1.0.8+9
+Tested runtime commit: d2868b97dc931a49f625f4711db4b555fecd34ec
+Pull request: #94
+Version: 1.0.8+9
 Android package: com.nearmeu.nearmeu
-Required production callables: ensureIdentityContinuity, closeCurrentAccount, reactivateCurrentAccount (asia-south1)
-CI: pending
-Signed artifact: pending
-Production lifecycle deployment: pending
-Focused physical owner test: pending
+Build #33 / run 30699307402: PASS
+Quality #430 / run 30699307401: PASS
+Recoverable artifact ID: 8818404060
+Recoverable artifact digest: sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c
+Tested signed debug APK SHA-256: c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406
+Release artifact ID: 8818505561
+Release APK SHA-256: e648ece943692ae4d7bcc083088f8ecbdde91a5c1fb892344076bff0bf8c1966
+Direct-update/history preservation: PASS
+Closed account neutral unavailable state: PASS
+Closed-account message authorization refusal: PASS
+Same-account reactivation/profile recreation: PASS
+Conversation continuity after reactivation: PASS
+Sign Out / Close Account / Permanent Delete separation: PASS
+Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Implemented scope under verification:
-
-- server-only SHA-256 verified-email mapping prevents a second UID from claiming the same verified email;
-- account Close requires recent Google reauthentication and preserves the Firebase Auth UID;
-- public `users/{uid}` parent is removed on Close, immediately removing Nearby/search visibility and making existing active-user authorization fail closed;
-- Firestore block subcollections are intentionally preserved when the public parent is removed;
-- exact private location is cleared, device tokens are removed and auth refresh tokens are revoked;
-- current-device encrypted local chat history is not wiped by Close Account;
-- same verified email reactivates the same UID and returns to public-profile recreation;
-- Sign Out, reversible Close Account and irreversible Delete Account remain distinct UI actions;
-- owner administrator self-close is rejected rather than silently destroying the only owner-admin continuity.
-
-Focused physical matrix: [`BATCH_05_PHYSICAL_TEST.md`](BATCH_05_PHYSICAL_TEST.md).
+Detailed focused physical matrix: [`BATCH_05_PHYSICAL_TEST.md`](BATCH_05_PHYSICAL_TEST.md).
 
 ## Canonical local workspace rule
 
@@ -121,4 +120,4 @@ The active owner working copy is `F:\NearMeU`. After every accepted/promoted bat
 
 ## Current gate
 
-Batch 05 must pass CI, permanent signing, production lifecycle-callable deployment and the short focused physical matrix before merge/promotion. Batch 04 remains the official recovery base until then.
+Batch 05 is owner-accepted. Merge PR #94 only after the acceptance-head CI is green, then complete final acceptance documentation and fast-forward `stable/official-recoverable-base`. Batch 06 starts only from that promoted Batch 05 base.
