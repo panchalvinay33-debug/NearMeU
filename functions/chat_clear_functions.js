@@ -117,16 +117,33 @@ exports.clearPrivateChat = onCall(
       );
     });
 
-    const hiddenMessageCount = await hideMessagesThroughClear({
-      chatRef,
-      actorId,
-      clearedAt,
-    });
+    // The per-user clear cutoff above is the authoritative privacy state. The
+    // deletedFor fan-out below is compatibility cleanup for current cloud
+    // messages. If it fails transiently, clients still hide/purge everything
+    // at or before clearedAt and a later cleanup can retry without resurrecting
+    // the cleared conversation.
+    let hiddenMessageCount = 0;
+    let cleanupPending = false;
+    try {
+      hiddenMessageCount = await hideMessagesThroughClear({
+        chatRef,
+        actorId,
+        clearedAt,
+      });
+    } catch (error) {
+      cleanupPending = true;
+      logger.error("Clear-chat message compatibility cleanup deferred", {
+        chatId: clearRequest.chatId,
+        actorId,
+        error,
+      });
+    }
 
     logger.info("Private chat cleared for participant", {
       chatId: clearRequest.chatId,
       actorId,
       hiddenMessageCount,
+      cleanupPending,
       policyVersion: CLEAR_POLICY_VERSION,
     });
 
@@ -134,6 +151,7 @@ exports.clearPrivateChat = onCall(
       success: true,
       clearedAtMillis: clearedAt.toMillis(),
       hiddenMessageCount,
+      cleanupPending,
       policyVersion: CLEAR_POLICY_VERSION,
     };
   },
