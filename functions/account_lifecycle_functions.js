@@ -180,13 +180,29 @@ exports.closeCurrentAccount = onCall(
     );
     await batch.commit();
 
-    const removedDeviceTokens = await deleteAllDeviceTokensForUid(uid);
-    await admin.auth().revokeRefreshTokens(uid);
+    // The lifecycle transaction above is authoritative. Cleanup after it is
+    // best-effort: if token deletion or refresh-token revocation temporarily
+    // fails, the closed account must stay closed rather than surfacing a false
+    // failure to the client. Existing authorization already fails closed
+    // because users/{uid} no longer exists.
+    let removedDeviceTokens = 0;
+    let cleanupPending = false;
+    try {
+      removedDeviceTokens = await deleteAllDeviceTokensForUid(uid);
+    } catch (_) {
+      cleanupPending = true;
+    }
+    try {
+      await admin.auth().revokeRefreshTokens(uid);
+    } catch (_) {
+      cleanupPending = true;
+    }
 
     return {
       success: true,
       alreadyClosed: false,
       removedDeviceTokens,
+      cleanupPending,
     };
   },
 );
