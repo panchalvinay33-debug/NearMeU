@@ -9,6 +9,9 @@ const {
   isExactPrivateChatParticipants,
   shouldHideMessageThroughClear,
 } = require("./chat_clear_logic");
+const {
+  purgeRecoveryChatForUser,
+} = require("./premium_recovery_functions");
 
 const db = admin.firestore();
 const REGION = "asia-south1";
@@ -118,12 +121,13 @@ exports.clearPrivateChat = onCall(
     });
 
     // The per-user clear cutoff above is the authoritative privacy state. The
-    // deletedFor fan-out below is compatibility cleanup for current cloud
-    // messages. If it fails transiently, clients still hide/purge everything
-    // at or before clearedAt and a later cleanup can retry without resurrecting
-    // the cleared conversation.
+    // deletedFor fan-out below is compatibility cleanup for current delivery
+    // messages. Premium recovery is a separate store and must be purged too,
+    // otherwise an intentionally cleared chat could resurrect after restore.
     let hiddenMessageCount = 0;
     let cleanupPending = false;
+    let recoveryDeletedCount = 0;
+    let recoveryCleanupPending = false;
     try {
       hiddenMessageCount = await hideMessagesThroughClear({
         chatRef,
@@ -139,11 +143,27 @@ exports.clearPrivateChat = onCall(
       });
     }
 
+    try {
+      recoveryDeletedCount = await purgeRecoveryChatForUser({
+        uid: actorId,
+        chatId: clearRequest.chatId,
+      });
+    } catch (error) {
+      recoveryCleanupPending = true;
+      logger.error("Clear-chat Premium recovery cleanup deferred", {
+        chatId: clearRequest.chatId,
+        actorId,
+        error,
+      });
+    }
+
     logger.info("Private chat cleared for participant", {
       chatId: clearRequest.chatId,
       actorId,
       hiddenMessageCount,
       cleanupPending,
+      recoveryDeletedCount,
+      recoveryCleanupPending,
       policyVersion: CLEAR_POLICY_VERSION,
     });
 
@@ -152,6 +172,8 @@ exports.clearPrivateChat = onCall(
       clearedAtMillis: clearedAt.toMillis(),
       hiddenMessageCount,
       cleanupPending,
+      recoveryDeletedCount,
+      recoveryCleanupPending,
       policyVersion: CLEAR_POLICY_VERSION,
     };
   },
