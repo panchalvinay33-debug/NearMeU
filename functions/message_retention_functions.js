@@ -26,8 +26,18 @@ function parentChatReference(messageSnapshot) {
   return chatRef;
 }
 
+function messageHasPrivateMedia(data) {
+  return (
+    data &&
+    typeof data.mediaStoragePath === "string" &&
+    data.mediaStoragePath.length > 0
+  );
+}
+
 async function deletePrivateMedia(messageSnapshot) {
   const data = messageSnapshot.data() || {};
+  if (!messageHasPrivateMedia(data)) return true;
+
   const chatRef = parentChatReference(messageSnapshot);
   const storagePath = data.mediaStoragePath;
   if (
@@ -39,6 +49,11 @@ async function deletePrivateMedia(messageSnapshot) {
       messageId: messageSnapshot.id,
     })
   ) {
+    logger.error("Expired private media path failed safety validation", {
+      chatId: chatRef?.id || null,
+      messageId: messageSnapshot.id,
+      storagePath,
+    });
     return false;
   }
 
@@ -128,7 +143,13 @@ async function refreshChatMetadata(chatRef) {
   const isUnsent = latestData.isUnsent === true;
   const type = typeof latestData.type === "string" ? latestData.type : "text";
   const fallbackText =
-    type === "image" ? "Photo" : type === "video" ? "Video" : "Message";
+    type === "image"
+      ? "Photo"
+      : type === "video"
+        ? "Video"
+        : type === "voice"
+          ? "Voice message"
+          : "Message";
   const text = isUnsent
     ? "This message was unsent"
     : typeof latestData.text === "string" && latestData.text.trim()
@@ -203,16 +224,30 @@ exports.purgeExpiredPrivateMessages = onSchedule(
     if (expired.empty) return;
 
     const touchedChats = new Map();
+    const safeToDelete = [];
     let mediaDeleted = 0;
+    let deferredForMedia = 0;
+
     for (const message of expired.docs) {
       const chatRef = parentChatReference(message);
+      const data = message.data() || {};
+      const hadPrivateMedia = messageHasPrivateMedia(data);
+      const mediaReady = await deletePrivateMedia(message);
+      if (!mediaReady) {
+        deferredForMedia += 1;
+        continue;
+      }
+
       if (chatRef) touchedChats.set(chatRef.path, chatRef);
-      if (await deletePrivateMedia(message)) mediaDeleted += 1;
+      if (hadPrivateMedia) mediaDeleted += 1;
+      safeToDelete.push(message);
     }
 
-    const batch = db.batch();
-    for (const message of expired.docs) batch.delete(message.ref);
-    await batch.commit();
+    if (safeToDelete.length > 0) {
+      const batch = db.batch();
+      for (const message of safeToDelete) batch.delete(message.ref);
+      await batch.commit();
+    }
 
     for (const chatRef of touchedChats.values()) {
       try {
@@ -225,12 +260,15 @@ exports.purgeExpiredPrivateMessages = onSchedule(
       }
     }
 
-    logger.info("Expired private messages purged", {
-      messageCount: expired.size,
+    logger.info("Expired private messages retention pass complete", {
+      queriedMessageCount: expired.size,
+      deletedMessageCount: safeToDelete.length,
       mediaDeleted,
+      deferredForMedia,
       chatCount: touchedChats.size,
     });
   },
 );
 
 module.exports.refreshChatMetadata = refreshChatMetadata;
+module.exports.messageHasPrivateMedia = messageHasPrivateMedia;

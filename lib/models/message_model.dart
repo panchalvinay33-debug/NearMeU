@@ -229,7 +229,16 @@ class MessageModel {
   bool get isMedia => isImage || isVideo || isVoice;
   bool get hasLocalMedia =>
       localMediaPath != null && localMediaPath!.trim().isNotEmpty;
+
+  bool cloudDeliveryExpiredAt(DateTime now) {
+    final expiry = cloudExpiresAt;
+    return expiry != null && !expiry.isAfter(now);
+  }
+
+  bool get isCloudDeliveryExpired => cloudDeliveryExpiredAt(DateTime.now());
+
   bool get hasRemoteMedia =>
+      !isCloudDeliveryExpired &&
       cloudMediaDeletedAt == null &&
       ((mediaStoragePath != null && mediaStoragePath!.trim().isNotEmpty) ||
           (mediaUrl != null && mediaUrl!.trim().isNotEmpty));
