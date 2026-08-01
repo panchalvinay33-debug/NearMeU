@@ -45,6 +45,15 @@ function normalizedDeletedFor(value) {
   return [...new Set(value.filter((uid) => typeof uid === "string" && uid))];
 }
 
+function hasDownloadAcknowledgement(message, uid) {
+  const acknowledgements =
+    message && message.downloadAcknowledgements &&
+    typeof message.downloadAcknowledgements === "object"
+      ? message.downloadAcknowledgements
+      : {};
+  return acknowledgements[uid] != null;
+}
+
 function recoveryDecision({ message, uid, entitlement, clearCutoffMs = null }) {
   if (!message || typeof message !== "object") {
     return { eligible: false, reason: "invalid-message" };
@@ -64,6 +73,13 @@ function recoveryDecision({ message, uid, entitlement, clearCutoffMs = null }) {
   }
   if (normalizedDeletedFor(message.deletedFor).includes(uid)) {
     return { eligible: false, reason: "deleted-for-user" };
+  }
+  if (
+    type !== "text" &&
+    uid === message.receiverId &&
+    !hasDownloadAcknowledgement(message, uid)
+  ) {
+    return { eligible: false, reason: "receiver-media-not-downloaded" };
   }
 
   const timestampMs = Number.isFinite(message.timestampMs)
@@ -108,6 +124,7 @@ module.exports = {
   ALLOWED_MESSAGE_TYPES,
   RECOVERY_MONTHS,
   RECOVERY_POLICY_VERSION,
+  hasDownloadAcknowledgement,
   recoveryDecision,
   recoveryExpiryMillis,
   recoveryMediaPath,
