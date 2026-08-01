@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -12,18 +13,59 @@ import 'local_chat_store.dart';
 class PremiumRecoveryService {
   PremiumRecoveryService({
     FirebaseFunctions? functions,
+    FirebaseAuth? auth,
     FirebaseStorage? storage,
     LocalChatStore? localChatStore,
   }) : _functions =
            functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1'),
+       _auth = auth ?? FirebaseAuth.instance,
        _storage = storage ?? FirebaseStorage.instance,
        _localChatStore = localChatStore ?? LocalChatStore();
 
   final FirebaseFunctions _functions;
+  final FirebaseAuth _auth;
   final FirebaseStorage _storage;
   final LocalChatStore _localChatStore;
 
   static const int _pageSize = 100;
+
+  Future<HttpsCallableResult<dynamic>> _readPage(
+    Map<String, Object> request,
+  ) {
+    return _functions
+        .httpsCallable('getMyPremiumRecoveryPage')
+        .call<dynamic>(request);
+  }
+
+  Future<HttpsCallableResult<dynamic>> _readPageWithAuthRetry(
+    Map<String, Object> request,
+  ) async {
+    try {
+      return await _readPage(request);
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'unauthenticated') rethrow;
+      final user = _auth.currentUser;
+      if (user == null) rethrow;
+      await user.getIdToken(true);
+      return _readPage(request);
+    }
+  }
+
+  Future<bool> _messageAlreadyStored({
+    required String ownerUid,
+    required String chatId,
+    required String messageId,
+  }) async {
+    final database = await _localChatStore.openForUser(ownerUid);
+    final rows = await database.query(
+      'messages',
+      columns: const <String>['message_id'],
+      where: 'owner_uid = ? AND chat_id = ? AND message_id = ?',
+      whereArgs: <Object?>[ownerUid, chatId, messageId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
 
   Future<int> restoreChat({
     required String ownerUid,
@@ -36,27 +78,25 @@ class PremiumRecoveryService {
       chatId: chatId,
       limit: 2000,
     );
-    final existingIds = existing
-        .map((record) => record.message.id)
-        .toSet();
+    final existingIds = existing.map((record) => record.message.id).toSet();
 
     var restored = 0;
     int? afterMillis;
+    String? afterMessageId;
     while (true) {
-      final response = await _functions
-          .httpsCallable('getMyPremiumRecoveryPage')
-          .call<dynamic>(<String, Object>{
-            'chatId': chatId,
-            'limit': _pageSize,
-            if (afterMillis != null) 'afterMillis': afterMillis,
-          });
+      final request = <String, Object>{
+        'chatId': chatId,
+        'limit': _pageSize,
+        if (afterMillis != null) 'afterMillis': afterMillis,
+        if (afterMessageId != null) 'afterMessageId': afterMessageId,
+      };
+      final response = await _readPageWithAuthRetry(request);
       final data = response.data;
       if (data is! Map) return restored;
       final rawMessages = data['messages'];
       if (rawMessages is! List || rawMessages.isEmpty) return restored;
 
       final records = <LocalStoredMessage>[];
-      int? lastTimestampMillis;
       for (final raw in rawMessages) {
         if (raw is! Map) continue;
         final messageId = raw['messageId'];
@@ -72,8 +112,16 @@ class PremiumRecoveryService {
             timestampMillis is! num) {
           continue;
         }
-        lastTimestampMillis = timestampMillis.toInt();
-        if (existingIds.contains(messageId)) continue;
+
+        if (existingIds.contains(messageId) ||
+            await _messageAlreadyStored(
+              ownerUid: ownerUid,
+              chatId: chatId,
+              messageId: messageId,
+            )) {
+          existingIds.add(messageId);
+          continue;
+        }
 
         final type = raw['type'] is String ? raw['type'] as String : 'text';
         final recoveryMediaPath = raw['recoveryMediaStoragePath'] is String
@@ -142,11 +190,20 @@ class PremiumRecoveryService {
       }
 
       final hasMore = data['hasMore'] == true;
-      if (!hasMore || lastTimestampMillis == null) return restored;
-      if (afterMillis != null && lastTimestampMillis <= afterMillis) {
+      final nextAfterMillis = data['nextAfterMillis'];
+      final nextAfterMessageId = data['nextAfterMessageId'];
+      if (!hasMore ||
+          nextAfterMillis is! num ||
+          nextAfterMessageId is! String ||
+          nextAfterMessageId.isEmpty) {
         return restored;
       }
-      afterMillis = lastTimestampMillis;
+      final nextMillis = nextAfterMillis.toInt();
+      if (afterMillis == nextMillis && afterMessageId == nextAfterMessageId) {
+        return restored;
+      }
+      afterMillis = nextMillis;
+      afterMessageId = nextAfterMessageId;
     }
   }
 
