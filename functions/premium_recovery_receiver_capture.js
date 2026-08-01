@@ -33,25 +33,33 @@ function normalizedParticipants(chatData) {
     : [];
 }
 
-async function captureDownloadedReceiverRecovery({
+async function captureParticipantMediaRecovery({
   uid,
   chatId,
   messageId,
   chatData,
   messageData,
 }) {
-  if (!messageData || messageData.receiverId !== uid) {
-    return { captured: false, reason: "not-receiver" };
+  if (!messageData || typeof uid !== "string" || !uid) {
+    return { captured: false, reason: "invalid-participant" };
   }
+  const senderId = messageData.senderId;
+  const receiverId = messageData.receiverId;
+  if (uid !== senderId && uid !== receiverId) {
+    return { captured: false, reason: "not-participant" };
+  }
+
   const type = typeof messageData.type === "string" ? messageData.type : "text";
   if (type === "text") return { captured: false, reason: "not-media" };
 
-  const acknowledgements = messageData.downloadAcknowledgements &&
-    typeof messageData.downloadAcknowledgements === "object"
-    ? messageData.downloadAcknowledgements
-    : {};
-  if (acknowledgements[uid] == null) {
-    return { captured: false, reason: "receiver-media-not-downloaded" };
+  if (uid === receiverId) {
+    const acknowledgements = messageData.downloadAcknowledgements &&
+      typeof messageData.downloadAcknowledgements === "object"
+      ? messageData.downloadAcknowledgements
+      : {};
+    if (acknowledgements[uid] == null) {
+      return { captured: false, reason: "receiver-media-not-downloaded" };
+    }
   }
 
   const entitlement = await readPremiumEntitlement(uid);
@@ -68,7 +76,7 @@ async function captureDownloadedReceiverRecovery({
 
   const sourcePath = messageData.mediaStoragePath;
   if (typeof sourcePath !== "string" || !sourcePath) {
-    throw new Error("Downloaded receiver media has no trusted storage path.");
+    throw new Error("Eligible private media has no trusted storage path.");
   }
   const destinationPath = recoveryMediaPath({
     uid,
@@ -81,7 +89,7 @@ async function captureDownloadedReceiverRecovery({
   const destination = bucket.file(destinationPath);
   const [sourceExists] = await source.exists();
   if (!sourceExists) {
-    throw new Error("Downloaded receiver media disappeared before recovery capture.");
+    throw new Error("Private media disappeared before recovery capture.");
   }
   const [destinationExists] = await destination.exists();
   if (!destinationExists) await source.copy(destination);
@@ -98,8 +106,8 @@ async function captureDownloadedReceiverRecovery({
     ownerId: uid,
     chatId,
     messageId,
-    senderId: messageData.senderId || null,
-    receiverId: messageData.receiverId || null,
+    senderId: senderId || null,
+    receiverId: receiverId || null,
     text: typeof messageData.text === "string" ? messageData.text : "",
     timestamp: messageData.timestamp,
     type,
@@ -133,4 +141,11 @@ async function captureDownloadedReceiverRecovery({
   return { captured: true, reason: "eligible" };
 }
 
-module.exports = { captureDownloadedReceiverRecovery };
+async function captureDownloadedReceiverRecovery(args) {
+  return captureParticipantMediaRecovery(args);
+}
+
+module.exports = {
+  captureDownloadedReceiverRecovery,
+  captureParticipantMediaRecovery,
+};
