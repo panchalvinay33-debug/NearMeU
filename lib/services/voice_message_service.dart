@@ -20,6 +20,8 @@ class VoiceMessageException implements Exception {
   String toString() => message;
 }
 
+enum _VoiceConfirmation { confirmed, rejected, unknown }
+
 class VoiceMessageService {
   VoiceMessageService({
     FirebaseStorage? storage,
@@ -121,6 +123,7 @@ class VoiceMessageService {
     );
 
     final reference = _storage.ref().child(storagePath);
+    var uploadCompleted = false;
     try {
       await reference.putFile(
         localFile,
@@ -136,50 +139,50 @@ class VoiceMessageService {
           },
         ),
       );
+      uploadCompleted = true;
 
-      await _functions.httpsCallable('sendPrivateMediaMessage').call<void>(
-        <String, dynamic>{
-          'receiverId': receiverId,
-          'messageId': messageId,
-          'type': 'voice',
-          'storagePath': storagePath,
-          'caption': '',
-          'durationMs': durationMs,
-          'replyTo': replyTo == null
-              ? null
-              : <String, dynamic>{
-                  'messageId': replyTo.id,
-                  'text': replyTo.text,
-                  'senderId': replyTo.senderId,
-                },
-        },
-      );
-
-      await _localChatStore.upsertMessages(
-        ownerUid: senderId,
-        records: <LocalStoredMessage>[pending.copyWith(pendingUpload: false)],
-      );
-      return message;
-    } on FirebaseFunctionsException catch (error, stackTrace) {
-      developer.log(
-        'Voice upload confirmation failed; pending outbox retained',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      throw VoiceMessageException(
-        error.message?.trim().isNotEmpty == true
-            ? error.message!.trim()
-            : 'Voice message is saved and will retry when the chat reconnects.',
-      );
-    } catch (error) {
-      try {
-        await reference.delete();
-      } catch (_) {}
-      await _localChatStore.deleteMessageForOwner(
-        ownerUid: senderId,
+      Object? confirmationError;
+      final confirmation = await _confirmCloudMessage(
         chatId: chatId,
-        messageId: messageId,
+        message: message,
+        onError: (error) => confirmationError = error,
       );
+
+      switch (confirmation) {
+        case _VoiceConfirmation.confirmed:
+          await _localChatStore.upsertMessages(
+            ownerUid: senderId,
+            records: <LocalStoredMessage>[
+              pending.copyWith(pendingUpload: false),
+            ],
+          );
+          return message;
+        case _VoiceConfirmation.rejected:
+          await _removeRejectedPending(
+            ownerUid: senderId,
+            chatId: chatId,
+            messageId: messageId,
+            reference: reference,
+          );
+          throw VoiceMessageException(_friendlyError(confirmationError));
+        case _VoiceConfirmation.unknown:
+          developer.log(
+            'Voice confirmation deferred to shared media outbox recovery',
+            error: confirmationError,
+          );
+          throw const VoiceMessageException(
+            'Voice message is saved securely and will be confirmed when this chat reconnects.',
+          );
+      }
+    } catch (_) {
+      if (!uploadCompleted) {
+        await _removeRejectedPending(
+          ownerUid: senderId,
+          chatId: chatId,
+          messageId: messageId,
+          reference: reference,
+        );
+      }
       rethrow;
     } finally {
       if (sourceFile.path != localFile.path) {
@@ -188,6 +191,107 @@ class VoiceMessageService {
         } catch (_) {}
       }
     }
+  }
+
+  Future<void> _removeRejectedPending({
+    required String ownerUid,
+    required String chatId,
+    required String messageId,
+    required Reference reference,
+  }) async {
+    try {
+      await reference.delete();
+    } catch (_) {}
+    await _localChatStore.deleteMessageForOwner(
+      ownerUid: ownerUid,
+      chatId: chatId,
+      messageId: messageId,
+    );
+  }
+
+  Future<_VoiceConfirmation> _confirmCloudMessage({
+    required String chatId,
+    required MessageModel message,
+    required void Function(Object error) onError,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await _functions.httpsCallable('sendPrivateMediaMessage').call<void>(
+          <String, dynamic>{
+            'receiverId': message.receiverId,
+            'messageId': message.id,
+            'type': 'voice',
+            'storagePath': message.mediaStoragePath,
+            'caption': '',
+            'durationMs': message.mediaDurationMs,
+            'replyTo': message.hasReply
+                ? <String, dynamic>{
+                    'messageId': message.replyToMessageId,
+                    'text': message.replyToText,
+                    'senderId': message.replyToSenderId,
+                  }
+                : null,
+          },
+        );
+        return _VoiceConfirmation.confirmed;
+      } catch (error) {
+        lastError = error;
+        onError(error);
+        if (_isDefinitiveFailure(error)) break;
+      }
+    }
+
+    try {
+      final snapshot = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(message.id)
+          .get();
+      if (snapshot.exists) {
+        final data = snapshot.data() ?? const <String, dynamic>{};
+        final matches = data['senderId'] == message.senderId &&
+            data['receiverId'] == message.receiverId &&
+            data['mediaStoragePath'] == message.mediaStoragePath;
+        return matches
+            ? _VoiceConfirmation.confirmed
+            : _VoiceConfirmation.rejected;
+      }
+      if (lastError != null && _isDefinitiveFailure(lastError)) {
+        return _VoiceConfirmation.rejected;
+      }
+      return _VoiceConfirmation.unknown;
+    } on FirebaseException catch (error, stackTrace) {
+      developer.log(
+        'Could not verify voice message commit',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return _VoiceConfirmation.unknown;
+    }
+  }
+
+  bool _isDefinitiveFailure(Object error) {
+    if (error is! FirebaseFunctionsException) return false;
+    return const <String>{
+      'invalid-argument',
+      'unauthenticated',
+      'permission-denied',
+      'failed-precondition',
+      'resource-exhausted',
+      'already-exists',
+      'not-found',
+    }.contains(error.code);
+  }
+
+  String _friendlyError(Object? error) {
+    if (error is FirebaseFunctionsException) {
+      final message = error.message?.trim();
+      if (message != null && message.isNotEmpty) return message;
+    }
+    if (error is VoiceMessageException) return error.message;
+    return 'Could not send this voice message. Please try again.';
   }
 
   Future<String> downloadVoice({
@@ -199,10 +303,20 @@ class VoiceMessageService {
       throw const VoiceMessageException('This is not a voice message.');
     }
 
-    final existing = message.localMediaPath;
-    if (existing != null && await File(existing).exists()) {
-      await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
-      return existing;
+    final declaredPath = message.localMediaPath;
+    if (declaredPath != null) {
+      final declaredFile = File(declaredPath);
+      if (await _isValidLocalFile(declaredFile, message.mediaSizeBytes)) {
+        await _persistDownloadedVoice(
+          ownerUid: ownerUid,
+          chatId: chatId,
+          message: message,
+          file: declaredFile,
+        );
+        await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
+        return declaredPath;
+      }
+      await _deleteIfExists(declaredFile);
     }
 
     final storagePath = message.mediaStoragePath;
@@ -215,44 +329,77 @@ class VoiceMessageService {
     final directory = await _mediaDirectory(ownerUid: ownerUid, chatId: chatId);
     final destination = File(p.join(directory.path, '${message.id}.m4a'));
     final partial = File('${destination.path}.part');
-    if (await partial.exists()) await partial.delete();
+    await _deleteIfExists(partial);
+
+    if (await _isValidLocalFile(destination, message.mediaSizeBytes)) {
+      await _persistDownloadedVoice(
+        ownerUid: ownerUid,
+        chatId: chatId,
+        message: message,
+        file: destination,
+      );
+      await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
+      return destination.path;
+    }
+    await _deleteIfExists(destination);
 
     try {
       await _storage.ref().child(storagePath).writeToFile(partial);
-      final actualBytes = await partial.length();
-      if (actualBytes <= 0 ||
-          (message.mediaSizeBytes != null &&
-              actualBytes != message.mediaSizeBytes)) {
-        await partial.delete();
+      if (!await _isValidLocalFile(partial, message.mediaSizeBytes)) {
+        await _deleteIfExists(partial);
         throw const VoiceMessageException(
           'The downloaded voice message did not pass verification.',
         );
       }
-      if (await destination.exists()) await destination.delete();
       await partial.rename(destination.path);
-
-      final downloaded = message.withLocalMedia(
-        localMediaPath: destination.path,
-      );
-      await _localChatStore.upsertMessages(
+      await _persistDownloadedVoice(
         ownerUid: ownerUid,
-        records: <LocalStoredMessage>[
-          LocalStoredMessage(
-            chatId: chatId,
-            message: downloaded,
-            localMediaPath: destination.path,
-            cloudExpiresAt: message.cloudExpiresAt,
-            downloadComplete: true,
-            cloudMediaDeleted: message.cloudMediaDeletedAt != null,
-          ),
-        ],
+        chatId: chatId,
+        message: message,
+        file: destination,
       );
       await _acknowledge(ownerUid: ownerUid, chatId: chatId, message: message);
       return destination.path;
     } catch (_) {
-      if (await partial.exists()) await partial.delete();
+      await _deleteIfExists(partial);
       rethrow;
     }
+  }
+
+  Future<bool> _isValidLocalFile(File file, int? expectedBytes) async {
+    if (!await file.exists()) return false;
+    final actualBytes = await file.length();
+    if (actualBytes <= 0 || actualBytes > maximumVoiceBytes) return false;
+    return expectedBytes == null || expectedBytes <= 0 || actualBytes == expectedBytes;
+  }
+
+  Future<void> _persistDownloadedVoice({
+    required String ownerUid,
+    required String chatId,
+    required MessageModel message,
+    required File file,
+  }) async {
+    final downloaded = message.withLocalMedia(localMediaPath: file.path);
+    await _localChatStore.upsertMessages(
+      ownerUid: ownerUid,
+      records: <LocalStoredMessage>[
+        LocalStoredMessage(
+          chatId: chatId,
+          message: downloaded,
+          localMediaPath: file.path,
+          cloudExpiresAt: message.cloudExpiresAt,
+          downloadComplete: true,
+          cloudMediaDeleted: message.cloudMediaDeletedAt != null,
+          pendingUpload: false,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteIfExists(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   Future<void> _acknowledge({

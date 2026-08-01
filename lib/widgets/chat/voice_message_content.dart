@@ -21,6 +21,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
   final VoiceMessageService _voiceService = VoiceMessageService();
 
   String? _localPath;
+  String? _downloadError;
   bool _isDownloading = false;
   bool _isPreparing = false;
   bool _isLoaded = false;
@@ -38,12 +39,14 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
     if (oldWidget.message.id != widget.message.id) {
       _player.stop();
       _isLoaded = false;
+      _downloadError = null;
       _localPath = widget.message.localMediaPath;
       _discardMissingFile();
     } else if (widget.message.localMediaPath?.isNotEmpty == true) {
       final nextPath = widget.message.localMediaPath;
       if (nextPath != _localPath) _isLoaded = false;
       _localPath = nextPath;
+      _downloadError = null;
       _discardMissingFile();
     }
   }
@@ -68,7 +71,10 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
 
     final ownerUid = FirebaseAuth.instance.currentUser?.uid;
     if (ownerUid == null || _isDownloading) return null;
-    setState(() => _isDownloading = true);
+    setState(() {
+      _isDownloading = true;
+      _downloadError = null;
+    });
     try {
       final chatId = _voiceService.chatIdFor(
         widget.message.senderId,
@@ -83,13 +89,12 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
       setState(() {
         _localPath = downloaded;
         _isLoaded = false;
+        _downloadError = null;
       });
       return downloaded;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        setState(() => _downloadError = error.toString());
       }
       return null;
     } finally {
@@ -119,9 +124,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
     } catch (error) {
       _isLoaded = false;
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        setState(() => _downloadError = error.toString());
       }
     } finally {
       if (mounted) setState(() => _isPreparing = false);
@@ -139,6 +142,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
     final declaredDuration = Duration(
       milliseconds: widget.message.mediaDurationMs ?? 0,
     );
+    final failed = _downloadError != null && _localPath == null;
 
     return Container(
       width: 250,
@@ -156,6 +160,7 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
             builder: (context, snapshot) {
               final playing = snapshot.data?.playing == true;
               return IconButton.filled(
+                tooltip: failed ? 'Retry voice download' : null,
                 onPressed: _isDownloading || _isPreparing
                     ? null
                     : _togglePlayback,
@@ -173,6 +178,8 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
                     : Icon(
                         playing
                             ? Icons.pause_rounded
+                            : failed
+                            ? Icons.refresh_rounded
                             : _localPath == null
                             ? Icons.download_rounded
                             : Icons.play_arrow_rounded,
@@ -186,19 +193,32 @@ class _VoiceMessageContentState extends State<VoiceMessageContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.graphic_eq_rounded, color: Colors.white70),
-                    SizedBox(width: 6),
-                    Text(
-                      'Voice message',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                    const Icon(Icons.graphic_eq_rounded, color: Colors.white70),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        failed ? 'Tap to retry voice message' : 'Voice message',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
                 ),
+                if (failed) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _downloadError!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white60, fontSize: 10),
+                  ),
+                ],
                 const SizedBox(height: 6),
                 StreamBuilder<Duration>(
                   stream: _player.positionStream,

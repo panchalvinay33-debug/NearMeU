@@ -22,14 +22,16 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
 
   String? _localPath;
   String? _thumbnailPath;
+  String? _downloadError;
   bool _isDownloading = false;
+  bool _isValidatingLocal = false;
 
   @override
   void initState() {
     super.initState();
     _localPath = widget.message.localMediaPath;
     _thumbnailPath = widget.message.localThumbnailPath;
-    _discardMissingLocalFiles();
+    _validateLocalFiles();
   }
 
   @override
@@ -38,27 +40,69 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
     if (oldWidget.message.id != widget.message.id) {
       _localPath = widget.message.localMediaPath;
       _thumbnailPath = widget.message.localThumbnailPath;
-      _discardMissingLocalFiles();
+      _downloadError = null;
+      _validateLocalFiles();
       return;
     }
 
     final nextLocalPath = widget.message.localMediaPath;
     if (nextLocalPath != null && nextLocalPath.trim().isNotEmpty) {
       _localPath = nextLocalPath;
+      _downloadError = null;
     }
     final nextThumbnailPath = widget.message.localThumbnailPath;
     if (nextThumbnailPath != null && nextThumbnailPath.trim().isNotEmpty) {
       _thumbnailPath = nextThumbnailPath;
     }
-    _discardMissingLocalFiles();
+    _validateLocalFiles();
   }
 
-  void _discardMissingLocalFiles() {
-    final path = _localPath;
-    if (path != null && !File(path).existsSync()) _localPath = null;
-    final thumbnail = _thumbnailPath;
-    if (thumbnail != null && !File(thumbnail).existsSync()) {
-      _thumbnailPath = null;
+  Future<void> _validateLocalFiles() async {
+    if (_isValidatingLocal) return;
+    _isValidatingLocal = true;
+    try {
+      final path = _localPath;
+      if (path != null) {
+        final file = File(path);
+        var valid = await file.exists();
+        if (valid) {
+          final bytes = await file.length();
+          final declared = widget.message.mediaSizeBytes;
+          valid = bytes > 0 && (declared == null || declared <= 0 || bytes == declared);
+        }
+        if (!valid) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          if (mounted) {
+            setState(() {
+              _localPath = null;
+              _thumbnailPath = null;
+            });
+          } else {
+            _localPath = null;
+            _thumbnailPath = null;
+          }
+        }
+      }
+
+      final thumbnail = _thumbnailPath;
+      if (thumbnail != null) {
+        final file = File(thumbnail);
+        final valid = await file.exists() && await file.length() > 0;
+        if (!valid) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          if (mounted) {
+            setState(() => _thumbnailPath = null);
+          } else {
+            _thumbnailPath = null;
+          }
+        }
+      }
+    } finally {
+      _isValidatingLocal = false;
     }
   }
 
@@ -66,7 +110,10 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
     final ownerUid = FirebaseAuth.instance.currentUser?.uid;
     if (ownerUid == null || _isDownloading) return;
 
-    setState(() => _isDownloading = true);
+    setState(() {
+      _isDownloading = true;
+      _downloadError = null;
+    });
     try {
       final chatId = _mediaService.chatIdFor(
         widget.message.senderId,
@@ -77,9 +124,21 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
         chatId: chatId,
         message: widget.message,
       );
+      final file = File(path);
+      final bytes = await file.length();
+      final declared = widget.message.mediaSizeBytes;
+      if (bytes <= 0 || (declared != null && declared > 0 && bytes != declared)) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        throw const PrivateMediaException(
+          'The downloaded file did not pass verification. Please retry.',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _localPath = path;
+        _downloadError = null;
         if (widget.message.isVideo) {
           final expectedThumbnail = p.join(
             p.dirname(path),
@@ -92,9 +151,7 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      setState(() => _downloadError = error.toString());
     } finally {
       if (mounted) setState(() => _isDownloading = false);
     }
@@ -172,6 +229,7 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
       );
     }
 
+    final failed = _downloadError != null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
@@ -179,7 +237,7 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
         onTap: _isDownloading ? null : _download,
         child: Container(
           width: 260,
-          height: 150,
+          constraints: const BoxConstraints(minHeight: 150),
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: .22),
@@ -196,7 +254,9 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
                 )
               else
                 Icon(
-                  widget.message.isVideo
+                  failed
+                      ? Icons.refresh_rounded
+                      : widget.message.isVideo
                       ? Icons.video_file_rounded
                       : Icons.image_rounded,
                   color: Colors.white,
@@ -206,6 +266,8 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
               Text(
                 _isDownloading
                     ? 'Downloading securely...'
+                    : failed
+                    ? 'Retry download'
                     : widget.message.isVideo
                     ? 'Download private video'
                     : 'Download private photo',
@@ -216,13 +278,22 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
                 ),
               ),
               const SizedBox(height: 5),
-              Text(
-                <String>[
-                  _sizeLabel(),
-                  if (widget.message.isVideo) _durationLabel(),
-                ].where((value) => value.isNotEmpty).join(' • '),
-                style: const TextStyle(color: Colors.white60, fontSize: 12),
-              ),
+              if (failed)
+                Text(
+                  _downloadError!,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
+                )
+              else
+                Text(
+                  <String>[
+                    _sizeLabel(),
+                    if (widget.message.isVideo) _durationLabel(),
+                  ].where((value) => value.isNotEmpty).join(' • '),
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
             ],
           ),
         ),

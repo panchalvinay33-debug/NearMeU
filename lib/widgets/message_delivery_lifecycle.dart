@@ -6,7 +6,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
-/// Keeps private-message delivery receipts independent from the chat screen.
+import '../services/local_chat_store.dart';
+import '../services/private_media_service.dart';
+
+/// Keeps private-message delivery receipts and media outbox recovery independent
+/// from the chat screen.
 ///
 /// A message becomes delivered only after the receiver's authenticated app has
 /// actually observed it from Firestore. Read receipts remain a separate action
@@ -30,6 +34,10 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'asia-south1',
   );
+  final LocalChatStore _localChatStore = LocalChatStore();
+  late final PrivateMediaService _mediaService = PrivateMediaService(
+    localChatStore: _localChatStore,
+  );
 
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSubscription;
@@ -38,6 +46,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
       <String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>{};
   final Set<String> _pendingReceiptKeys = <String>{};
   String? _activeUid;
+  bool _recoveringMediaOutbox = false;
 
   @override
   void initState() {
@@ -68,6 +77,8 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
     _activeUid = user?.uid;
     if (user == null) return;
 
+    unawaited(_recoverPendingMedia(user.uid));
+
     _chatSubscription = _firestore
         .collection('chats')
         .where('participants', arrayContains: user.uid)
@@ -82,6 +93,22 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
             );
           },
         );
+  }
+
+  Future<void> _recoverPendingMedia(String uid) async {
+    if (_activeUid != uid || _recoveringMediaOutbox) return;
+    _recoveringMediaOutbox = true;
+    try {
+      await _mediaService.recoverPendingUploads(ownerUid: uid);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Private media outbox recovery deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _recoveringMediaOutbox = false;
+    }
   }
 
   Future<void> _syncChatListeners(
