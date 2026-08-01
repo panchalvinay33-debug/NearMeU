@@ -22,34 +22,17 @@ function accountState(data) {
     : ACCOUNT_STATE_ACTIVE;
 }
 
-function closedPublicProfile(uid, existing = {}, timestamp) {
-  if (typeof uid !== "string" || !uid.trim()) {
-    throw new TypeError("A user id is required.");
-  }
+function closedLifecycleRecord(uid, existingUser = {}, timestamp) {
+  const safeUid = typeof uid === "string" ? uid.trim() : "";
+  if (!safeUid) throw new TypeError("A user id is required.");
 
   return {
-    uid: uid.trim(),
-    nickname: "Account unavailable",
-    gender: "",
-    lookingFor: "",
-    createdAt: existing.createdAt || timestamp,
-    approxLatitude: null,
-    approxLongitude: null,
-    locationCell: null,
-    discoveryCells: [],
-    state: null,
-    country: null,
-    photoUrl: null,
-    age: Number.isInteger(existing.age) ? existing.age : 18,
-    lastSeen: timestamp,
-    isOnline: false,
-    isAdmin: existing.isAdmin === true,
-    isSuspended: existing.isSuspended === true,
-    privacyVersion: Number.isInteger(existing.privacyVersion)
-      ? existing.privacyVersion
-      : 1,
+    uid: safeUid,
     accountState: ACCOUNT_STATE_CLOSED,
     closedAt: timestamp,
+    preservedCreatedAt: existingUser.createdAt || null,
+    preservedIsAdmin: existingUser.isAdmin === true,
+    preservedIsSuspended: existingUser.isSuspended === true,
   };
 }
 
@@ -57,7 +40,7 @@ module.exports = {
   ACCOUNT_STATE_ACTIVE,
   ACCOUNT_STATE_CLOSED,
   accountState,
-  closedPublicProfile,
+  closedLifecycleRecord,
   identityEmailKey,
   normalizeVerifiedEmail,
 };
