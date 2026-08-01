@@ -42,5 +42,16 @@ exports.getMyPremiumEntitlement = onCall(
   },
 );
 
-module.exports.readPremiumEntitlement = readPremiumEntitlement;
-module.exports.requirePremiumEntitlement = requirePremiumEntitlement;
+// Internal helpers are intentionally non-enumerable so bootstrap's object
+// spread exports only deployable Cloud Functions, while sibling modules can
+// still reuse the same trusted entitlement read/authorization logic.
+Object.defineProperties(module.exports, {
+  readPremiumEntitlement: {
+    value: readPremiumEntitlement,
+    enumerable: false,
+  },
+  requirePremiumEntitlement: {
+    value: requirePremiumEntitlement,
+    enumerable: false,
+  },
+});
