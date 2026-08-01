@@ -53,9 +53,8 @@ async function purgeRecoveryForDeletedUid(uid) {
   await cleanupJobRef(uid).delete().catch(() => {});
 }
 
-async function enqueueAndRun(uid) {
-  const jobRef = cleanupJobRef(uid);
-  await jobRef.set(
+async function ensureCleanupJob(uid) {
+  await cleanupJobRef(uid).set(
     {
       uid,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -63,22 +62,24 @@ async function enqueueAndRun(uid) {
     },
     { merge: true },
   );
-  await purgeRecoveryForDeletedUid(uid);
 }
 
 exports.purgePremiumRecoveryOnAuthDelete = functionsV1
   .region(REGION)
   .auth.user()
   .onDelete(async (user) => {
+    // Persist the retry job first. If this write itself fails, allow the
+    // background invocation to fail instead of silently losing the only retry
+    // marker for permanently deleted account recovery data.
+    await ensureCleanupJob(user.uid);
     try {
-      await enqueueAndRun(user.uid);
+      await purgeRecoveryForDeletedUid(user.uid);
     } catch (error) {
       logger.error("Permanent-account Premium recovery cleanup deferred", {
         uid: user.uid,
         error,
       });
-      // The durable job survives so the scheduler can retry even if this
-      // background invocation itself is not retried by the platform.
+      // The durable job remains for the hourly retry worker.
     }
   });
 
@@ -101,7 +102,8 @@ exports.retryPremiumRecoveryAccountDeletion = onSchedule(
     for (const job of jobs.docs) {
       const uid = job.get("uid") || job.id;
       try {
-        await enqueueAndRun(uid);
+        await ensureCleanupJob(uid);
+        await purgeRecoveryForDeletedUid(uid);
         completed += 1;
       } catch (error) {
         logger.error("Premium recovery account-deletion retry failed", {
