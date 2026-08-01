@@ -11,7 +11,7 @@ const {
   privateMediaPathAllowed,
 } = require("./message_retention_logic");
 const {
-  captureDownloadedReceiverRecovery,
+  captureParticipantMediaRecovery,
 } = require("./premium_recovery_receiver_capture");
 
 const db = admin.firestore();
@@ -131,21 +131,31 @@ exports.acknowledgePrivateMediaDownload = onCall(
       };
     });
 
-    // A Premium receiver's separate six-month copy must be durable before the
-    // temporary delivery object is removed. If capture fails transiently, keep
-    // the source object so a later acknowledgement retry can finish safely.
+    // The temporary delivery object must remain until every currently eligible
+    // Premium participant copy that can depend on this source is durable. This
+    // closes both the fast-receiver race and the receiver-download race while
+    // keeping Free-user delivery cleanup unchanged.
     if (!media.cloudMediaDeletedAt) {
       try {
-        await captureDownloadedReceiverRecovery({
-          uid,
-          chatId: acknowledgement.chatId,
-          messageId: acknowledgement.messageId,
-          chatData: media.chatData,
-          messageData: media.messageData,
-        });
+        const participantIds = [media.messageData.senderId, uid]
+          .filter((value, index, values) =>
+            typeof value === "string" &&
+            value.length > 0 &&
+            values.indexOf(value) === index,
+          );
+        for (const participantId of participantIds) {
+          await captureParticipantMediaRecovery({
+            uid: participantId,
+            chatId: acknowledgement.chatId,
+            messageId: acknowledgement.messageId,
+            chatData: media.chatData,
+            messageData: media.messageData,
+          });
+        }
       } catch (error) {
-        logger.error("Premium receiver recovery capture deferred", {
-          uid,
+        logger.error("Premium media recovery capture deferred", {
+          receiverId: uid,
+          senderId: media.messageData.senderId || null,
           chatId: acknowledgement.chatId,
           messageId: acknowledgement.messageId,
           error,
