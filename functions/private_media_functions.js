@@ -12,6 +12,10 @@ const {
   normalizePrivateMediaRequest,
   validateStoredMedia,
 } = require("./private_media_logic");
+const {
+  readPremiumEntitlement,
+  requirePremiumEntitlement,
+} = require("./premium_entitlement_functions");
 
 const db = admin.firestore();
 const REGION = "asia-south1";
@@ -78,6 +82,9 @@ exports.sendPrivateMediaMessage = onCall(
     } catch (error) {
       throw new HttpsError("invalid-argument", error.message);
     }
+
+    const entitlement = await readPremiumEntitlement(senderId);
+    requirePremiumEntitlement(entitlement, `send-${media.type}`);
 
     const file = admin.storage().bucket().file(media.storagePath);
     let storedMedia;
