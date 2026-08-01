@@ -8,7 +8,7 @@ const {
   ACCOUNT_STATE_ACTIVE,
   ACCOUNT_STATE_CLOSED,
   accountState,
-  closedPublicProfile,
+  closedLifecycleRecord,
   identityEmailKey,
   normalizeVerifiedEmail,
 } = require("./account_lifecycle_logic");
@@ -53,6 +53,10 @@ function requireRecentVerifiedIdentity(request) {
 
 function identityRef(email) {
   return db().collection("identityEmails").doc(identityEmailKey(email));
+}
+
+function lifecycleRef(uid) {
+  return db().collection("accountLifecycle").doc(uid);
 }
 
 async function claimIdentity(uid, email) {
@@ -104,10 +108,12 @@ exports.ensureIdentityContinuity = onCall({ region: REGION }, async (request) =>
   const email = requireVerifiedEmail(request);
   await claimIdentity(uid, email);
 
-  const user = await db().collection("users").doc(uid).get();
+  const lifecycle = await lifecycleRef(uid).get();
   return {
     success: true,
-    accountState: user.exists ? accountState(user.data()) : ACCOUNT_STATE_ACTIVE,
+    accountState: lifecycle.exists
+      ? accountState(lifecycle.data())
+      : ACCOUNT_STATE_ACTIVE,
   };
 });
 
@@ -119,19 +125,49 @@ exports.closeCurrentAccount = onCall(
 
     const userRef = db().collection("users").doc(uid);
     const privateRef = db().collection("privateProfiles").doc(uid);
-    const userSnapshot = await userRef.get();
+    const stateRef = lifecycleRef(uid);
+    const [userSnapshot, lifecycleSnapshot] = await Promise.all([
+      userRef.get(),
+      stateRef.get(),
+    ]);
+
+    if (
+      lifecycleSnapshot.exists &&
+      accountState(lifecycleSnapshot.data()) === ACCOUNT_STATE_CLOSED
+    ) {
+      return { success: true, alreadyClosed: true };
+    }
     if (!userSnapshot.exists) {
       throw new HttpsError("not-found", "NearMeU profile was not found.");
     }
 
-    if (accountState(userSnapshot.data()) === ACCOUNT_STATE_CLOSED) {
-      return { success: true, alreadyClosed: true };
+    const userData = userSnapshot.data() || {};
+    if (userData.isAdmin === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The owner administrator account cannot be closed from the app.",
+      );
+    }
+    if (userData.isSuspended === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "A suspended account cannot be self-closed.",
+      );
     }
 
     const now = admin.firestore.Timestamp.now();
-    const closedProfile = closedPublicProfile(uid, userSnapshot.data(), now);
     const batch = db().batch();
-    batch.set(userRef, closedProfile);
+
+    // Deleting only the public parent document makes the account immediately
+    // unavailable to discovery and to every rule/function that requires an
+    // active users/{uid} document. Firestore subcollections are NOT deleted,
+    // so block relationships survive exactly as required by the product rule.
+    batch.delete(userRef);
+    batch.set(stateRef, {
+      ...closedLifecycleRecord(uid, userData, now),
+      identityKey: identityEmailKey(email),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     batch.set(
       privateRef,
       {
@@ -162,23 +198,33 @@ exports.reactivateCurrentAccount = onCall(
     const email = requireVerifiedEmail(request);
     await claimIdentity(uid, email);
 
-    const userRef = db().collection("users").doc(uid);
-    const snapshot = await userRef.get();
-    if (!snapshot.exists) {
-      return { success: true, reactivated: false, profileRequired: true };
+    const stateRef = lifecycleRef(uid);
+    const snapshot = await stateRef.get();
+    if (!snapshot.exists || accountState(snapshot.data()) !== ACCOUNT_STATE_CLOSED) {
+      const user = await db().collection("users").doc(uid).get();
+      return {
+        success: true,
+        reactivated: false,
+        profileRequired: !user.exists,
+      };
     }
 
-    if (accountState(snapshot.data()) !== ACCOUNT_STATE_CLOSED) {
-      return { success: true, reactivated: false, profileRequired: false };
+    const stateData = snapshot.data() || {};
+    if (stateData.identityKey && stateData.identityKey !== identityEmailKey(email)) {
+      throw new HttpsError(
+        "permission-denied",
+        "Reactivation requires the same verified email used by this identity.",
+      );
     }
 
-    await userRef.update({
-      accountState: ACCOUNT_STATE_ACTIVE,
-      closedAt: admin.firestore.FieldValue.delete(),
-      reactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      isOnline: false,
-      lastSeen: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await stateRef.set(
+      {
+        accountState: ACCOUNT_STATE_ACTIVE,
+        reactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
     return { success: true, reactivated: true, profileRequired: true };
   },
