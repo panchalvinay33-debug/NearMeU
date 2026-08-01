@@ -21,7 +21,7 @@ test("calendar six-month expiry clips end-of-month safely", () => {
   );
 });
 
-test("active Premium user receives eligible recovery retention", () => {
+test("active Premium user receives eligible text recovery retention", () => {
   const timestampMs = Date.UTC(2026, 7, 1, 10, 0, 0, 0);
   const result = recoveryDecision({
     uid: "u1",
@@ -40,6 +40,57 @@ test("Free user does not receive a new recovery assignment", () => {
     message: { type: "text", timestampMs: 1_000, deletedFor: [] },
   });
   assert.deepEqual(result, { eligible: false, reason: "not-premium" });
+});
+
+test("sent media is eligible for Premium sender without receiver download", () => {
+  const result = recoveryDecision({
+    uid: "sender",
+    entitlement: premium,
+    message: {
+      senderId: "sender",
+      receiverId: "receiver",
+      type: "image",
+      timestampMs: 2_001,
+      deletedFor: [],
+      downloadAcknowledgements: { sender: 1 },
+    },
+  });
+  assert.equal(result.eligible, true);
+});
+
+test("received media waits until Premium receiver downloaded it", () => {
+  const result = recoveryDecision({
+    uid: "receiver",
+    entitlement: premium,
+    message: {
+      senderId: "sender",
+      receiverId: "receiver",
+      type: "video",
+      timestampMs: 2_001,
+      deletedFor: [],
+      downloadAcknowledgements: { sender: 1 },
+    },
+  });
+  assert.deepEqual(result, {
+    eligible: false,
+    reason: "receiver-media-not-downloaded",
+  });
+});
+
+test("downloaded received media becomes recovery eligible", () => {
+  const result = recoveryDecision({
+    uid: "receiver",
+    entitlement: premium,
+    message: {
+      senderId: "sender",
+      receiverId: "receiver",
+      type: "voice",
+      timestampMs: 2_001,
+      deletedFor: [],
+      downloadAcknowledgements: { sender: 1, receiver: 2 },
+    },
+  });
+  assert.equal(result.eligible, true);
 });
 
 test("Clear Chat cutoff prevents resurrection", () => {
