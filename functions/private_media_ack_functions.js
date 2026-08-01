@@ -10,6 +10,9 @@ const {
 const {
   privateMediaPathAllowed,
 } = require("./message_retention_logic");
+const {
+  captureDownloadedReceiverRecovery,
+} = require("./premium_recovery_receiver_capture");
 
 const db = admin.firestore();
 const REGION = "asia-south1";
@@ -96,6 +99,7 @@ exports.acknowledgePrivateMediaDownload = onCall(
           ? message.downloadAcknowledgements
           : {};
       const alreadyAcknowledged = acknowledgements[uid] != null;
+      let recoveryMessage = message;
       if (!alreadyAcknowledged) {
         const now = admin.firestore.Timestamp.now();
         transaction.update(
@@ -107,14 +111,51 @@ exports.acknowledgePrivateMediaDownload = onCall(
           "recipientDownloadedAt",
           now,
         );
+        recoveryMessage = {
+          ...message,
+          downloadAcknowledgements: {
+            ...acknowledgements,
+            [uid]: now,
+          },
+          recipientDownloadedAt: now,
+          downloadAcknowledgementVersion: DOWNLOAD_ACK_VERSION,
+        };
       }
 
       return {
         storagePath,
         alreadyAcknowledged,
         cloudMediaDeletedAt: message.cloudMediaDeletedAt || null,
+        chatData: chat,
+        messageData: recoveryMessage,
       };
     });
+
+    // A Premium receiver's separate six-month copy must be durable before the
+    // temporary delivery object is removed. If capture fails transiently, keep
+    // the source object so a later acknowledgement retry can finish safely.
+    if (!media.cloudMediaDeletedAt) {
+      try {
+        await captureDownloadedReceiverRecovery({
+          uid,
+          chatId: acknowledgement.chatId,
+          messageId: acknowledgement.messageId,
+          chatData: media.chatData,
+          messageData: media.messageData,
+        });
+      } catch (error) {
+        logger.error("Premium receiver recovery capture deferred", {
+          uid,
+          chatId: acknowledgement.chatId,
+          messageId: acknowledgement.messageId,
+          error,
+        });
+        throw new HttpsError(
+          "unavailable",
+          "Download was saved. Premium recovery will retry before cloud cleanup.",
+        );
+      }
+    }
 
     if (media.cloudMediaDeletedAt) {
       return {
