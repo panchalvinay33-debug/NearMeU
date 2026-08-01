@@ -11,6 +11,14 @@ This is the canonical map for understanding, operating, testing, recovering and 
 5. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled development order and gates.
 6. [`MASTER_PROJECT_AUDIT.md`](MASTER_PROJECT_AUDIT.md) — broader historical/project audit; where older identifiers conflict with the three current-state files above, the current accepted Batch 02 recovery records take precedence.
 
+## Canonical local workspace
+
+- Primary local project folder on the owner Windows machine: `F:\NearMeU`.
+- All future NearMeU development, Firebase deployment, Git operations and recovery-base synchronization should use `F:\NearMeU` as the canonical working copy unless the owner explicitly changes this path.
+- Temporary clones under `C:\Users\<user>\Downloads` are not the canonical project workspace and should not be used as the long-term base.
+- After every accepted/promoted batch, the local `F:\NearMeU` working copy should be synchronized to the promoted `main` / `stable/official-recoverable-base` state so the accepted base is also saved locally on the F: drive.
+- Existing folders such as `F:\NearMeU-OLD` or dated backup folders are backups only; they must not be mistaken for the active project.
+
 ## Current accepted identifiers
 
 - Development source branch: `main`
