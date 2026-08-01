@@ -23,15 +23,11 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 
 ## Current accepted starting point
 
-- Accepted batch: `05`
-- Final promoted main/recovery SHA: `3b749c8d7a320b71446245f99c694fdf85d9ccc4`
-- Accepted runtime merge: `44143f612cbf8b7adf6d591abe74aac2c6397704`
-- Accepted PR: `#94`
+The current promoted recovery base remains Batch 05 until Batch 06 final merge/recovery promotion completes:
+
+- Final promoted Batch 05 main/recovery: `3b749c8d7a320b71446245f99c694fdf85d9ccc4`
 - Version: `1.0.8+9`
 - Package: `com.nearmeu.nearmeu`
-- Tested runtime: `d2868b97dc931a49f625f4711db4b555fecd34ec`
-- Tested signed debug APK SHA-256: `c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406`
-- Physical owner acceptance: PASS on 2026-08-01
 
 ## Completed batches
 
@@ -42,43 +38,44 @@ Every runtime change is completed as one focused batch. A later batch starts onl
 - Batch 04 — Clear Chat and deletion semantics — accepted/promoted.
 - Batch 05 — Identity, account close and reactivation — accepted/promoted.
 
-## Active batch
+## Accepted / promotion pending
 
 ### Batch 06 — Premium entitlement foundation
 
-Branch: `batch/06-premium-entitlement-foundation`
+Owner physically accepted the focused Batch 06 behavior on 2026-08-01.
 
-Target version: `1.0.9+10`
+Accepted runtime evidence:
 
-Implemented/verification scope:
+- PR: `#96`
+- Tested runtime: `52fe6a52ad117e9eccb922e535b9d6752af7e695`
+- Version: `1.0.9+10`
+- Build #40 / run `30706204824`: PASS
+- Quality #439 / run `30706204828`: PASS
+- Signed debug APK SHA-256: `2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f`
+- Signed release APK SHA-256: `4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72`
+- Production `getMyPremiumEntitlement` available and tested.
+- Production `sendPrivateMediaMessage` updated with Premium enforcement.
+- Free text remained usable.
+- Free outbound mic/photo/video controls remained visible and correctly locked.
+- Existing received/local media remained available.
+- Stale-token `UNAUTHENTICATED` behavior was fixed with one forced Firebase ID-token refresh/retry and physically retested successfully.
 
-- single private Premium plan with no public badge;
-- server-only `premiumEntitlements/{uid}` truth, evaluated from independent `googlePlay` and `admin` grants;
-- missing, disabled or expired grants resolve to Free;
-- either valid Google Play or admin grant can independently keep Premium active, so future admin revocation cannot silently cancel a valid Play purchase;
-- trusted callable `getMyPremiumEntitlement(asia-south1)` exposes only the current user's effective entitlement;
-- client Premium state is read through the callable, never from a client-writable local/Firestore flag;
-- Free text messaging remains unchanged;
-- chat composer keeps mic and photo/video controls visible but locked for Free users;
-- tapping a locked control refreshes trusted entitlement and only continues the original action if Premium is active;
-- server `sendPrivateMediaMessage` independently enforces Premium for image, video and voice sends;
-- received/local media remains viewable regardless of current Premium status;
-- future Batch 09/10 outbound calling can reuse the same entitlement service;
-- Batch 07 recovery and Batch 11 owner-admin mutation remain separate.
+Batch 06 still requires acceptance-head CI, PR merge, final recovery documentation and recovery-branch promotion before Batch 07 runtime code begins.
 
-Explicitly not implemented in Batch 06:
+## Next batch after promotion
 
-- Google Play Billing purchase/receipt verification;
-- six-month backup/restore;
-- owner-facing Premium grant/revoke controls;
-- public Premium badges;
-- multiple Premium tiers/coins/trials.
+### Batch 07 — Six-month automatic Premium backup and restore
 
-Focused physical matrix: [`BATCH_06_PHYSICAL_TEST.md`](BATCH_06_PHYSICAL_TEST.md).
+Planned scope remains:
+
+- automatic Premium backup/recovery window up to six months;
+- use Batch 06 trusted entitlement truth rather than a local Premium flag;
+- preserve Clear Chat / deletion tombstone semantics so intentionally cleared/deleted content cannot resurrect;
+- define restore eligibility and retained backup lifecycle precisely before runtime implementation;
+- do not mix profile sharing, calling or owner-admin entitlement controls into this batch.
 
 ## Later batches
 
-- Batch 07 — Six-month automatic Premium backup and restore
 - Batch 08 — Profile sharing and deep-link recovery
 - Batch 09 — Agora audio calling
 - Batch 10 — Agora video calling
