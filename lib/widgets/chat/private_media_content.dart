@@ -23,13 +23,14 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
   String? _localPath;
   String? _thumbnailPath;
   bool _isDownloading = false;
+  bool _isValidatingLocal = false;
 
   @override
   void initState() {
     super.initState();
     _localPath = widget.message.localMediaPath;
     _thumbnailPath = widget.message.localThumbnailPath;
-    _discardMissingLocalFiles();
+    _validateLocalFiles();
   }
 
   @override
@@ -38,7 +39,7 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
     if (oldWidget.message.id != widget.message.id) {
       _localPath = widget.message.localMediaPath;
       _thumbnailPath = widget.message.localThumbnailPath;
-      _discardMissingLocalFiles();
+      _validateLocalFiles();
       return;
     }
 
@@ -50,15 +51,55 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
     if (nextThumbnailPath != null && nextThumbnailPath.trim().isNotEmpty) {
       _thumbnailPath = nextThumbnailPath;
     }
-    _discardMissingLocalFiles();
+    _validateLocalFiles();
   }
 
-  void _discardMissingLocalFiles() {
-    final path = _localPath;
-    if (path != null && !File(path).existsSync()) _localPath = null;
-    final thumbnail = _thumbnailPath;
-    if (thumbnail != null && !File(thumbnail).existsSync()) {
-      _thumbnailPath = null;
+  Future<void> _validateLocalFiles() async {
+    if (_isValidatingLocal) return;
+    _isValidatingLocal = true;
+    try {
+      final path = _localPath;
+      if (path != null) {
+        final file = File(path);
+        var valid = await file.exists();
+        if (valid) {
+          final bytes = await file.length();
+          final declared = widget.message.mediaSizeBytes;
+          valid = bytes > 0 && (declared == null || declared <= 0 || bytes == declared);
+        }
+        if (!valid) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          if (mounted) {
+            setState(() {
+              _localPath = null;
+              _thumbnailPath = null;
+            });
+          } else {
+            _localPath = null;
+            _thumbnailPath = null;
+          }
+        }
+      }
+
+      final thumbnail = _thumbnailPath;
+      if (thumbnail != null) {
+        final file = File(thumbnail);
+        final valid = await file.exists() && await file.length() > 0;
+        if (!valid) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          if (mounted) {
+            setState(() => _thumbnailPath = null);
+          } else {
+            _thumbnailPath = null;
+          }
+        }
+      }
+    } finally {
+      _isValidatingLocal = false;
     }
   }
 
@@ -77,6 +118,17 @@ class _PrivateMediaContentState extends State<PrivateMediaContent> {
         chatId: chatId,
         message: widget.message,
       );
+      final file = File(path);
+      final bytes = await file.length();
+      final declared = widget.message.mediaSizeBytes;
+      if (bytes <= 0 || (declared != null && declared > 0 && bytes != declared)) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        throw const PrivateMediaException(
+          'The downloaded file did not pass verification. Please retry.',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _localPath = path;
