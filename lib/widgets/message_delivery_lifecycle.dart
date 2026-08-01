@@ -131,7 +131,8 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
         );
       }
     } on FirebaseFunctionsException catch (error, stackTrace) {
-      final reason = error.details is Map ? error.details['reason'] : null;
+      final details = error.details;
+      final reason = details is Map ? details['reason'] : null;
       if (error.code == 'failed-precondition' && reason == 'premium-required') {
         return;
       }
