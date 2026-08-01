@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
 import '../services/account_deletion_service.dart';
+import '../services/account_lifecycle_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
@@ -30,13 +31,18 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
+  final AccountLifecycleService _accountLifecycleService =
+      AccountLifecycleService();
   final AccountDeletionService _accountDeletionService =
       AccountDeletionService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? userData;
   bool isLoading = true;
+  bool isClosingAccount = false;
   bool isDeletingAccount = false;
+
+  bool get _accountActionBusy => isClosingAccount || isDeletingAccount;
 
   @override
   void initState() {
@@ -76,15 +82,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _goToLogin();
   }
 
-  Future<void> _deleteAccount() async {
-    if (isDeletingAccount) return;
+  Future<void> _closeAccount() async {
+    if (_accountActionBusy) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
+        title: const Text('Close Account'),
         content: const Text(
-          'You will be asked to verify your Google account first. After verification, NearMeU will permanently delete your profile, private account data, and your copy of shared conversations. This cannot be undone.',
+          'Closing is reversible. Your public profile and Nearby visibility will be removed, and new messaging/calling will be disabled. Your NearMeU identity, blocks, and eligible uncleared conversation continuity remain. Signing in again with the same verified Google email reactivates the same identity and you will recreate your public profile.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Verify & Close'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => isClosingAccount = true);
+    try {
+      await _accountLifecycleService.closeCurrentAccount();
+      if (!mounted) return;
+      _goToLogin();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() => isClosingAccount = false);
+      final message = error.code == 'reauthentication-cancelled'
+          ? 'Account close was cancelled. Nothing was changed.'
+          : 'Could not verify and close the account. Please retry.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => isClosingAccount = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not close the account. Please retry.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    if (_accountActionBusy) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account Permanently'),
+        content: const Text(
+          'This is different from Close Account. You will be asked to verify your Google account first. After verification, NearMeU will permanently delete your profile, private account data, and your copy of shared conversations. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -94,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text(
-              'Verify & Delete',
+              'Verify & Delete Permanently',
               style: TextStyle(color: Colors.redAccent),
             ),
           ),
@@ -266,17 +321,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Sign Out',
                       subtitle: 'Sign out from this device',
                       titleColor: Colors.orangeAccent,
-                      onTap: isDeletingAccount ? null : _logout,
+                      onTap: _accountActionBusy ? null : _logout,
+                    ),
+                    _SettingsTile(
+                      icon: Icons.pause_circle_outline_rounded,
+                      iconColor: Colors.orangeAccent,
+                      title: isClosingAccount
+                          ? 'Verifying & closing…'
+                          : 'Close Account',
+                      subtitle:
+                          'Reversible; same verified email reactivates this identity',
+                      titleColor: Colors.orangeAccent,
+                      onTap: _accountActionBusy ? null : _closeAccount,
                     ),
                     _SettingsTile(
                       icon: Icons.delete_forever_rounded,
                       iconColor: Colors.redAccent,
                       title: isDeletingAccount
                           ? 'Verifying & deleting…'
-                          : 'Delete Account',
-                      subtitle: 'Verify first, then permanently delete',
+                          : 'Delete Account Permanently',
+                      subtitle: 'Irreversible permanent deletion',
                       titleColor: Colors.redAccent,
-                      onTap: isDeletingAccount ? null : _deleteAccount,
+                      onTap: _accountActionBusy ? null : _deleteAccount,
                     ),
                   ],
                 ),
@@ -287,7 +353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
         currentIndex: 2,
-        onTap: isDeletingAccount
+        onTap: _accountActionBusy
             ? null
             : (index) {
                 if (index == 0) {

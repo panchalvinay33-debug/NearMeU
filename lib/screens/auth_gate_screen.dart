@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
+import '../services/account_lifecycle_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/presence_service.dart';
@@ -20,6 +21,8 @@ class AuthGateScreen extends StatefulWidget {
 class _AuthGateScreenState extends State<AuthGateScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
+  final AccountLifecycleService _accountLifecycleService =
+      AccountLifecycleService();
 
   @override
   void initState() {
@@ -42,6 +45,11 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     }
 
     try {
+      final lifecycle = await _accountLifecycleService.ensureIdentityContinuity();
+      if (lifecycle.isClosed) {
+        await _accountLifecycleService.reactivateCurrentAccount();
+      }
+
       final AppUser? savedUser = await _userService.getUser(firebaseUser.uid);
 
       if (!mounted) return;
@@ -69,7 +77,7 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
 
       if (!mounted) return;
       _goToLoginWithMessage(
-        'Unable to verify your account. Please sign in again.',
+        'Unable to verify your NearMeU identity. Please sign in again.',
       );
     }
   }

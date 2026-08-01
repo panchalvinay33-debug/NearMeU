@@ -21,9 +21,9 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 01 | Chat reliability and message-state truth | ACCEPTED | `batch/01-chat-reliability` | Yes | Superseded |
 | 02 | Photo/video/voice-message reliability | ACCEPTED | `batch/02-media-reliability` | Yes | Superseded |
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | `batch/03-local-first-seven-day-cloud` | Yes | Superseded by Batch 04 |
-| 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base after docs merge |
-| 05 | Identity, account close and reactivation | PLANNED | — | Yes | Next batch |
-| 06 | Premium entitlement foundation | PLANNED | — | Yes | After acceptance |
+| 04 | Clear Chat and deletion semantics | ACCEPTED | `batch/04-clear-chat-deletion-semantics` | Yes | Promoted official base |
+| 05 | Identity, account close and reactivation | ACCEPTED | `batch/05-identity-account-close-reactivation` | Yes | Awaiting merge/final promotion |
+| 06 | Premium entitlement foundation | PLANNED | — | Yes | Next batch after Batch 05 promotion |
 | 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | After acceptance |
 | 08 | Profile sharing and deep-link recovery | PLANNED | — | Yes | After acceptance |
 | 09 | Agora audio calling | PLANNED | — | Yes | After acceptance |
@@ -75,39 +75,44 @@ Tested runtime commit: f22b36690b7ca65828ce2db809a89abe9931f83e
 Physical acceptance evidence head: c98f304f5bd4525315d8f5c6c558e2d0dca98b5d
 Pull request: #92
 Merged main runtime commit: d387b5cf8db7d9e792673ada4dd1c1d2958c7aee
+Final documented/recovery commit: c0a734e3dfbbab61b5c1b008df4e3f09bb011556
 Version: 1.0.7+8
 Android package: com.nearmeu.nearmeu
-Tested APK filename: NearMeU-Batch-04-v1.0.7-8-Signed.apk
 Tested APK SHA-256: 24e770e3b09cfcb2608b8a8283405cef282f62a4832a3e67fd3a625a2bd2deb8
-Tested artifact ID: 8817336599
-Tested artifact digest: sha256:6a012c299547e7b32f9f76e5c1ece24e2b4110111bae40289372b1624ccbb39a
-Final docs-head recoverable artifact ID: 8817642243
-Final docs-head recoverable artifact digest: sha256:6bbb921fc7f115bd84aaa3ce1979da65271ea77f4cd129b787120096e3bc10d3
-Build #27 / run 30695802197: PASS
-Quality #422 / run 30695802185: PASS
-Docs-head Build #28 / run 30696835582: PASS
-Docs-head Quality #423 / run 30696835612: PASS
 Production clearPrivateChat(asia-south1) deployment: PASS
 Focused physical owner test: PASS
-Clear Chat after production deployment: PASS
-Delete for Me: PASS
-Delete for Everyone: PASS
-Tick regression: PASS
 Owner decision: ACCEPTED on 2026-08-01
 ```
 
-Accepted Batch 04 behavior:
+## Batch 05 acceptance record
 
-- authoritative per-user Clear Chat cutoff at `clearStates.<uid>.clearedAt`;
-- encrypted local rows and referenced local media removed through the clear cutoff;
-- cleared history remains hidden after restart/sync once clear state is observed;
-- chat remains absent from actor list until newer post-clear activity;
-- other participant remains unaffected by actor Clear Chat;
-- Delete for Me does not recreate an expired delivery-cloud stub;
-- Delete for Everyone retains trusted sender-only 60-minute semantics and local media detachment;
-- production `clearPrivateChat` callable deployed successfully.
+```text
+Batch ID: 05
+Title: Identity, account close and reactivation
+Status: ACCEPTED
+Branch: batch/05-identity-account-close-reactivation
+Base: c0a734e3dfbbab61b5c1b008df4e3f09bb011556
+Tested runtime commit: d2868b97dc931a49f625f4711db4b555fecd34ec
+Pull request: #94
+Version: 1.0.8+9
+Android package: com.nearmeu.nearmeu
+Build #33 / run 30699307402: PASS
+Quality #430 / run 30699307401: PASS
+Recoverable artifact ID: 8818404060
+Recoverable artifact digest: sha256:70505abc00881695754c70684ae4140ab05224c1c424d242d6cdc9d11e20e94c
+Tested signed debug APK SHA-256: c3371eb86c73a090b311c4d42656d8eaf799025aa04cd56da3bc6f51faeaf406
+Release artifact ID: 8818505561
+Release APK SHA-256: e648ece943692ae4d7bcc083088f8ecbdde91a5c1fb892344076bff0bf8c1966
+Direct-update/history preservation: PASS
+Closed account neutral unavailable state: PASS
+Closed-account message authorization refusal: PASS
+Same-account reactivation/profile recreation: PASS
+Conversation continuity after reactivation: PASS
+Sign Out / Close Account / Permanent Delete separation: PASS
+Owner decision: ACCEPTED on 2026-08-01
+```
 
-Focused physical matrix: [`BATCH_04_PHYSICAL_TEST.md`](BATCH_04_PHYSICAL_TEST.md).
+Detailed focused physical matrix: [`BATCH_05_PHYSICAL_TEST.md`](BATCH_05_PHYSICAL_TEST.md).
 
 ## Canonical local workspace rule
 
@@ -115,4 +120,4 @@ The active owner working copy is `F:\NearMeU`. After every accepted/promoted bat
 
 ## Current gate
 
-Batch 04 is accepted and merged. Final acceptance documentation must merge and `stable/official-recoverable-base` must then fast-forward to that exact docs merge commit. Batch 05 may start only from the promoted Batch 04 base.
+Batch 05 is owner-accepted. Merge PR #94 only after the acceptance-head CI is green, then complete final acceptance documentation and fast-forward `stable/official-recoverable-base`. Batch 06 starts only from that promoted Batch 05 base.
