@@ -17,6 +17,7 @@ module.exports = {
   ...require("./premium_entitlement_functions.js"),
   ...require("./premium_recovery_functions.js"),
   ...require("./premium_recovery_delete_functions.js"),
+  ...require("./premium_recovery_account_cleanup_functions.js"),
   ...require("./private_media_functions.js"),
   ...require("./private_media_ack_functions.js"),
   ...require("./message_unsend_functions.js"),
