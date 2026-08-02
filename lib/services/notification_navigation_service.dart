@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../screens/chat_screen.dart';
 import '../screens/support_announcements_screen.dart';
 import '../security/notification_route.dart';
+import 'profile_deep_link_navigation_service.dart';
 import 'user_service.dart';
 
 class NotificationNavigationService {
@@ -34,6 +35,7 @@ class NotificationNavigationService {
 
   void setAppShellReady(bool ready) {
     _appShellReady = ready;
+    ProfileDeepLinkNavigationService.instance.setAppShellReady(ready);
     if (ready) unawaited(_flushPendingRoute());
   }
 

@@ -8,5 +8,27 @@
   },
   "functions": {
     "source": "functions"
+  },
+  "hosting": {
+    "public": "hosting/public",
+    "cleanUrls": true,
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cache-Control", "value": "public,max-age=3600" }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/p/**",
+        "function": {
+          "functionId": "sharedProfilePreview",
+          "region": "asia-south1"
+        }
+      }
+    ]
   }
 }
