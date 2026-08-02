@@ -46,7 +46,7 @@ async function blockedEitherWay(viewerUid, targetUid) {
   return blockedByViewer.exists || blockedByTarget.exists;
 }
 
-async function createFreshShareLink(uid) {
+async function createFreshShareLink(uid, enabled = true) {
   await requireActiveProfile(uid);
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -59,18 +59,18 @@ async function createFreshShareLink(uid) {
         if (existing.exists) throw new Error("public-id-collision");
         transaction.set(publicRef, {
           ownerUid: uid,
-          enabled: true,
+          enabled,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         transaction.set(ownerRef, {
           publicId,
-          enabled: true,
+          enabled,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       });
-      return { publicId, enabled: true, url: buildShareUrl(publicId) };
+      return { publicId, enabled, url: buildShareUrl(publicId) };
     } catch (error) {
       if (error && error.message === "public-id-collision") continue;
       throw error;
@@ -108,7 +108,7 @@ exports.setMyProfileSharingEnabled = onCall({ region: REGION }, async (request) 
   const owner = await ownerShareRef(uid).get();
   if (!owner.exists || !isValidPublicProfileId(owner.get("publicId"))) {
     if (!enabled) return { publicId: "", enabled: false, url: null };
-    return createFreshShareLink(uid);
+    return createFreshShareLink(uid, true);
   }
   const publicId = owner.get("publicId");
   const batch = db.batch();
@@ -130,8 +130,12 @@ exports.rotateMyProfileShareLink = onCall({ region: REGION }, async (request) =>
   await requireActiveProfile(uid);
   const oldOwner = await ownerShareRef(uid).get();
   const oldPublicId = oldOwner.exists ? oldOwner.get("publicId") : null;
-  const fresh = await createFreshShareLink(uid);
-  if (isValidPublicProfileId(oldPublicId) && oldPublicId !== fresh.publicId) {
+  if (!isValidPublicProfileId(oldPublicId)) {
+    return { publicId: "", enabled: false, url: null };
+  }
+  const desiredEnabled = oldOwner.get("enabled") === true;
+  const fresh = await createFreshShareLink(uid, desiredEnabled);
+  if (oldPublicId !== fresh.publicId) {
     await publicShareRef(oldPublicId).delete().catch(() => {});
   }
   return fresh;
@@ -139,6 +143,7 @@ exports.rotateMyProfileShareLink = onCall({ region: REGION }, async (request) =>
 
 exports.resolveSharedProfile = onCall({ region: REGION }, async (request) => {
   const viewerUid = requireAuthenticatedUid(request);
+  await requireActiveProfile(viewerUid);
   const publicId = request.data && request.data.publicId;
   if (!isValidPublicProfileId(publicId)) {
     throw new HttpsError("invalid-argument", "Invalid shared profile link.");
