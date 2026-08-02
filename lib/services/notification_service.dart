@@ -41,6 +41,23 @@ class NotificationService {
   String? _registeredToken;
   bool _initialized = false;
 
+  static const AndroidNotificationChannel _generalChannel =
+      AndroidNotificationChannel(
+        'nearmeu_notifications',
+        'NearMeU Notifications',
+        description: 'Private messages and official NearMeU updates',
+        importance: Importance.high,
+      );
+
+  static const AndroidNotificationChannel _callChannel =
+      AndroidNotificationChannel(
+        'nearmeu_calls',
+        'NearMeU Calls',
+        description: 'Incoming NearMeU audio calls',
+        importance: Importance.max,
+        playSound: true,
+      );
+
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -53,17 +70,12 @@ class NotificationService {
       onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
     );
 
-    const channel = AndroidNotificationChannel(
-      'nearmeu_notifications',
-      'NearMeU Notifications',
-      description: 'Private messages and official NearMeU updates',
-      importance: Importance.high,
-    );
-    await _localNotifications
+    final androidNotifications = _localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(channel);
+        >();
+    await androidNotifications?.createNotificationChannel(_generalChannel);
+    await androidNotifications?.createNotificationChannel(_callChannel);
 
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
       _showForegroundNotification,
@@ -244,19 +256,25 @@ class NotificationService {
     final destination = NotificationRoute.fromData(message.data);
     if (notification == null || destination == null) return;
 
+    final isCall = destination.isAudioCall;
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        isCall ? _callChannel.id : _generalChannel.id,
+        isCall ? _callChannel.name : _generalChannel.name,
+        channelDescription:
+            isCall ? _callChannel.description : _generalChannel.description,
+        importance: isCall ? Importance.max : Importance.high,
+        priority: isCall ? Priority.max : Priority.high,
+        category: isCall ? AndroidNotificationCategory.call : null,
+        fullScreenIntent: false,
+      ),
+    );
+
     await _localNotifications.show(
       notification.hashCode,
       notification.title,
       notification.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'nearmeu_notifications',
-          'NearMeU Notifications',
-          channelDescription: 'Private messages and official NearMeU updates',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
+      details,
       payload: destination.payload,
     );
   }
