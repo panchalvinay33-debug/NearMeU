@@ -93,7 +93,7 @@ exports.getMyProfileShareLink = onCall({ region: REGION }, async (request) => {
   await requireActiveProfile(uid);
   const owner = await ownerShareRef(uid).get();
   if (!owner.exists || !isValidPublicProfileId(owner.get("publicId"))) {
-    return createFreshShareLink(uid);
+    return { publicId: "", enabled: false, url: null };
   }
   const publicId = owner.get("publicId");
   const publicLink = await publicShareRef(publicId).get();
@@ -107,7 +107,7 @@ exports.setMyProfileSharingEnabled = onCall({ region: REGION }, async (request) 
   const enabled = request.data && request.data.enabled === true;
   const owner = await ownerShareRef(uid).get();
   if (!owner.exists || !isValidPublicProfileId(owner.get("publicId"))) {
-    if (!enabled) return { enabled: false, url: null };
+    if (!enabled) return { publicId: "", enabled: false, url: null };
     return createFreshShareLink(uid);
   }
   const publicId = owner.get("publicId");
