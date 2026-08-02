@@ -1,6 +1,6 @@
 # Batch 07 Physical Acceptance — Six-Month Premium Backup and Restore
 
-Status: **CI / SIGNED ARTIFACTS PASS — PRODUCTION DEPLOYMENT / OWNER TEST PENDING**
+Status: **CI / SIGNED ARTIFACTS / PRODUCTION DEPLOYMENT PASS — OWNER TEST PENDING**
 
 Target version: `1.0.10+11`
 
@@ -42,7 +42,7 @@ This batch must remain focused. Do not repeat the full Batch 01–06 physical ma
 
 Authoritative tested runtime head: `eb15259e2456f9aab547aa474e6d350dba0c429e`.
 
-Automated evidence:
+Automated runtime evidence:
 
 - Build recoverable base APK #63 / run `30715897246` — PASS.
 - NearMeU quality gate #464 / run `30715897249` — PASS.
@@ -52,22 +52,31 @@ Automated evidence:
 - Signed release APK SHA-256 `a180d25bd8d0da94529ac6c07041734b2c1197e80fb5038f9f56df4828d008f3`.
 - Permanent signing certificate SHA-256 `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`.
 
-## Required production deployment
+Evidence/docs head before deployment: `2d8ca087a15b514b4cb802ba69d4fed0240331da`.
 
-Expected Batch 07 backend/runtime deployment includes:
+- Build recoverable base APK #64 / run `30733194300` — PASS.
+- NearMeU quality gate #465 / run `30733194268` — PASS.
 
-- `capturePremiumRecoveryOnMessageCreate`
-- `syncPremiumRecoveryOnMessageUpdate`
-- `getMyPremiumRecoveryPage`
-- `purgeExpiredPremiumRecovery`
-- `deleteMyPremiumRecoveryMessage`
-- `purgePremiumRecoveryOnAuthDelete`
-- `retryPremiumRecoveryAccountDeletion`
-- updated `acknowledgePrivateMediaDownload`
-- updated `clearPrivateChat`
-- updated Storage Rules for owner-only recovery-media reads.
+## Production deployment
 
-Deployment is not evidence of acceptance until focused physical restore testing passes.
+Owner-provided PowerShell evidence on 2026-08-02 shows Firebase deployment completed successfully for project `nearmeu-e82c7` from the canonical `F:\NearMeU` workspace.
+
+Successfully created/updated production functions shown in the deployment output:
+
+- `capturePremiumRecoveryOnMessageCreate` — created successfully.
+- `syncPremiumRecoveryOnMessageUpdate` — created successfully.
+- `getMyPremiumRecoveryPage` — created successfully.
+- `purgeExpiredPremiumRecovery` — created successfully.
+- `deleteMyPremiumRecoveryMessage` — created successfully.
+- `purgePremiumRecoveryOnAuthDelete` — created successfully.
+- `retryPremiumRecoveryAccountDeletion` — created successfully.
+- `acknowledgePrivateMediaDownload` — updated successfully.
+- `clearPrivateChat` — updated successfully.
+- Firebase Storage Rules `storage.rules` — released successfully.
+
+The terminal ended with `Deploy complete!`.
+
+Deployment is not final owner acceptance until focused physical restore testing passes.
 
 ## Focused owner matrix
 
@@ -95,7 +104,8 @@ Debug APK SHA-256: fbf1f90abc14b2e19a25d7873ceea39488fc0a250e9d0e89746105441eb8a
 Release artifact: 8823517406 / sha256:de930dd9e0415ba83413255589a1ca3b715f9a4e002dcd74b1ac43d542c8fc0d
 Release APK SHA-256: a180d25bd8d0da94529ac6c07041734b2c1197e80fb5038f9f56df4828d008f3
 Permanent signing certificate: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
-Production deployment: PENDING
+Evidence-head Build/Quality: 30733194300 / #64 — PASS; 30733194268 / #465 — PASS
+Production deployment: PASS — owner PowerShell evidence, 2026-08-02, `Deploy complete!`
 Focused physical restore: PENDING
 Clear/Delete resurrection checks: PENDING
 Owner decision: PENDING
