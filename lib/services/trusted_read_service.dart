@@ -143,6 +143,15 @@ class TrustedReadService {
     return candidate.chatId.compareTo(existing.chatId) < 0;
   }
 
+  bool _isClearedPreview({
+    required Timestamp? lastMessageTime,
+    required Timestamp? clearedAt,
+  }) {
+    if (clearedAt == null) return false;
+    if (lastMessageTime == null) return true;
+    return !lastMessageTime.toDate().isAfter(clearedAt.toDate());
+  }
+
   Future<List<ChatPreviewModel>> _getChatPreviewsFromFirestore(
     String uid,
   ) async {
@@ -198,7 +207,22 @@ class TrustedReadService {
       final currentReadState = readStates[uid] is Map
           ? Map<String, dynamic>.from(readStates[uid] as Map)
           : const <String, dynamic>{};
-      final lastMessageTime = data['lastMessageTime'];
+      final clearStates = data['clearStates'] is Map
+          ? Map<String, dynamic>.from(data['clearStates'] as Map)
+          : const <String, dynamic>{};
+      final currentClearState = clearStates[uid] is Map
+          ? Map<String, dynamic>.from(clearStates[uid] as Map)
+          : const <String, dynamic>{};
+      final lastMessageTime = data['lastMessageTime'] is Timestamp
+          ? data['lastMessageTime'] as Timestamp
+          : null;
+      final clearedAt = currentClearState['clearedAt'] is Timestamp
+          ? currentClearState['clearedAt'] as Timestamp
+          : null;
+      final clearedForCurrentUser = _isClearedPreview(
+        lastMessageTime: lastMessageTime,
+        clearedAt: clearedAt,
+      );
 
       chats.add(
         ChatPreviewModel(
@@ -210,22 +234,30 @@ class TrustedReadService {
           otherUserPhotoUrl: otherData['photoUrl'] is String
               ? otherData['photoUrl'] as String
               : null,
-          lastMessage: data['lastMessage'] is String
+          lastMessage: clearedForCurrentUser
+              ? ''
+              : data['lastMessage'] is String
               ? data['lastMessage'] as String
               : '',
-          lastMessageTime: lastMessageTime is Timestamp
-              ? lastMessageTime.toDate()
-              : null,
-          messageType: data['lastMessageType'] is String
+          lastMessageTime: clearedForCurrentUser
+              ? null
+              : lastMessageTime?.toDate(),
+          messageType: clearedForCurrentUser
+              ? 'text'
+              : data['lastMessageType'] is String
               ? data['lastMessageType'] as String
               : 'text',
-          isUnsent:
-              data['lastMessageIsUnsent'] == true ||
-              data['lastMessage'] == 'This message was unsent',
-          lastMessageSenderId: data['lastMessageSenderId'] is String
+          isUnsent: !clearedForCurrentUser &&
+              (data['lastMessageIsUnsent'] == true ||
+                  data['lastMessage'] == 'This message was unsent'),
+          lastMessageSenderId: clearedForCurrentUser
+              ? null
+              : data['lastMessageSenderId'] is String
               ? data['lastMessageSenderId'] as String
               : null,
-          unreadCount: unreadCounts[uid] is num
+          unreadCount: clearedForCurrentUser
+              ? 0
+              : unreadCounts[uid] is num
               ? (unreadCounts[uid] as num).toInt()
               : currentReadState['unreadCount'] is num
               ? (currentReadState['unreadCount'] as num).toInt()
