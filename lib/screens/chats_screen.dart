@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_preview_model.dart';
 import '../services/announcement_service.dart';
+import '../services/chat_service.dart';
 import '../services/in_app_notification_service.dart';
 import '../services/trusted_read_service.dart';
+import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/date_formatters.dart';
 import 'chat_screen.dart';
@@ -14,6 +16,7 @@ import 'nearby_screen.dart';
 import 'notifications_screen.dart';
 import 'settings_screen.dart';
 import 'support_announcements_screen.dart';
+import 'user_profile_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -27,6 +30,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   final AnnouncementService _announcementService = AnnouncementService();
   final InAppNotificationService _notificationService =
       InAppNotificationService();
+  final ChatService _chatService = ChatService();
+  final UserService _userService = UserService();
   final TextEditingController _searchController = TextEditingController();
 
   List<ChatPreviewModel> _chats = const <ChatPreviewModel>[];
@@ -34,6 +39,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   bool _isLoading = true;
   bool _isRefreshing = false;
   bool _isNavigating = false;
+  bool _isMutatingChat = false;
   String _query = '';
   Object? _loadError;
 
@@ -107,7 +113,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       _chats.fold<int>(0, (total, chat) => total + chat.unreadCount);
 
   Future<void> _openChat(ChatPreviewModel chat) async {
-    if (_isNavigating) return;
+    if (_isNavigating || _isMutatingChat) return;
     setState(() => _isNavigating = true);
 
     await Navigator.push(
@@ -124,6 +130,214 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (!mounted) return;
     setState(() => _isNavigating = false);
     await _loadChats();
+  }
+
+  Future<void> _openProfile(ChatPreviewModel chat) async {
+    if (_isNavigating || _isMutatingChat) return;
+    setState(() => _isNavigating = true);
+    try {
+      final profile = await _userService.getUser(chat.otherUserId);
+      if (!mounted) return;
+      if (profile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile is not available right now.')),
+        );
+        return;
+      }
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => UserProfileScreen(user: profile),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this profile.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isNavigating = false);
+        await _loadChats();
+      }
+    }
+  }
+
+  Future<void> _clearChatFromList(
+    ChatPreviewModel chat,
+    String currentUserId,
+  ) async {
+    if (_isMutatingChat) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Clear Chat?'),
+        content: const Text(
+          'This permanently removes this conversation, downloaded media, voice notes and local chat history for you. The other person keeps their copy. This cannot be undone.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Clear Chat'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isMutatingChat = true);
+    try {
+      await _chatService.clearChat(
+        currentUserId: currentUserId,
+        otherUserId: chat.otherUserId,
+      );
+      await _loadChats();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chat cleared for you.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isMutatingChat = false);
+    }
+  }
+
+  Future<void> _blockUserFromList(
+    ChatPreviewModel chat,
+    String currentUserId,
+  ) async {
+    if (_isMutatingChat) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Block ${chat.otherUserName}?'),
+        content: const Text(
+          'This user will be hidden from Nearby and you will not be able to chat or call each other.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Block User'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isMutatingChat = true);
+    try {
+      await _userService.blockUser(
+        currentUserId: currentUserId,
+        targetUserId: chat.otherUserId,
+      );
+      await _loadChats();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${chat.otherUserName} blocked.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not block this user.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isMutatingChat = false);
+    }
+  }
+
+  Future<void> _showChatActions(
+    ChatPreviewModel chat,
+    String currentUserId,
+  ) async {
+    if (_isMutatingChat || _isNavigating) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(
+                chat.otherUserName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_rounded, color: Colors.white),
+              title: const Text(
+                'View Profile',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_openProfile(chat));
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.delete_sweep_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Clear Chat',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              subtitle: const Text(
+                'Remove this conversation for you',
+                style: TextStyle(color: Colors.white54),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_clearChatFromList(chat, currentUserId));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded, color: Colors.redAccent),
+              title: const Text(
+                'Block User',
+                style: TextStyle(color: Colors.redAccent),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_blockUserFromList(chat, currentUserId));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Color _avatarColor(String seed) {
@@ -312,6 +526,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     currentUserId: currentUserId,
                     avatarColor: _avatarColor(chat.otherUserId),
                     onTap: () => _openChat(chat),
+                    onLongPress: () => _showChatActions(chat, currentUserId),
                   );
                 },
               ),
@@ -455,12 +670,14 @@ class _ChatCard extends StatelessWidget {
     required this.currentUserId,
     required this.avatarColor,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final ChatPreviewModel chat;
   final String currentUserId;
   final Color avatarColor;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -471,6 +688,7 @@ class _ChatCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(26),
         child: Container(
           padding: const EdgeInsets.all(16),
