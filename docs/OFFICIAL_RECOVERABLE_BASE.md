@@ -1,56 +1,43 @@
 # NearMeU Official Recoverable Base
 
-Last promoted: 2026-08-01
+Last promoted: pending final Batch 07 documentation merge on 2026-08-02
 
-## Current official base
+## Current accepted base
 
-Batch 06 is the accepted runtime/recovery starting point for future NearMeU work.
+Batch 07 is the accepted runtime/recovery starting point for future NearMeU work.
 
 - Repository: `panchalvinay33-debug/NearMeU`
 - Source branch: `main`
 - Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `2eea2d3fc0583ace77526bae9a918c940e470d24`
-- Tested runtime commit: `52fe6a52ad117e9eccb922e535b9d6752af7e695`
-- Physical acceptance evidence head: `a626a501db3b1d24573f6002087b2f0d88b16ce3`
-- Accepted pull request: `#96`
+- Accepted merged runtime commit: `db48338e6528b61e1e486d6d158c9d62e641c977`
+- Tested runtime commit: `5ae058122d927c7e35257fb80ca5fa879f14b784`
+- Accepted pull request: `#98`
 - Android application ID: `com.nearmeu.nearmeu`
 - Firebase project: `nearmeu-e82c7`
-- App version: `1.0.9+10`
-- Physically tested signed debug APK SHA-256: `2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f`
-- Recoverable artifact ID: `8820525497`
-- Recoverable artifact digest: `sha256:7a6023c00bc328438efa4135f411286ae98c39485ff2c35f4385697eb78ea4e7`
-- Signed release artifact ID: `8820623151`
-- Signed release APK SHA-256: `4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72`
-- Tested-runtime Build workflow: `30706204824` / #40 — passed
-- Tested-runtime Quality workflow: `30706204828` / #439 — passed
-- Acceptance-head Build workflow: `30709123869` / #44 — passed
-- Acceptance-head Quality workflow: `30709123867` / #443 — passed
+- App version: `1.0.10+11`
+- Physically tested signed debug APK SHA-256: `2af784329a1594a761877110c671508b19f8cd1cc2542d9079cc46a7b80025d1`
+- Recoverable artifact ID: `8833110504`
+- Recoverable artifact digest: `sha256:75892030fb34647b64b89fd6f1ac3a94b48acac6bf24217eb63b69a5feb5c6fc`
+- Signed release artifact ID: `8833182373`
+- Signed release artifact digest: `sha256:4bc19b26851ab9349a578fb9fe64b6d609af16e0ff9da2432194a25106e4b403`
+- Signed release APK SHA-256: `19a100dcfa64dc00bb71e918452d8c70d902d2b42ced8e72e6ef04eef5568442`
+- Build workflow: `30746260270` / #79 — PASS
+- Quality workflow: `30746260318` / #480 — PASS
 - Permanent signing certificate SHA-256: `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`
 
 ## Owner acceptance
 
-Status: **ACCEPTED OFFICIAL RECOVERABLE BASE**
+Status: **ACCEPTED** on 2026-08-02.
 
-Owner physically accepted Batch 06 on 2026-08-01. The focused device test confirmed existing chat/media continuity, Free text messaging, visible Premium locks on voice and photo/video controls, and trusted Premium-required responses after the stale-token recovery fix. The earlier pre-deploy `NOT_FOUND` and stale-token `UNAUTHENTICATED` states were resolved before final acceptance.
+Accepted physical/backend evidence includes direct-update continuity, Premium text restore, Premium sent-photo restore, Clear Chat no-resurrection, Delete-for-Me no-resurrection, Unsend/Delete-for-Everyone no-resurrection, cross-account Clear Chat isolation, seven-day delivery-cloud regression and backend-enforced Free-user Premium recovery rejection.
 
-Accepted Batch 06 behavior adds:
-
-- one private trusted Premium entitlement model;
-- missing/expired entitlement is Free;
-- independent `googlePlay` and future `admin` grant evaluation;
-- trusted `getMyPremiumEntitlement` callable in `asia-south1`;
-- server-side Premium enforcement in `sendPrivateMediaMessage` for outbound photo/video/voice messages;
-- Free text messaging and incoming/local media remain available;
-- locked outbound media/voice controls remain visible to Free users;
-- Premium status is not publicly exposed;
-- client retries once with a forced Firebase ID-token refresh on an `UNAUTHENTICATED` entitlement read;
-- Google Play purchase verification, six-month Premium recovery and owner-admin grant mutation remain later batches.
+Known evidence gap: receiver-media pre-download/post-download recovery eligibility remains **OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS**.
 
 ## Canonical local workspace
 
-The owner Windows machine canonical project workspace is `F:\NearMeU`.
+Owner workspace: `F:\NearMeU`.
 
-After each accepted/promoted batch, sync this workspace to promoted `main`; temporary Downloads clones and OLD folders are not the active project.
+After the final documentation merge and recovery-branch promotion, synchronize this workspace to promoted `main` before Batch 08 starts.
 
 ## Recovery procedure
 
@@ -59,27 +46,39 @@ cd "F:\NearMeU"
 git fetch origin
 git checkout stable/official-recoverable-base
 git reset --hard origin/stable/official-recoverable-base
+git rev-parse HEAD
 ```
 
-Accepted runtime checkpoint:
+For immutable accepted runtime source only:
 
 ```powershell
-git checkout 2eea2d3fc0583ace77526bae9a918c940e470d24
+git checkout 5ae058122d927c7e35257fb80ca5fa879f14b784
 ```
 
-Install only a permanent-certificate-matching APK using update mode (`adb install -r`); never uninstall or wipe for normal upgrades.
+For merged-main Batch 07 runtime:
 
-## Non-negotiable change control
+```powershell
+git checkout db48338e6528b61e1e486d6d158c9d62e641c977
+```
 
-- All new runtime work starts from this accepted base.
-- One runtime batch is active at a time.
-- `main` changes through a passing pull request.
-- Runtime batches require CI, permanently signed APK, physical-device testing and owner approval.
-- `stable/official-recoverable-base` moves only after merged-main acceptance and final documentation are complete.
-- Package ID, signing identity and monotonically increasing versionCode remain compatible.
+Install only an APK signed by the permanent matching certificate and use update mode (`adb install -r`). Do not uninstall or wipe normal test installations.
+
+## Batch 07 accepted behavior
+
+- separate per-user six-month Premium recovery store;
+- Premium entitlement is trusted server-side truth;
+- sent Premium media can be recovered;
+- received media recovery is implemented to require download acknowledgement;
+- restore is idempotent into encrypted local chat storage;
+- Clear Chat blocks/purges that user's recovery history;
+- Delete for Me purges that user's recovery copy;
+- Unsend/Delete for Everyone purges both participants' recovery copies;
+- seven-day delivery cloud remains separate;
+- permanent Auth deletion has recovery cleanup/retry handling;
+- call audio/video is never backed up.
 
 ## Next approved batch
 
-Batch 07 — six-month automatic Premium backup and restore.
+Batch 08 — profile sharing and deep-link recovery.
 
-Batch 06 is closed and must not be reopened except for a verified regression.
+Batch 07 is closed after the final docs merge, recovery-branch fast-forward and `F:\NearMeU` sync complete.
