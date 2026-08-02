@@ -1,6 +1,6 @@
 # Batch 07 Physical Acceptance — Six-Month Premium Backup and Restore
 
-Status: **CI / SIGNED ARTIFACTS / PRODUCTION DEPLOYMENT PASS — OWNER TEST PENDING**
+Status: **CI / SIGNED ARTIFACTS / PRODUCTION DEPLOYMENT / DIRECT UPDATE PASS — FOCUSED RESTORE TEST PENDING**
 
 Target version: `1.0.10+11`
 
@@ -78,10 +78,14 @@ The terminal ended with `Deploy complete!`.
 
 Deployment is not final owner acceptance until focused physical restore testing passes.
 
+## Direct-update checkpoint
+
+Owner confirmed the Batch 07 signed debug APK was installed as an Android update with existing app data preserved. The owner then confirmed all three focused continuity checks passed: the update completed, the same login remained active, and existing chats/media remained visible. No uninstall or data wipe was used.
+
 ## Focused owner matrix
 
-1. Direct update with `adb install -r`; no uninstall/data wipe.
-2. Existing login/chat/media state remains available.
+1. Direct update with `adb install -r`; no uninstall/data wipe. **PASS.**
+2. Existing login/chat/media state remains available. **PASS.**
 3. Premium eligible text appears in recovery and restores after the test device's local chat copy is intentionally reset through the approved recovery-test procedure.
 4. Premium sent media restores from the recovery copy.
 5. Receiver media is not backed up before download; after receiver download it becomes recoverable when that receiver is Premium.
@@ -106,6 +110,7 @@ Release APK SHA-256: a180d25bd8d0da94529ac6c07041734b2c1197e80fb5038f9f56df4828d
 Permanent signing certificate: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
 Evidence-head Build/Quality: 30733194300 / #64 — PASS; 30733194268 / #465 — PASS
 Production deployment: PASS — owner PowerShell evidence, 2026-08-02, `Deploy complete!`
+Direct update continuity: PASS — owner confirmed update, same login, existing chats/media preserved
 Focused physical restore: PENDING
 Clear/Delete resurrection checks: PENDING
 Owner decision: PENDING
