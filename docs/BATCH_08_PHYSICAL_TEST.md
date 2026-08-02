@@ -1,55 +1,40 @@
 # Batch 08 Physical Acceptance — Profile Sharing and Deep-Link Recovery
 
-Status: **CI PASS / DEPLOYMENT + PHYSICAL ACCEPTANCE PENDING**
+Status: **ACCEPTED**
+
+Accepted on: 2026-08-02
 
 Target version: `1.0.11+12`
 
-Branch: `batch/08-profile-sharing-deep-link-recovery`
+Runtime branch: `batch/08-profile-sharing-deep-link-recovery`
 
-Authoritative branch head: `c8210ca2591cd843eb5edcedef284892d82db435`
+Tested runtime commit: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+
+Merged main runtime commit: `f83a6e92457f728f177dc062dcc9171c141a9217`
 
 Base / promoted Batch 07 recovery state: `ff551ceb48d3fc1d957141977df29ebb31837b87`
 
 ## Frozen scope
 
 - Free and Premium users can share their own profile.
-- Sharing is explicit opt-in: opening the settings screen does not silently create/enable a public link.
-- Shared links use an opaque, revocable public identifier; Firebase UID, verified email, phone number and exact location are never placed in the public URL or public web preview.
-- Android installed-app handling uses the verified Firebase Hosting URL plus a NearMeU custom-scheme fallback.
-- Without the app, the shared URL shows a generic privacy-safe NearMeU landing preview and a Play Store route; personal profile details are resolved only inside the authenticated app.
+- Sharing is explicit opt-in; opening Profile Sharing does not silently create or enable a link.
+- Shared links use an opaque, revocable public identifier; Firebase UID, verified email, phone number and exact location are not placed in the public URL or public web preview.
+- Android installed-app handling uses the verified Firebase Hosting HTTPS URL plus a NearMeU custom-scheme fallback.
+- The web preview is generic and privacy-safe; personal profile details are resolved only inside the authenticated app.
 - A signed-in active app user resolves the public identifier through a trusted callable before opening the profile.
-- Block relationships are checked both ways before app-side resolution; a block cannot be bypassed with a shared link.
-- Suspended, closed or permanently deleted accounts do not resolve because an active shareable `users/{uid}` profile is required.
+- Block relationships are checked both ways; a shared link cannot bypass a block.
+- Suspended, closed, missing or permanently deleted profiles do not resolve.
 - Users can disable sharing and reset/revoke the current public link.
-- Resetting a disabled link preserves the disabled state and never silently re-enables sharing.
-- Permanent Auth UID deletion removes the current profile-sharing owner/link mapping.
+- Reset while disabled preserves the disabled state.
+- Permanent Auth UID deletion removes the profile-sharing owner/link mapping.
 - Existing chat, Premium, six-month recovery, Clear/Delete, seven-day delivery-cloud, package and signing behavior remain unchanged.
-- No Agora calling, owner-Premium admin or Play purchase verification work is in Batch 08.
+- No Agora calling, owner-Premium administration or Play purchase verification work is included.
 
-## Implementation paths
+## Final automated gate evidence
 
-- `functions/profile_sharing_logic.js`
-- `functions/profile_sharing_functions.js`
-- `functions/bootstrap.js`
-- `firebase.json`
-- `hosting/public/.well-known/assetlinks.json`
-- `hosting/public/index.html`
-- `android/app/src/main/AndroidManifest.xml`
-- `android/app/src/main/kotlin/com/nearmeu/nearmeu/MainActivity.kt`
-- `lib/services/profile_sharing_service.dart`
-- `lib/widgets/deep_link_lifecycle.dart`
-- `lib/screens/profile_sharing_screen.dart`
-- `lib/screens/settings_screen.dart`
-- `lib/main.dart`
-- `rules_tests/profile_sharing.test.js`
-
-## Automated gate evidence
-
-- Build recoverable base APK #86 / run `30749349760`: **PASS**.
-- NearMeU quality gate #489 / run `30749349765`: **PASS**.
-- Flutter format: **PASS**.
-- Flutter analyze: **PASS**.
-- Flutter tests: **PASS**.
+- Build recoverable base APK #90 / run `30750777554`: **PASS**.
+- NearMeU quality gate #493 / run `30750777555`: **PASS**.
+- Flutter format/analyze/tests: **PASS**.
 - Cloud Functions unit/load checks: **PASS**.
 - Firebase Rules emulator tests: **PASS**.
 - Permanent signing verification: **PASS**.
@@ -58,44 +43,46 @@ Base / promoted Batch 07 recovery state: `ff551ceb48d3fc1d957141977df29ebb31837b
 
 ### Recoverable signed debug artifact
 
-- Artifact ID: `8834050185`.
-- Artifact digest: `sha256:65a8465f3387c776bc20f938ccf12c22b39913c879c0dbbdef78cbeca7ec1b7e`.
-- Signed debug APK SHA-256: `82bee077a8b7c0533376283ce01de903b617400824979b34d5b596a125693bd5`.
+- Artifact ID: `8834500159`.
+- Artifact digest: `sha256:f2515b2ce44e7d8ab4edbddb8060975dcc1c13e236a7a51f852f7a106b298c49`.
+- Signed debug APK SHA-256: `4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412`.
 
 ### Signed release artifact
 
-- Artifact ID: `8834130859`.
-- Artifact digest: `sha256:cdc53cb2885184a42d1ddc47c57208057c65f896d0e84278ce7785997da78ec2`.
-- Signed release APK SHA-256: `b8b66c4d719359bc9a92e3dd6dfa57174b12580844904150e9d24832c1e3a51f`.
+- Artifact ID: `8834548293`.
+- Artifact digest: `sha256:fc7348a6088c587670fda6d6bbde0e5c8ad9cb63fd7aa9156087132b3dfc762a`.
+- Signed release APK SHA-256: `ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde`.
 
-GitHub Actions checks out the PR merge ref for build execution, so generated artifact names/manifests may contain merge-ref SHA `4f3dfbfb12ff0947455d0e27032b65b233c78f01`. The authoritative Batch 08 branch head for acceptance remains `c8210ca2591cd843eb5edcedef284892d82db435`; these values must not be conflated.
+GitHub Actions built the PR merge ref `d843fbe831bede63fedd4cd69a46bdf108f5f799`; the authoritative tested runtime branch head is `fdc9b22322a96b793fff3058b1ca990f656e80a1`. These values must not be conflated.
 
-## Production actions before complete physical test
+## Production deployment
 
-Deploy only the Batch 08 profile-sharing Functions and Firebase Hosting from the exact branch/head above. Existing Firestore/Storage rules are not part of this deployment because those runtime rule files did not change in Batch 08.
+The Batch 08 profile-sharing Functions and Firebase Hosting were deployed and then operationally verified on the owner test device: the initial `getMyProfileShareLink` call loaded successfully and the public Hosting preview worked. Existing Firestore/Storage rules were not changed by Batch 08.
 
-Deployment is not acceptance; owner physical testing follows deployment.
+## Physical/backend acceptance matrix
 
-## Focused owner matrix
+- Direct update with `adb install -r`, same package/signing/session retained — **PASS**.
+- Settings → Share My Profile loads correctly — **PASS**.
+- Explicit Sharing ON generates opaque HTTPS link — **PASS**.
+- Android share flow shares the profile URL — **PASS**.
+- Public URL exposes no readable UID/email/phone/exact location — **PASS**.
+- Generic privacy-safe web preview — **PASS**.
+- HTTPS warm-start deep link opens the correct profile once — **PASS**.
+- HTTPS cold-start deep link opens the correct profile once — **PASS** after same-batch navigation-race fix.
+- Sharing OFF makes the current link unavailable — **PASS**.
+- Re-enable restores current-link resolution — **PASS**.
+- Reset while ON rotates to a new link; old link becomes unavailable; new link resolves — **PASS**.
+- Reset while OFF preserves disabled state — **owner-reported PASS**.
+- Bidirectional block bypass prevention — **owner-reported PASS plus backend-enforced evidence**.
+- Unblock restores normal resolution — **owner-reported PASS**.
+- Suspended/missing/unshareable profile rejection — **backend-enforced PASS**; destructive owner-account suspension/deletion was not required for physical acceptance.
+- Permanent Auth-delete mapping cleanup — **backend-trigger implementation + automated checks PASS**.
+- Regression smoke: Nearby, Chats, text/media and existing app behavior — **owner-reported PASS**.
 
-1. Install Batch 08 APK with `adb install -r`; no uninstall/data wipe. Existing login/chat/media remains intact.
-2. Settings → Share My Profile opens with sharing OFF for a user who has never enabled it.
-3. Turning sharing ON creates an HTTPS link using an opaque public identifier, not UID/email/exact location.
-4. Android share sheet opens with the profile URL.
-5. Opening the HTTPS link on the installed tested app resolves to the correct profile.
-6. Opening the custom `nearmeu://profile/...` fallback resolves to the same profile.
-7. Cold-start link: app closed → link opened → after authenticated startup the correct profile opens once.
-8. Warm-start link: app already running → link opens the correct profile once without duplicate navigation.
-9. Disabled sharing: old link becomes unavailable in app and web preview.
-10. Re-enable sharing: current link becomes available again.
-11. Reset link while ON: old URL no longer resolves; new URL resolves and sharing remains ON.
-12. Reset link while OFF: identifier changes but sharing remains OFF; new link does not resolve until explicitly enabled.
-13. Block bypass test: block either direction, then shared link must not open the blocked profile in app.
-14. Unblock restores normal resolution when link remains enabled.
-15. Suspended/closed/unavailable account shared link does not expose profile.
-16. Web preview is generic and reveals no nickname, age, UID, email, phone number or location; detailed profile data is app-only after authenticated authorization.
-17. Regression smoke: Nearby, Chats, text send, media availability, Clear/Delete semantics and Premium recovery startup remain normal.
+## Known evidence note
+
+The HTTPS installed-app path was physically verified for both warm and cold starts. The custom `nearmeu://profile/...` fallback exists in the Android/client implementation but was not separately captured as an independent physical screenshot; it is not used to overstate the HTTPS physical evidence.
 
 ## Owner decision
 
-`PENDING` until required production deployment, focused physical tests and owner acceptance are complete.
+**ACCEPTED on 2026-08-02.** Batch 08 runtime PR #100 was merged only after the final signed Build #90 / Quality #493 state passed owner testing.
