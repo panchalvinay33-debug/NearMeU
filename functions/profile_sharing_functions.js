@@ -160,47 +160,36 @@ exports.resolveSharedProfile = onCall({ region: REGION }, async (request) => {
   return { profile };
 });
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+exports.sharedProfilePreview = onRequest(
+  { region: REGION, enforceAppCheck: false },
+  async (request, response) => {
+    response.set("Cache-Control", "private, max-age=60");
+    const match = request.path.match(/\/p\/([A-Za-z0-9_-]{20,64})\/?$/);
+    const publicId = match && match[1];
+    if (!isValidPublicProfileId(publicId)) {
+      response.status(404).send("Profile unavailable");
+      return;
+    }
+    const link = await publicShareRef(publicId).get();
+    const targetUid = link.exists && link.get("enabled") === true ? link.get("ownerUid") : null;
+    const user = typeof targetUid === "string"
+      ? await db.collection("users").doc(targetUid).get()
+      : null;
+    const profile = user && user.exists ? safeSharedProfile(user.data(), targetUid) : null;
+    if (!profile) {
+      response.status(404).send("Profile unavailable");
+      return;
+    }
 
-exports.sharedProfilePreview = onRequest({ region: REGION }, async (request, response) => {
-  response.set("Cache-Control", "private, max-age=60");
-  const match = request.path.match(/\/p\/([A-Za-z0-9_-]{20,64})\/?$/);
-  const publicId = match && match[1];
-  if (!isValidPublicProfileId(publicId)) {
-    response.status(404).send("Profile unavailable");
-    return;
-  }
-  const link = await publicShareRef(publicId).get();
-  const targetUid = link.exists && link.get("enabled") === true ? link.get("ownerUid") : null;
-  const user = typeof targetUid === "string"
-    ? await db.collection("users").doc(targetUid).get()
-    : null;
-  const profile = user && user.exists ? safeSharedProfile(user.data(), targetUid) : null;
-  if (!profile) {
-    response.status(404).send("Profile unavailable");
-    return;
-  }
-
-  const name = escapeHtml(profile.nickname);
-  const details = [profile.age, profile.gender, profile.state, profile.country]
-    .filter((value) => value !== null && value !== "")
-    .map(escapeHtml)
-    .join(" · ");
-  const deepLink = `nearmeu://profile/${publicId}`;
-  const playUrl = "https://play.google.com/store/apps/details?id=com.nearmeu.nearmeu";
-  response.status(200).type("html").send(`<!doctype html>
+    const deepLink = `nearmeu://profile/${publicId}`;
+    const playUrl = "https://play.google.com/store/apps/details?id=com.nearmeu.nearmeu";
+    response.status(200).type("html").send(`<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${name} on NearMeU</title><meta name="robots" content="noindex,nofollow">
+<title>Shared NearMeU profile</title><meta name="robots" content="noindex,nofollow">
 <style>body{font-family:system-ui;background:#0b0b0b;color:#fff;margin:0;display:grid;min-height:100vh;place-items:center}.card{max-width:460px;margin:24px;padding:28px;border-radius:24px;background:#171717;text-align:center}.muted{color:#aaa}.btn{display:block;margin-top:14px;padding:14px 18px;border-radius:14px;text-decoration:none;background:#7c4dff;color:#fff}.secondary{background:#2a2a2a}</style></head>
-<body><main class="card"><h1>${name}</h1><p class="muted">${details}</p><p>View this profile securely in NearMeU.</p><a class="btn" href="${deepLink}">Open in NearMeU</a><a class="btn secondary" href="${playUrl}">Get NearMeU</a><p class="muted">Private email, Firebase UID and exact location are not shown on this page.</p></main></body></html>`);
-});
+<body><main class="card"><h1>NearMeU profile</h1><p>A NearMeU user shared a profile link with you.</p><p class="muted">For privacy, profile details are only resolved inside the signed-in NearMeU app where blocks and account availability can be checked.</p><a class="btn" href="${deepLink}">Open in NearMeU</a><a class="btn secondary" href="${playUrl}">Get NearMeU</a></main></body></html>`);
+  },
+);
 
 exports.purgeProfileSharingOnAuthDelete = functionsV1
   .region(REGION)
