@@ -8,7 +8,7 @@ import '../services/audio_call_service.dart';
 import '../theme/app_colors.dart';
 
 class AudioCallScreen extends StatefulWidget {
-  const AudioCallScreen.outgoing({
+  AudioCallScreen.outgoing({
     super.key,
     required AudioCallSession session,
   }) : initialSession = session,
@@ -189,9 +189,11 @@ class _AudioCallScreenState extends State<AudioCallScreen>
         },
         onError: (errorCode, message) {
           if (!mounted) return;
-          setState(() => _error = message?.trim().isNotEmpty == true
-              ? message!.trim()
-              : 'Audio engine error: ${errorCode.name}');
+          setState(
+            () => _error = message.trim().isNotEmpty
+                ? message.trim()
+                : 'Audio engine error: ${errorCode.name}',
+          );
         },
       );
       engine.registerEventHandler(handler);
