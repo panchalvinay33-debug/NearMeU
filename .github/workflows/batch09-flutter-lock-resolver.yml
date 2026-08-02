@@ -1,0 +1,36 @@
+name: Batch 09 Flutter lock resolver
+
+on:
+  push:
+    branches:
+      - batch/09-agora-audio-calling
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-flutter-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: batch/09-agora-audio-calling
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve Flutter lock
+        run: flutter pub get
+      - name: Commit exact resolved lock when changed
+        shell: bash
+        run: |
+          if git diff --quiet -- pubspec.lock; then
+            echo "Flutter lock already resolved."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.lock
+          git commit -m "Batch 09: resolve Flutter package lock"
+          git push origin HEAD:batch/09-agora-audio-calling
