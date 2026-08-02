@@ -1,10 +1,12 @@
 # Batch 08 Physical Acceptance — Profile Sharing and Deep-Link Recovery
 
-Status: **IMPLEMENTATION / CI / DEPLOYMENT / PHYSICAL ACCEPTANCE PENDING**
+Status: **CI PASS / DEPLOYMENT + PHYSICAL ACCEPTANCE PENDING**
 
 Target version: `1.0.11+12`
 
 Branch: `batch/08-profile-sharing-deep-link-recovery`
+
+Authoritative branch head: `c8210ca2591cd843eb5edcedef284892d82db435`
 
 Base / promoted Batch 07 recovery state: `ff551ceb48d3fc1d957141977df29ebb31837b87`
 
@@ -41,22 +43,38 @@ Base / promoted Batch 07 recovery state: `ff551ceb48d3fc1d957141977df29ebb31837b
 - `lib/main.dart`
 - `rules_tests/profile_sharing.test.js`
 
-## Automated gates required
+## Automated gate evidence
 
-1. Flutter format — PASS required.
-2. Flutter analyze — PASS required.
-3. Flutter tests — PASS required.
-4. Cloud Functions load/tests including `profile_sharing_logic.test.js` — PASS required.
-5. Firebase Rules tests including direct client denial for internal share mappings — PASS required.
-6. Permanent signing restored/verified — PASS required.
-7. Signed debug/recoverable APK — PASS required.
-8. Signed release APK — PASS required.
-9. Android package stays `com.nearmeu.nearmeu`.
-10. Permanent signing certificate stays unchanged.
+- Build recoverable base APK #86 / run `30749349760`: **PASS**.
+- NearMeU quality gate #489 / run `30749349765`: **PASS**.
+- Flutter format: **PASS**.
+- Flutter analyze: **PASS**.
+- Flutter tests: **PASS**.
+- Cloud Functions unit/load checks: **PASS**.
+- Firebase Rules emulator tests: **PASS**.
+- Permanent signing verification: **PASS**.
+- Android package: `com.nearmeu.nearmeu` unchanged.
+- Permanent signing certificate SHA-256: `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`.
+
+### Recoverable signed debug artifact
+
+- Artifact ID: `8834050185`.
+- Artifact digest: `sha256:65a8465f3387c776bc20f938ccf12c22b39913c879c0dbbdef78cbeca7ec1b7e`.
+- Signed debug APK SHA-256: `82bee077a8b7c0533376283ce01de903b617400824979b34d5b596a125693bd5`.
+
+### Signed release artifact
+
+- Artifact ID: `8834130859`.
+- Artifact digest: `sha256:cdc53cb2885184a42d1ddc47c57208057c65f896d0e84278ce7785997da78ec2`.
+- Signed release APK SHA-256: `b8b66c4d719359bc9a92e3dd6dfa57174b12580844904150e9d24832c1e3a51f`.
+
+GitHub Actions checks out the PR merge ref for build execution, so generated artifact names/manifests may contain merge-ref SHA `4f3dfbfb12ff0947455d0e27032b65b233c78f01`. The authoritative Batch 08 branch head for acceptance remains `c8210ca2591cd843eb5edcedef284892d82db435`; these values must not be conflated.
 
 ## Production actions before complete physical test
 
-Batch 08 requires deployment of the new profile-sharing callables/function plus Firebase Hosting configuration/content so the public HTTPS URL and `assetlinks.json` are real. Deployment is not acceptance; owner physical testing follows deployment.
+Deploy only the Batch 08 profile-sharing Functions and Firebase Hosting from the exact branch/head above. Existing Firestore/Storage rules are not part of this deployment because those runtime rule files did not change in Batch 08.
+
+Deployment is not acceptance; owner physical testing follows deployment.
 
 ## Focused owner matrix
 
@@ -80,4 +98,4 @@ Batch 08 requires deployment of the new profile-sharing callables/function plus 
 
 ## Owner decision
 
-`PENDING` until fresh CI, permanent signed APK, required production deployment, focused physical tests and owner acceptance are complete.
+`PENDING` until required production deployment, focused physical tests and owner acceptance are complete.
