@@ -1,6 +1,6 @@
 # Batch 09 Physical Acceptance — Agora Audio Calling
 
-Status: **IMPLEMENTATION / CI / CREDENTIAL DEPLOYMENT PENDING**
+Status: **IMPLEMENTATION / FINAL CI / CREDENTIAL DEPLOYMENT PENDING**
 
 Target version: `1.0.12+13`
 
@@ -25,6 +25,14 @@ Accepted Batch 08 base: `7f8b0c1f147a8de420ac54fa25c215fc22a7b299`
 - Agora video/camera publishing is disabled in Batch 09; video calling is Batch 10.
 - Actual call audio is not recorded, uploaded, stored in chat media, or included in seven-day delivery storage or Premium recovery.
 - Existing chat, media, Clear/Delete, Premium recovery and profile-sharing behavior must remain unchanged.
+
+## Dependency-resolution checkpoint
+
+- Agora Flutter `6.6.3` was rejected by CI because its `ffi` constraint conflicts with the app's accepted `package_info_plus 8.3.1` dependency.
+- Batch 09 therefore pins the compatible stable Agora Flutter `6.5.4` line.
+- The resolved Flutter lockfile now records `agora_rtc_engine 6.5.4`.
+- Functions use the maintained `agora-token` package and its resolved lockfile is committed.
+- Temporary dependency-lock resolver workflows have been removed; final acceptance requires normal repository CI on a non-bot-authored Batch 09 head.
 
 ## Trusted backend surface
 
