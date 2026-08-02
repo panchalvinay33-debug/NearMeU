@@ -23,37 +23,37 @@ Every runtime change is one focused batch. A later batch starts only after autom
 
 ## Current accepted runtime
 
-Batch 07 — Six-month Premium backup and restore — is owner accepted.
+Batch 08 — Profile sharing and deep-link recovery — is owner accepted.
 
-- Tested runtime: `5ae058122d927c7e35257fb80ca5fa879f14b784`
-- Runtime merge: `db48338e6528b61e1e486d6d158c9d62e641c977`
-- PR: `#98`
-- Version: `1.0.10+11`
-- Build #79 / run `30746260270`: PASS
-- Quality #480 / run `30746260318`: PASS
-- Physically tested signed debug APK SHA-256: `2af784329a1594a761877110c671508b19f8cd1cc2542d9079cc46a7b80025d1`
+- Tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+- Runtime merge: `f83a6e92457f728f177dc062dcc9171c141a9217`
+- PR: `#100`
+- Version: `1.0.11+12`
+- Build #90 / run `30750777554`: PASS
+- Quality #493 / run `30750777555`: PASS
+- Physically tested signed debug APK SHA-256: `4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412`
+- Signed release APK SHA-256: `ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde`
 - Owner acceptance: 2026-08-02
-- Known evidence gap: receiver-media pre-download/post-download recovery physical verification was owner-deferred and is not claimed as PASS.
+- Known evidence notes: Batch 07 receiver-media pre/post-download physical proof remains owner-deferred; Batch 08 custom-scheme fallback was not separately screenshot-verified although HTTPS warm/cold app links were physically verified.
 
-Batches 00 through 07 are accepted.
+Batches 00 through 08 are accepted.
 
 ## Next batch
 
-### Batch 08 — Profile sharing and deep-link recovery
+### Batch 09 — Agora audio calling
 
 Frozen direction:
 
-- privacy-safe profile sharing for Free and Premium users;
-- revocable public identifier rather than exposing Firebase UID;
-- deep-link/open-app recovery behavior;
-- block/privacy rules must continue to apply;
-- no calling work in this batch;
-- no owner-admin Premium mutation or Play purchase verification in this batch;
-- preserve accepted chat, local-first, delivery-cloud, deletion and Premium-recovery semantics.
+- audio calling only; video remains Batch 10;
+- preserve existing chat, Premium, recovery, profile-sharing and deletion semantics;
+- use trusted backend authorization for any call-initiation entitlement decisions;
+- actual call audio is not recorded or backed up;
+- call-state, permission, connection, hangup/failure behavior must be tested on real devices;
+- no owner-admin Premium mutation work in Batch 09;
+- no Play purchase-verification or Play Store readiness scope creep.
 
 ## Later batches
 
-- Batch 09 — Agora audio calling
 - Batch 10 — Agora video calling
 - Batch 11 — Owner-only Premium administration / purchase-verification work
 - Batch 12 — Full regression and Play Store readiness, including production App Check / Play Integrity readiness
