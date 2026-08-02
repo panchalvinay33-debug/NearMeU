@@ -2,7 +2,7 @@ name: nearmeu
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.11+12
+version: 1.0.12+13
 
 environment:
   sdk: ^3.9.0
@@ -26,6 +26,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   google_sign_in: ^6.3.0
 
+  agora_rtc_engine: ^6.6.3
   geolocator: ^13.0.1
   geocoding: ^3.0.0
   image_picker: ^1.1.2
