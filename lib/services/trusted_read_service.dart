@@ -39,7 +39,7 @@ class TrustedReadService {
       final result = await _functions
           .httpsCallable('getPrivateChatPreviews')
           .call<Map<String, dynamic>>();
-      final chats = _parseChatPreviews(result.data);
+      final chats = _dedupeChatPreviews(_parseChatPreviews(result.data));
       if (uid != null) await _rememberChatPreviews(uid, chats);
       return chats;
     } catch (error, stackTrace) {
@@ -54,7 +54,9 @@ class TrustedReadService {
 
     if (uid != null) {
       try {
-        final chats = await _getChatPreviewsFromFirestore(uid);
+        final chats = _dedupeChatPreviews(
+          await _getChatPreviewsFromFirestore(uid),
+        );
         await _rememberChatPreviews(uid, chats);
         return chats;
       } catch (error, stackTrace) {
@@ -67,13 +69,19 @@ class TrustedReadService {
 
       final memoryChats = _memoryChatCache[uid];
       if (memoryChats != null && memoryChats.isNotEmpty) {
-        return List<ChatPreviewModel>.unmodifiable(memoryChats);
+        return List<ChatPreviewModel>.unmodifiable(
+          _dedupeChatPreviews(memoryChats),
+        );
       }
 
       final cachedChats = await _previewCache.loadChatPreviews(uid);
       if (cachedChats.isNotEmpty) {
-        _memoryChatCache[uid] = cachedChats;
-        return cachedChats;
+        final deduped = _dedupeChatPreviews(cachedChats);
+        _memoryChatCache[uid] = List<ChatPreviewModel>.unmodifiable(deduped);
+        if (deduped.length != cachedChats.length) {
+          await _previewCache.saveChatPreviews(uid, deduped);
+        }
+        return deduped;
       }
     }
 
@@ -99,6 +107,40 @@ class TrustedReadService {
     }
     _sortChats(chats);
     return chats;
+  }
+
+  List<ChatPreviewModel> _dedupeChatPreviews(
+    Iterable<ChatPreviewModel> source,
+  ) {
+    final newestByOtherUser = <String, ChatPreviewModel>{};
+    for (final chat in source) {
+      if (chat.otherUserId.isEmpty) continue;
+      final existing = newestByOtherUser[chat.otherUserId];
+      if (existing == null || _isPreferredPreview(chat, existing)) {
+        newestByOtherUser[chat.otherUserId] = chat;
+      }
+    }
+    final chats = newestByOtherUser.values.toList(growable: false);
+    _sortChats(chats);
+    return chats;
+  }
+
+  bool _isPreferredPreview(
+    ChatPreviewModel candidate,
+    ChatPreviewModel existing,
+  ) {
+    final candidateTime =
+        candidate.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final existingTime =
+        existing.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final timeComparison = candidateTime.compareTo(existingTime);
+    if (timeComparison != 0) return timeComparison > 0;
+
+    final candidateHasMessage = candidate.lastMessage.trim().isNotEmpty;
+    final existingHasMessage = existing.lastMessage.trim().isNotEmpty;
+    if (candidateHasMessage != existingHasMessage) return candidateHasMessage;
+
+    return candidate.chatId.compareTo(existing.chatId) < 0;
   }
 
   Future<List<ChatPreviewModel>> _getChatPreviewsFromFirestore(
@@ -203,7 +245,8 @@ class TrustedReadService {
     String uid,
     List<ChatPreviewModel> chats,
   ) async {
-    final immutable = List<ChatPreviewModel>.unmodifiable(chats);
+    final deduped = _dedupeChatPreviews(chats);
+    final immutable = List<ChatPreviewModel>.unmodifiable(deduped);
     _memoryChatCache[uid] = immutable;
     await _previewCache.saveChatPreviews(uid, immutable);
   }
@@ -214,7 +257,9 @@ class TrustedReadService {
           first.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
       final secondTime =
           second.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return secondTime.compareTo(firstTime);
+      final timeComparison = secondTime.compareTo(firstTime);
+      if (timeComparison != 0) return timeComparison;
+      return first.chatId.compareTo(second.chatId);
     });
   }
 
