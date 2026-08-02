@@ -1,6 +1,6 @@
 # Batch 07 Physical Acceptance — Six-Month Premium Backup and Restore
 
-Status: **CI / SIGNED ARTIFACTS / PRODUCTION DEPLOYMENT / DIRECT UPDATE PASS — FOCUSED RESTORE TEST PENDING**
+Status: **CI / SIGNED ARTIFACTS / PRODUCTION DEPLOYMENT / DIRECT UPDATE / PREMIUM TEST ENTITLEMENT PASS — FOCUSED RESTORE TEST PENDING**
 
 Target version: `1.0.10+11`
 
@@ -82,20 +82,25 @@ Deployment is not final owner acceptance until focused physical restore testing 
 
 Owner confirmed the Batch 07 signed debug APK was installed as an Android update with existing app data preserved. The owner then confirmed all three focused continuity checks passed: the update completed, the same login remained active, and existing chats/media remained visible. No uninstall or data wipe was used.
 
+## Temporary trusted Premium test entitlement
+
+Because Google Play purchase verification and the owner-admin Premium UI are intentionally outside Batch 07, the owner created a temporary trusted server-side entitlement document in `premiumEntitlements/{uid}` using the existing `grants.admin` schema. The owner then confirmed that Premium-gated media controls worked and the previous Premium-required lock message no longer appeared. This is test setup evidence only; it does not claim Batch 11 owner-admin functionality exists.
+
 ## Focused owner matrix
 
 1. Direct update with `adb install -r`; no uninstall/data wipe. **PASS.**
 2. Existing login/chat/media state remains available. **PASS.**
-3. Premium eligible text appears in recovery and restores after the test device's local chat copy is intentionally reset through the approved recovery-test procedure.
-4. Premium sent media restores from the recovery copy.
-5. Receiver media is not backed up before download; after receiver download it becomes recoverable when that receiver is Premium.
-6. Clear Chat removes the clearing user's recovery copy and that content does not return after restore.
-7. Delete for Me does not return for that user after restore; the backend path is also designed to remain authoritative after the seven-day delivery source expires.
-8. Delete for Everyone / unsend does not return for either participant after restore.
-9. Seven-day delivery-cloud behavior remains separate and unchanged.
-10. Free users cannot invoke Premium restore.
-11. Close Account / same-email reactivation continues the permitted uncleared recovery identity; do not repeat the full Batch 05 lifecycle matrix unless a regression appears.
-12. Permanent Account Delete cleanup is primarily backend/automated evidence; do not destroy the owner's real test identity solely to prove Batch 07 unless a disposable identity is intentionally used.
+3. Temporary trusted Premium entitlement activates Premium-gated controls for the focused Batch 07 test. **PASS.**
+4. Premium eligible text appears in recovery and restores after the test device's local chat copy is intentionally reset through the approved recovery-test procedure.
+5. Premium sent media restores from the recovery copy.
+6. Receiver media is not backed up before download; after receiver download it becomes recoverable when that receiver is Premium.
+7. Clear Chat removes the clearing user's recovery copy and that content does not return after restore.
+8. Delete for Me does not return for that user after restore; the backend path is also designed to remain authoritative after the seven-day delivery source expires.
+9. Delete for Everyone / unsend does not return for either participant after restore.
+10. Seven-day delivery-cloud behavior remains separate and unchanged.
+11. Free users cannot invoke Premium restore.
+12. Close Account / same-email reactivation continues the permitted uncleared recovery identity; do not repeat the full Batch 05 lifecycle matrix unless a regression appears.
+13. Permanent Account Delete cleanup is primarily backend/automated evidence; do not destroy the owner's real test identity solely to prove Batch 07 unless a disposable identity is intentionally used.
 
 ## Acceptance record
 
@@ -111,6 +116,7 @@ Permanent signing certificate: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9
 Evidence-head Build/Quality: 30733194300 / #64 — PASS; 30733194268 / #465 — PASS
 Production deployment: PASS — owner PowerShell evidence, 2026-08-02, `Deploy complete!`
 Direct update continuity: PASS — owner confirmed update, same login, existing chats/media preserved
+Temporary trusted Premium test entitlement: PASS — owner confirmed Premium controls unlocked
 Focused physical restore: PENDING
 Clear/Delete resurrection checks: PENDING
 Owner decision: PENDING
