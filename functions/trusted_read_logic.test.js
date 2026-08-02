@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const {
   chatDocumentKey,
   mergeChatDocuments,
+  shouldHidePreviewThroughClear,
   shouldScanLegacyChats,
 } = require("./trusted_read_logic");
 
@@ -56,4 +57,15 @@ test("merge respects the document inspection ceiling", () => {
     maximumDocuments: 2,
   });
   assert.deepEqual(result.map(chatDocumentKey), ["chats/a", "chats/b"]);
+});
+
+test("clear cutoff hides previews at or before the clear time", () => {
+  assert.equal(shouldHidePreviewThroughClear(1000, 1000), true);
+  assert.equal(shouldHidePreviewThroughClear(999, 1000), true);
+  assert.equal(shouldHidePreviewThroughClear(null, 1000), true);
+});
+
+test("messages after a clear remain eligible for the chat preview", () => {
+  assert.equal(shouldHidePreviewThroughClear(1001, 1000), false);
+  assert.equal(shouldHidePreviewThroughClear(1001, null), false);
 });
