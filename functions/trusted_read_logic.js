@@ -29,6 +29,12 @@ function shouldScanLegacyChats(normalCount, maximumPreviewCount) {
   return normalCount < maximumPreviewCount;
 }
 
+function shouldHidePreviewThroughClear(messageTimeMillis, clearedAtMillis) {
+  if (!Number.isFinite(clearedAtMillis)) return false;
+  if (!Number.isFinite(messageTimeMillis)) return true;
+  return messageTimeMillis <= clearedAtMillis;
+}
+
 function mergeChatDocuments({
   normalDocuments = [],
   legacyDocuments = [],
@@ -54,5 +60,6 @@ function mergeChatDocuments({
 module.exports = {
   chatDocumentKey,
   mergeChatDocuments,
+  shouldHidePreviewThroughClear,
   shouldScanLegacyChats,
 };
