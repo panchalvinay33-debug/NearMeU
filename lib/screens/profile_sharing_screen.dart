@@ -57,7 +57,9 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(enabled ? 'Profile sharing enabled' : 'Profile sharing disabled'),
+          content: Text(
+            enabled ? 'Profile sharing enabled' : 'Profile sharing disabled',
+          ),
         ),
       );
     } catch (_) {
@@ -83,17 +85,26 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
   }
 
   Future<void> _resetLink() async {
-    if (_actionLoading) return;
+    final current = _link;
+    if (_actionLoading || current == null || current.url.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reset profile link?'),
-        content: const Text(
-          'Your current shared link will stop working immediately. A new private public identifier will be created.',
+        content: Text(
+          current.enabled
+              ? 'Your current shared link will stop working immediately. A new public identifier will be created and sharing will stay ON.'
+              : 'Your old link will be replaced with a new public identifier. Sharing will stay OFF until you enable it.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Reset link')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset link'),
+          ),
         ],
       ),
     );
@@ -128,22 +139,24 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
         title: const Text('Profile Sharing'),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
-                      ],
-                    ),
-                  ),
-                )
-              : _buildContent(),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            )
+          : _buildContent(),
     );
   }
 
@@ -164,12 +177,19 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.link_rounded, color: AppColors.primary, size: 30),
+                  const Icon(
+                    Icons.link_rounded,
+                    color: AppColors.primary,
+                    size: 30,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       link.enabled ? 'Sharing is ON' : 'Sharing is OFF',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   Switch(
@@ -180,14 +200,20 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Your link uses a revocable public identifier. It does not contain your Firebase UID, verified email, phone number or exact location.',
-                style: TextStyle(color: AppColors.textSecondary, height: 1.45),
+                'Sharing starts only when you turn it ON. Your link uses a revocable public identifier and never contains your Firebase UID, verified email, phone number or exact location.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
               ),
               if (link.url.isNotEmpty) ...[
                 const SizedBox(height: 18),
                 SelectableText(
                   link.url,
-                  style: const TextStyle(color: AppColors.textHint, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppColors.textHint,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ],
@@ -201,13 +227,13 @@ class _ProfileSharingScreenState extends State<ProfileSharingScreen> {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: _actionLoading ? null : _resetLink,
+          onPressed: link.url.isNotEmpty && !_actionLoading ? _resetLink : null,
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Reset Shared Link'),
         ),
         const SizedBox(height: 22),
         const Text(
-          'If you disable sharing or reset the link, old links stop resolving. Blocks, suspension and account availability are checked again whenever a signed-in user opens a shared profile.',
+          'If you disable sharing or reset the link, old links stop resolving. Resetting never turns sharing ON by itself. Blocks, suspension and account availability are checked again whenever a signed-in user opens a shared profile.',
           style: TextStyle(color: AppColors.textSecondary, height: 1.45),
         ),
       ],
