@@ -1,6 +1,7 @@
 "use strict";
 
 const admin = require("firebase-admin");
+const functionsV1 = require("firebase-functions/v1");
 const { HttpsError, onCall, onRequest } = require("firebase-functions/v2/https");
 
 const {
@@ -78,6 +79,15 @@ async function createFreshShareLink(uid) {
   throw new HttpsError("resource-exhausted", "Could not create a share link.");
 }
 
+async function purgeProfileSharingForUid(uid) {
+  const owner = await ownerShareRef(uid).get();
+  const publicId = owner.exists ? owner.get("publicId") : null;
+  const batch = db.batch();
+  batch.delete(ownerShareRef(uid));
+  if (isValidPublicProfileId(publicId)) batch.delete(publicShareRef(publicId));
+  await batch.commit();
+}
+
 exports.getMyProfileShareLink = onCall({ region: REGION }, async (request) => {
   const uid = requireAuthenticatedUid(request);
   await requireActiveProfile(uid);
@@ -122,11 +132,7 @@ exports.rotateMyProfileShareLink = onCall({ region: REGION }, async (request) =>
   const oldPublicId = oldOwner.exists ? oldOwner.get("publicId") : null;
   const fresh = await createFreshShareLink(uid);
   if (isValidPublicProfileId(oldPublicId) && oldPublicId !== fresh.publicId) {
-    await publicShareRef(oldPublicId).set({
-      enabled: false,
-      revokedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await publicShareRef(oldPublicId).delete().catch(() => {});
   }
   return fresh;
 });
@@ -195,3 +201,10 @@ exports.sharedProfilePreview = onRequest({ region: REGION }, async (request, res
 <style>body{font-family:system-ui;background:#0b0b0b;color:#fff;margin:0;display:grid;min-height:100vh;place-items:center}.card{max-width:460px;margin:24px;padding:28px;border-radius:24px;background:#171717;text-align:center}.muted{color:#aaa}.btn{display:block;margin-top:14px;padding:14px 18px;border-radius:14px;text-decoration:none;background:#7c4dff;color:#fff}.secondary{background:#2a2a2a}</style></head>
 <body><main class="card"><h1>${name}</h1><p class="muted">${details}</p><p>View this profile securely in NearMeU.</p><a class="btn" href="${deepLink}">Open in NearMeU</a><a class="btn secondary" href="${playUrl}">Get NearMeU</a><p class="muted">Private email, Firebase UID and exact location are not shown on this page.</p></main></body></html>`);
 });
+
+exports.purgeProfileSharingOnAuthDelete = functionsV1
+  .region(REGION)
+  .auth.user()
+  .onDelete(async (user) => {
+    await purgeProfileSharingForUid(user.uid);
+  });
