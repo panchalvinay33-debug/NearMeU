@@ -39,7 +39,7 @@ class TrustedReadService {
       final result = await _functions
           .httpsCallable('getPrivateChatPreviews')
           .call<Map<String, dynamic>>();
-      final chats = _parseChatPreviews(result.data);
+      final chats = _dedupeChatPreviews(_parseChatPreviews(result.data));
       if (uid != null) await _rememberChatPreviews(uid, chats);
       return chats;
     } catch (error, stackTrace) {
@@ -54,7 +54,9 @@ class TrustedReadService {
 
     if (uid != null) {
       try {
-        final chats = await _getChatPreviewsFromFirestore(uid);
+        final chats = _dedupeChatPreviews(
+          await _getChatPreviewsFromFirestore(uid),
+        );
         await _rememberChatPreviews(uid, chats);
         return chats;
       } catch (error, stackTrace) {
@@ -67,13 +69,19 @@ class TrustedReadService {
 
       final memoryChats = _memoryChatCache[uid];
       if (memoryChats != null && memoryChats.isNotEmpty) {
-        return List<ChatPreviewModel>.unmodifiable(memoryChats);
+        return List<ChatPreviewModel>.unmodifiable(
+          _dedupeChatPreviews(memoryChats),
+        );
       }
 
       final cachedChats = await _previewCache.loadChatPreviews(uid);
       if (cachedChats.isNotEmpty) {
-        _memoryChatCache[uid] = cachedChats;
-        return cachedChats;
+        final deduped = _dedupeChatPreviews(cachedChats);
+        _memoryChatCache[uid] = List<ChatPreviewModel>.unmodifiable(deduped);
+        if (deduped.length != cachedChats.length) {
+          await _previewCache.saveChatPreviews(uid, deduped);
+        }
+        return deduped;
       }
     }
 
@@ -99,6 +107,86 @@ class TrustedReadService {
     }
     _sortChats(chats);
     return chats;
+  }
+
+  List<ChatPreviewModel> _dedupeChatPreviews(
+    Iterable<ChatPreviewModel> source,
+  ) {
+    final newestByOtherUser = <String, ChatPreviewModel>{};
+    for (final chat in source) {
+      if (chat.otherUserId.isEmpty) continue;
+      final existing = newestByOtherUser[chat.otherUserId];
+      if (existing == null || _isPreferredPreview(chat, existing)) {
+        newestByOtherUser[chat.otherUserId] = chat;
+      }
+    }
+    final chats = newestByOtherUser.values.toList(growable: false);
+    _sortChats(chats);
+    return chats;
+  }
+
+  bool _isPreferredPreview(
+    ChatPreviewModel candidate,
+    ChatPreviewModel existing,
+  ) {
+    final candidateTime =
+        candidate.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final existingTime =
+        existing.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final timeComparison = candidateTime.compareTo(existingTime);
+    if (timeComparison != 0) return timeComparison > 0;
+
+    final candidateHasMessage = candidate.lastMessage.trim().isNotEmpty;
+    final existingHasMessage = existing.lastMessage.trim().isNotEmpty;
+    if (candidateHasMessage != existingHasMessage) return candidateHasMessage;
+
+    return candidate.chatId.compareTo(existing.chatId) < 0;
+  }
+
+  bool _isAfterClear({
+    required Timestamp? messageTime,
+    required Timestamp? clearedAt,
+  }) {
+    if (clearedAt == null) return true;
+    if (messageTime == null) return false;
+    return messageTime.toDate().isAfter(clearedAt.toDate());
+  }
+
+  Future<Map<String, dynamic>?> _latestVisibleMessageForPreview({
+    required DocumentReference<Map<String, dynamic>> chatRef,
+    required String uid,
+    required Timestamp? clearedAt,
+  }) async {
+    final snapshot = await chatRef
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(50)
+        .get();
+    for (final document in snapshot.docs) {
+      final data = document.data();
+      final deletedFor = data['deletedFor'];
+      if (deletedFor is List && deletedFor.whereType<String>().contains(uid)) {
+        continue;
+      }
+      final timestamp = data['timestamp'] is Timestamp
+          ? data['timestamp'] as Timestamp
+          : null;
+      if (!_isAfterClear(messageTime: timestamp, clearedAt: clearedAt)) {
+        continue;
+      }
+      return <String, dynamic>{'id': document.id, ...data};
+    }
+    return null;
+  }
+
+  String _fallbackPreviewText(Map<String, dynamic> message) {
+    final text = message['text'];
+    if (text is String && text.trim().isNotEmpty) return text;
+    final type = message['type'];
+    if (type == 'image') return 'Photo';
+    if (type == 'video') return 'Video';
+    if (type == 'audio' || type == 'voice') return 'Voice message';
+    return 'Message';
   }
 
   Future<List<ChatPreviewModel>> _getChatPreviewsFromFirestore(
@@ -156,7 +244,24 @@ class TrustedReadService {
       final currentReadState = readStates[uid] is Map
           ? Map<String, dynamic>.from(readStates[uid] as Map)
           : const <String, dynamic>{};
-      final lastMessageTime = data['lastMessageTime'];
+      final clearStates = data['clearStates'] is Map
+          ? Map<String, dynamic>.from(data['clearStates'] as Map)
+          : const <String, dynamic>{};
+      final currentClearState = clearStates[uid] is Map
+          ? Map<String, dynamic>.from(clearStates[uid] as Map)
+          : const <String, dynamic>{};
+      final clearedAt = currentClearState['clearedAt'] is Timestamp
+          ? currentClearState['clearedAt'] as Timestamp
+          : null;
+      final visibleMessage = await _latestVisibleMessageForPreview(
+        chatRef: document.reference,
+        uid: uid,
+        clearedAt: clearedAt,
+      );
+      final visibleTimestamp = visibleMessage?['timestamp'] is Timestamp
+          ? visibleMessage!['timestamp'] as Timestamp
+          : null;
+      final isUnsent = visibleMessage?['isUnsent'] == true;
 
       chats.add(
         ChatPreviewModel(
@@ -168,22 +273,22 @@ class TrustedReadService {
           otherUserPhotoUrl: otherData['photoUrl'] is String
               ? otherData['photoUrl'] as String
               : null,
-          lastMessage: data['lastMessage'] is String
-              ? data['lastMessage'] as String
-              : '',
-          lastMessageTime: lastMessageTime is Timestamp
-              ? lastMessageTime.toDate()
-              : null,
-          messageType: data['lastMessageType'] is String
-              ? data['lastMessageType'] as String
+          lastMessage: visibleMessage == null
+              ? ''
+              : isUnsent
+              ? 'This message was unsent'
+              : _fallbackPreviewText(visibleMessage),
+          lastMessageTime: visibleTimestamp?.toDate(),
+          messageType: visibleMessage?['type'] is String
+              ? visibleMessage!['type'] as String
               : 'text',
-          isUnsent:
-              data['lastMessageIsUnsent'] == true ||
-              data['lastMessage'] == 'This message was unsent',
-          lastMessageSenderId: data['lastMessageSenderId'] is String
-              ? data['lastMessageSenderId'] as String
+          isUnsent: isUnsent,
+          lastMessageSenderId: visibleMessage?['senderId'] is String
+              ? visibleMessage!['senderId'] as String
               : null,
-          unreadCount: unreadCounts[uid] is num
+          unreadCount: visibleMessage == null
+              ? 0
+              : unreadCounts[uid] is num
               ? (unreadCounts[uid] as num).toInt()
               : currentReadState['unreadCount'] is num
               ? (currentReadState['unreadCount'] as num).toInt()
@@ -203,7 +308,8 @@ class TrustedReadService {
     String uid,
     List<ChatPreviewModel> chats,
   ) async {
-    final immutable = List<ChatPreviewModel>.unmodifiable(chats);
+    final deduped = _dedupeChatPreviews(chats);
+    final immutable = List<ChatPreviewModel>.unmodifiable(deduped);
     _memoryChatCache[uid] = immutable;
     await _previewCache.saveChatPreviews(uid, immutable);
   }
@@ -214,7 +320,9 @@ class TrustedReadService {
           first.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
       final secondTime =
           second.lastMessageTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return secondTime.compareTo(firstTime);
+      final timeComparison = secondTime.compareTo(firstTime);
+      if (timeComparison != 0) return timeComparison;
+      return first.chatId.compareTo(second.chatId);
     });
   }
 

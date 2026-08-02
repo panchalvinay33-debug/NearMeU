@@ -67,18 +67,23 @@ class PremiumEntitlementService {
   }
 
   Future<HttpsCallableResult<dynamic>> _readWithAuthRetry() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-user',
+        message: 'Please sign in again to verify Premium access.',
+      );
+    }
+
+    // A fresh install can reach the first Premium control immediately after
+    // login. Ensure Firebase has materialized an ID token before the callable
+    // is sent, then force-refresh exactly once if the backend still reports an
+    // unauthenticated request.
+    await user.getIdToken();
     try {
       return await _readCallable();
     } on FirebaseFunctionsException catch (error) {
       if (error.code != 'unauthenticated') rethrow;
-
-      final user = _auth.currentUser;
-      if (user == null) rethrow;
-
-      // Account close/reactivation revokes old refresh tokens. A process that
-      // stayed alive can briefly retain an auth session whose callable token is
-      // stale even though the UI still has a current user. Force one fresh ID
-      // token and retry exactly once.
       await user.getIdToken(true);
       return _readCallable();
     }

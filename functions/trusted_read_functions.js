@@ -3,6 +3,7 @@
 const admin = require("firebase-admin");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const {
+  firstVisiblePreviewMessage,
   mergeChatDocuments,
   shouldScanLegacyChats,
 } = require("./trusted_read_logic");
@@ -12,6 +13,7 @@ const REGION = "asia-south1";
 const MAX_CHAT_PREVIEWS = 100;
 const MAX_LEGACY_MESSAGES = 100;
 const MAX_DISCOVERY_USERS = 100;
+const MAX_PREVIEW_MESSAGE_SCAN = 50;
 const MAX_CHAT_DOCUMENTS_TO_INSPECT =
   MAX_CHAT_PREVIEWS + MAX_LEGACY_MESSAGES;
 
@@ -199,6 +201,16 @@ async function repairLegacyChat({
   );
 }
 
+function fallbackPreviewText(message) {
+  const text = safeString(message.text).trim();
+  if (text) return text;
+  const type = safeString(message.type, "text");
+  if (type === "image") return "Photo";
+  if (type === "video") return "Video";
+  if (type === "audio" || type === "voice") return "Voice message";
+  return "Message";
+}
+
 async function buildChatPreview({
   chatDocument,
   uid,
@@ -206,14 +218,14 @@ async function buildChatPreview({
   allowRepair,
 }) {
   const data = chatDocument.data() || {};
-  const latestMessages = await chatDocument.ref
+  const messageSnapshot = await chatDocument.ref
     .collection("messages")
     .orderBy("timestamp", "desc")
-    .limit(1)
+    .limit(MAX_PREVIEW_MESSAGE_SCAN)
     .get();
-  if (latestMessages.empty) return null;
+  if (messageSnapshot.empty) return null;
 
-  const latestMessage = latestMessages.docs[0];
+  const latestMessage = messageSnapshot.docs[0];
   const latestData = latestMessage.data() || {};
   const existingParticipants = validParticipants(data.participants, uid)
     ? data.participants
@@ -260,18 +272,32 @@ async function buildChatPreview({
   const unreadCounts = safeMap(data.unreadCounts);
   const readStates = safeMap(data.readStates);
   const currentReadState = safeMap(readStates[uid]);
-  const isUnsent =
-    latestData.isUnsent === true ||
-    data.lastMessageIsUnsent === true ||
-    data.lastMessage === "This message was unsent";
-  const lastMessage = isUnsent
-    ? "This message was unsent"
-    : safeString(data.lastMessage, safeString(latestData.text));
-  const lastMessageTime = data.lastMessageTime || latestData.timestamp;
-  const lastSenderId = safeString(
-    data.lastMessageSenderId,
-    safeString(latestData.senderId),
-  );
+  const clearStates = safeMap(data.clearStates);
+  const currentClearState = safeMap(clearStates[uid]);
+  const clearedAtMillis = timestampMillis(currentClearState.clearedAt);
+
+  const candidates = messageSnapshot.docs.map((document) => {
+    const message = document.data() || {};
+    return {
+      id: document.id,
+      data: message,
+      deletedFor: Array.isArray(message.deletedFor) ? message.deletedFor : [],
+      messageTimeMillis: timestampMillis(message.timestamp),
+    };
+  });
+  const visible = firstVisiblePreviewMessage(candidates, uid, clearedAtMillis);
+  const visibleData = visible ? visible.data : null;
+  const visibleIsLatest = visible && visible.id === latestMessage.id;
+  const isUnsent = visibleData ? visibleData.isUnsent === true : false;
+  const lastMessage = !visibleData
+    ? ""
+    : isUnsent
+      ? "This message was unsent"
+      : visibleIsLatest && typeof data.lastMessage === "string"
+        ? data.lastMessage
+        : fallbackPreviewText(visibleData);
+  const lastMessageTime = visibleData ? visibleData.timestamp : null;
+  const lastSenderId = visibleData ? safeString(visibleData.senderId) : "";
 
   return {
     chatId: chatDocument.id,
@@ -283,17 +309,18 @@ async function buildChatPreview({
       typeof otherData.photoUrl === "string" ? otherData.photoUrl : null,
     lastMessage,
     lastMessageTimeMillis: timestampMillis(lastMessageTime),
-    messageType: safeString(
-      latestData.type,
-      safeString(data.lastMessageType, "text"),
-    ),
+    messageType: visibleData ? safeString(visibleData.type, "text") : "text",
     isUnsent,
     lastMessageSenderId: lastSenderId || null,
     lastMessageSeen:
-      typeof latestData.isSeen === "boolean" ? latestData.isSeen : null,
-    unreadCount: Number.isInteger(unreadCounts[uid])
-      ? unreadCounts[uid]
-      : safeInteger(currentReadState.unreadCount, 0),
+      visibleData && typeof visibleData.isSeen === "boolean"
+        ? visibleData.isSeen
+        : null,
+    unreadCount: visibleData
+      ? Number.isInteger(unreadCounts[uid])
+        ? unreadCounts[uid]
+        : safeInteger(currentReadState.unreadCount, 0)
+      : 0,
     isOtherUserOnline: otherData.isOnline === true,
   };
 }

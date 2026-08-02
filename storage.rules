@@ -125,6 +125,14 @@ service firebase.storage {
       allow delete: if owns(senderId);
     }
 
+    // Premium recovery media is copied only by trusted backend code. Clients
+    // may read only their own recovery namespace; direct client writes/deletes
+    // are never allowed, so entitlement/retention/deletion truth stays server-side.
+    match /premiumRecoveryMedia/{uid}/{chatId}/{messageId}/{fileName} {
+      allow read: if owns(uid);
+      allow create, update, delete: if false;
+    }
+
     match /announcementMedia/{announcementId}/{fileName} {
       allow read: if signedIn();
       allow create: if isAdmin() && validAnnouncementMedia(announcementId);

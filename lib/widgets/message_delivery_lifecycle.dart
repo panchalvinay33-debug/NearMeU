@@ -7,14 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
 import '../services/local_chat_store.dart';
+import '../services/premium_recovery_service.dart';
 import '../services/private_media_service.dart';
 
-/// Keeps private-message delivery receipts and media outbox recovery independent
-/// from the chat screen.
-///
-/// A message becomes delivered only after the receiver's authenticated app has
-/// actually observed it from Firestore. Read receipts remain a separate action
-/// performed when the receiver opens the conversation.
+/// Keeps private-message delivery receipts, media outbox recovery and eligible
+/// Premium cloud recovery independent from the chat screen.
 class MessageDeliveryLifecycle extends StatefulWidget {
   const MessageDeliveryLifecycle({
     super.key,
@@ -38,6 +35,8 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
   late final PrivateMediaService _mediaService = PrivateMediaService(
     localChatStore: _localChatStore,
   );
+  late final PremiumRecoveryService _premiumRecoveryService =
+      PremiumRecoveryService(localChatStore: _localChatStore);
 
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSubscription;
@@ -45,6 +44,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
       _messageSubscriptions =
       <String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>{};
   final Set<String> _pendingReceiptKeys = <String>{};
+  final Set<String> _recoveryAttemptedChats = <String>{};
   String? _activeUid;
   bool _recoveringMediaOutbox = false;
 
@@ -73,8 +73,12 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
   }
 
   Future<void> _handleAuthChanged(User? user) async {
+    final previousUid = _activeUid;
     await _stopChatListeners();
     _activeUid = user?.uid;
+    if (previousUid != _activeUid) {
+      _recoveryAttemptedChats.clear();
+    }
     if (user == null) return;
 
     unawaited(_recoverPendingMedia(user.uid));
@@ -111,6 +115,41 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
     }
   }
 
+  Future<void> _recoverPremiumChat({
+    required String uid,
+    required String chatId,
+  }) async {
+    if (_activeUid != uid || !_recoveryAttemptedChats.add(chatId)) return;
+    try {
+      final restored = await _premiumRecoveryService.restoreChat(
+        ownerUid: uid,
+        chatId: chatId,
+      );
+      if (restored > 0) {
+        developer.log(
+          'Premium recovery restored $restored messages for chat $chatId',
+        );
+      }
+    } on FirebaseFunctionsException catch (error, stackTrace) {
+      final details = error.details;
+      final reason = details is Map ? details['reason'] : null;
+      if (error.code == 'failed-precondition' && reason == 'premium-required') {
+        return;
+      }
+      developer.log(
+        'Premium chat recovery deferred (${error.code})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'Premium chat recovery deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<void> _syncChatListeners(
     String uid,
     List<QueryDocumentSnapshot<Map<String, dynamic>>> chats,
@@ -127,6 +166,7 @@ class _MessageDeliveryLifecycleState extends State<MessageDeliveryLifecycle>
     }
 
     for (final chat in chats) {
+      unawaited(_recoverPremiumChat(uid: uid, chatId: chat.id));
       if (_messageSubscriptions.containsKey(chat.id)) continue;
       final participants = chat.data()['participants'];
       if (participants is! List) continue;

@@ -180,6 +180,17 @@ class ChatService {
     }
 
     try {
+      await _functions
+          .httpsCallable('deleteMyPremiumRecoveryMessage')
+          .call<void>(<String, dynamic>{
+            'otherUserId': otherUserId,
+            'messageId': message.id,
+          });
+    } on FirebaseFunctionsException catch (error) {
+      throw ChatSecurityException(_functionsErrorMessage(error));
+    }
+
+    try {
       await _localChatStore.deleteMessageForOwner(
         ownerUid: currentUserId,
         chatId: chatId,
@@ -286,7 +297,10 @@ class ChatService {
   }) async {
     final snapshot = await chatRef.get();
     if (!snapshot.exists) return null;
-    return ChatClearPolicy.clearedAtForUser(snapshot.data() ?? <String, dynamic>{}, ownerUid);
+    return ChatClearPolicy.clearedAtForUser(
+      snapshot.data() ?? <String, dynamic>{},
+      ownerUid,
+    );
   }
 
   Future<void> _reconcileRemoteHiddenMessages({

@@ -28,6 +28,34 @@ class ResilientNearbyService {
   final FirebaseAuth _auth;
   final LocalPreviewCache _cache;
 
+  Future<HttpsCallableResult<Map<String, dynamic>>> _readCandidates() {
+    return _functions
+        .httpsCallable('getNearbyCandidates')
+        .call<Map<String, dynamic>>();
+  }
+
+  Future<HttpsCallableResult<Map<String, dynamic>>>
+  _readCandidatesWithAuthRetry() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-user',
+        message: 'Please sign in again.',
+      );
+    }
+
+    // After a reinstall/login, establish a usable Firebase ID token before the
+    // first callable request instead of racing auth restoration.
+    await user.getIdToken();
+    try {
+      return await _readCandidates();
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'unauthenticated') rethrow;
+      await user.getIdToken(true);
+      return _readCandidates();
+    }
+  }
+
   Future<NearbyLoadResult> loadCandidates() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
@@ -35,9 +63,7 @@ class ResilientNearbyService {
     }
 
     try {
-      final result = await _functions
-          .httpsCallable('getNearbyCandidates')
-          .call<Map<String, dynamic>>();
+      final result = await _readCandidatesWithAuthRetry();
       final users = _parseCandidates(result.data);
       await _cache.saveNearbyCandidates(uid, users);
       return NearbyLoadResult(
