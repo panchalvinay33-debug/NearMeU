@@ -1,6 +1,6 @@
 # Batch 07 Physical Acceptance — Six-Month Premium Backup and Restore
 
-Status: **IN PROGRESS — IMPLEMENTATION / CI / PRODUCTION / OWNER TEST PENDING**
+Status: **CI / SIGNED ARTIFACTS PASS — PRODUCTION DEPLOYMENT / OWNER TEST PENDING**
 
 Target version: `1.0.10+11`
 
@@ -16,6 +16,7 @@ This batch must remain focused. Do not repeat the full Batch 01–06 physical ma
 - New eligible Premium text messages receive per-user recovery retention for up to six calendar months.
 - Sent Premium media may be backed up after trusted send acceptance.
 - Received media becomes recovery eligible only after that receiver has actually downloaded/acknowledged it.
+- Before temporary delivery media is removed after receiver download, eligible Premium sender and receiver recovery copies are synchronously secured; idempotent retries accept an already-existing recovery object even if the temporary source has since been removed.
 - Recovery media is copied into a separate per-user storage namespace.
 - Premium expiry does not immediately erase an already-valid recovery assignment; recorded expiry controls purge.
 - Clear Chat permanently removes that user's recovery copy.
@@ -39,6 +40,18 @@ This batch must remain focused. Do not repeat the full Batch 01–06 physical ma
 - Package remains `com.nearmeu.nearmeu`.
 - Permanent signing certificate remains unchanged.
 
+Authoritative tested runtime head: `eb15259e2456f9aab547aa474e6d350dba0c429e`.
+
+Automated evidence:
+
+- Build recoverable base APK #63 / run `30715897246` — PASS.
+- NearMeU quality gate #464 / run `30715897249` — PASS.
+- Recoverable artifact ID `8823448766`, digest `sha256:7b361fb5a0c6cd20c67d24ef5f3645e7520503c654bb0110a9b4402641c163f8`.
+- Debug/recoverable APK SHA-256 `fbf1f90abc14b2e19a25d7873ceea39488fc0a250e9d0e89746105441eb8a294`.
+- Signed release artifact ID `8823517406`, digest `sha256:de930dd9e0415ba83413255589a1ca3b715f9a4e002dcd74b1ac43d542c8fc0d`.
+- Signed release APK SHA-256 `a180d25bd8d0da94529ac6c07041734b2c1197e80fb5038f9f56df4828d008f3`.
+- Permanent signing certificate SHA-256 `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`.
+
 ## Required production deployment
 
 Expected Batch 07 backend/runtime deployment includes:
@@ -50,6 +63,7 @@ Expected Batch 07 backend/runtime deployment includes:
 - `deleteMyPremiumRecoveryMessage`
 - `purgePremiumRecoveryOnAuthDelete`
 - `retryPremiumRecoveryAccountDeletion`
+- updated `acknowledgePrivateMediaDownload`
 - updated `clearPrivateChat`
 - updated Storage Rules for owner-only recovery-media reads.
 
@@ -73,14 +87,14 @@ Deployment is not evidence of acceptance until focused physical restore testing 
 ## Acceptance record
 
 ```text
-Tested runtime commit: PENDING
-Build workflow: PENDING
-Quality workflow: PENDING
-Recoverable artifact: PENDING
-Debug APK SHA-256: PENDING
-Release artifact: PENDING
-Release APK SHA-256: PENDING
-Permanent signing certificate: PENDING
+Tested runtime commit: eb15259e2456f9aab547aa474e6d350dba0c429e
+Build workflow: 30715897246 / #63 — PASS
+Quality workflow: 30715897249 / #464 — PASS
+Recoverable artifact: 8823448766 / sha256:7b361fb5a0c6cd20c67d24ef5f3645e7520503c654bb0110a9b4402641c163f8
+Debug APK SHA-256: fbf1f90abc14b2e19a25d7873ceea39488fc0a250e9d0e89746105441eb8a294
+Release artifact: 8823517406 / sha256:de930dd9e0415ba83413255589a1ca3b715f9a4e002dcd74b1ac43d542c8fc0d
+Release APK SHA-256: a180d25bd8d0da94529ac6c07041734b2c1197e80fb5038f9f56df4828d008f3
+Permanent signing certificate: B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B
 Production deployment: PENDING
 Focused physical restore: PENDING
 Clear/Delete resurrection checks: PENDING
