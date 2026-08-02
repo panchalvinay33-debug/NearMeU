@@ -35,6 +35,36 @@ function shouldHidePreviewThroughClear(messageTimeMillis, clearedAtMillis) {
   return messageTimeMillis <= clearedAtMillis;
 }
 
+function isMessageVisibleForPreview({
+  deletedFor,
+  uid,
+  messageTimeMillis,
+  clearedAtMillis,
+}) {
+  if (Array.isArray(deletedFor) && deletedFor.includes(uid)) return false;
+  return !shouldHidePreviewThroughClear(messageTimeMillis, clearedAtMillis);
+}
+
+function firstVisiblePreviewMessage(messages, uid, clearedAtMillis) {
+  if (!Array.isArray(messages)) {
+    throw new TypeError("messages must be an array");
+  }
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    if (
+      isMessageVisibleForPreview({
+        deletedFor: message.deletedFor,
+        uid,
+        messageTimeMillis: message.messageTimeMillis,
+        clearedAtMillis,
+      })
+    ) {
+      return message;
+    }
+  }
+  return null;
+}
+
 function mergeChatDocuments({
   normalDocuments = [],
   legacyDocuments = [],
@@ -59,6 +89,8 @@ function mergeChatDocuments({
 
 module.exports = {
   chatDocumentKey,
+  firstVisiblePreviewMessage,
+  isMessageVisibleForPreview,
   mergeChatDocuments,
   shouldHidePreviewThroughClear,
   shouldScanLegacyChats,
