@@ -1,0 +1,26 @@
+name: Batch 09 dependency lock resolver
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-functions-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Resolve Functions package lock
+        run: npm install --package-lock-only --prefix functions --no-audit --no-fund
+      - name: Upload resolved Functions lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: batch09-functions-package-lock
+          path: functions/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
