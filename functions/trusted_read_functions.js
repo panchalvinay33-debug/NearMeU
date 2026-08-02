@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const {
   mergeChatDocuments,
+  shouldHidePreviewThroughClear,
   shouldScanLegacyChats,
 } = require("./trusted_read_logic");
 
@@ -260,18 +261,36 @@ async function buildChatPreview({
   const unreadCounts = safeMap(data.unreadCounts);
   const readStates = safeMap(data.readStates);
   const currentReadState = safeMap(readStates[uid]);
-  const isUnsent =
-    latestData.isUnsent === true ||
-    data.lastMessageIsUnsent === true ||
-    data.lastMessage === "This message was unsent";
-  const lastMessage = isUnsent
-    ? "This message was unsent"
-    : safeString(data.lastMessage, safeString(latestData.text));
-  const lastMessageTime = data.lastMessageTime || latestData.timestamp;
-  const lastSenderId = safeString(
-    data.lastMessageSenderId,
-    safeString(latestData.senderId),
+  const clearStates = safeMap(data.clearStates);
+  const currentClearState = safeMap(clearStates[uid]);
+  const clearedAtMillis = timestampMillis(currentClearState.clearedAt);
+  const latestMessageTimeMillis = timestampMillis(
+    latestData.timestamp || data.lastMessageTime,
   );
+  const clearedForCurrentUser = shouldHidePreviewThroughClear(
+    latestMessageTimeMillis,
+    clearedAtMillis,
+  );
+
+  const isUnsent =
+    !clearedForCurrentUser &&
+    (latestData.isUnsent === true ||
+      data.lastMessageIsUnsent === true ||
+      data.lastMessage === "This message was unsent");
+  const lastMessage = clearedForCurrentUser
+    ? ""
+    : isUnsent
+      ? "This message was unsent"
+      : safeString(data.lastMessage, safeString(latestData.text));
+  const lastMessageTime = clearedForCurrentUser
+    ? null
+    : data.lastMessageTime || latestData.timestamp;
+  const lastSenderId = clearedForCurrentUser
+    ? ""
+    : safeString(
+        data.lastMessageSenderId,
+        safeString(latestData.senderId),
+      );
 
   return {
     chatId: chatDocument.id,
@@ -283,17 +302,23 @@ async function buildChatPreview({
       typeof otherData.photoUrl === "string" ? otherData.photoUrl : null,
     lastMessage,
     lastMessageTimeMillis: timestampMillis(lastMessageTime),
-    messageType: safeString(
-      latestData.type,
-      safeString(data.lastMessageType, "text"),
-    ),
+    messageType: clearedForCurrentUser
+      ? "text"
+      : safeString(
+          latestData.type,
+          safeString(data.lastMessageType, "text"),
+        ),
     isUnsent,
     lastMessageSenderId: lastSenderId || null,
     lastMessageSeen:
-      typeof latestData.isSeen === "boolean" ? latestData.isSeen : null,
-    unreadCount: Number.isInteger(unreadCounts[uid])
-      ? unreadCounts[uid]
-      : safeInteger(currentReadState.unreadCount, 0),
+      clearedForCurrentUser || typeof latestData.isSeen !== "boolean"
+        ? null
+        : latestData.isSeen,
+    unreadCount: clearedForCurrentUser
+      ? 0
+      : Number.isInteger(unreadCounts[uid])
+        ? unreadCounts[uid]
+        : safeInteger(currentReadState.unreadCount, 0),
     isOtherUserOnline: otherData.isOnline === true,
   };
 }
