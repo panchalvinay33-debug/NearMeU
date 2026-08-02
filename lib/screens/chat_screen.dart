@@ -13,6 +13,7 @@ import 'package:record/record.dart';
 
 import '../models/app_user.dart';
 import '../models/message_model.dart';
+import '../services/audio_call_service.dart';
 import '../services/chat_service.dart';
 import '../services/local_chat_store.dart';
 import '../services/private_media_service.dart';
@@ -25,6 +26,7 @@ import '../widgets/chat/composer.dart';
 import '../widgets/chat/date_chip.dart';
 import '../widgets/chat/message_bubble.dart';
 import '../widgets/chat/reply_preview.dart';
+import 'audio_call_screen.dart';
 import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -58,6 +60,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     region: 'asia-south1',
   );
   final UserService _userService = UserService();
+  final AudioCallService _audioCallService = AudioCallService();
   final AudioRecorder _recorder = AudioRecorder();
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
@@ -72,6 +75,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isRecordingVoice = false;
   bool _isAcknowledgingRead = false;
   bool _isClearingChat = false;
+  bool _isStartingAudioCall = false;
   Duration _recordingDuration = Duration.zero;
   Timer? _readAcknowledgementTimer;
   Timer? _recordingTimer;
@@ -865,6 +869,32 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _startAudioCall() async {
+    if (_isBlocked || _checkingBlock || _isStartingAudioCall) return;
+    setState(() => _isStartingAudioCall = true);
+    try {
+      final session = await _audioCallService.startCall(widget.otherUserId);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => AudioCallScreen.outgoing(session: session),
+        ),
+      );
+    } on AudioCallException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start audio call.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isStartingAudioCall = false);
+    }
+  }
+
   Future<void> _clearChat() async {
     final user = currentUser;
     if (user == null || _isClearingChat) return;
@@ -1032,6 +1062,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   if (_isRecordingVoice) await _cancelVoiceRecording();
                   if (context.mounted) Navigator.pop(context);
                 },
+                onProfile: () => unawaited(_openOtherUserProfile()),
+                onAudioCall: _isBlocked || _checkingBlock
+                    ? null
+                    : () => unawaited(_startAudioCall()),
+                audioCallLoading: _isStartingAudioCall,
                 onMenu: _isClearingChat ? null : _showChatMenu,
               );
             },
