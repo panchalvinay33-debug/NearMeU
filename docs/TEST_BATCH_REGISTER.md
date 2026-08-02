@@ -1,8 +1,8 @@
 # NearMeU Test Batch Register
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
-Physical acceptance requires a signed artifact, checksum, device evidence and owner decision.
+Physical acceptance requires a signed artifact, checksum, device evidence and owner decision. Deferred evidence must remain explicitly marked as deferred and must never be rewritten as PASS.
 
 ## Batch table
 
@@ -13,67 +13,54 @@ Physical acceptance requires a signed artifact, checksum, device evidence and ow
 | 02 | Photo/video/voice-message reliability | ACCEPTED | Superseded |
 | 03 | Local-first persistence and seven-day delivery cloud | ACCEPTED | Superseded |
 | 04 | Clear Chat and deletion semantics | ACCEPTED | Superseded |
-| 05 | Identity, account close and reactivation | ACCEPTED | Superseded by Batch 06 |
-| 06 | Premium entitlement foundation | ACCEPTED | Promoted official base |
-| 07 | Six-month automatic Premium backup and restore | PLANNED NEXT | Starts after Batch 06 promotion docs merge |
-| 08 | Profile sharing and deep-link recovery | PLANNED | Later |
+| 05 | Identity, account close and reactivation | ACCEPTED | Superseded |
+| 06 | Premium entitlement foundation | ACCEPTED | Superseded by Batch 07 |
+| 07 | Six-month automatic Premium backup and restore | ACCEPTED | Promote after docs merge |
+| 08 | Profile sharing and deep-link recovery | PLANNED NEXT | Starts after Batch 07 promotion/local sync |
 | 09 | Agora audio calling | PLANNED | Later |
 | 10 | Agora video calling | PLANNED | Later |
 | 11 | Owner-only Premium administration | PLANNED | Later |
 | 12 | Full regression and Play Store readiness | PLANNED | Release-readiness gate |
 
-## Batch 05 acceptance record
+## Batch 07 acceptance record
 
 ```text
-Batch ID: 05
+Batch ID: 07
+Title: Six-month Premium backup and restore
 Status: ACCEPTED
-Tested runtime commit: d2868b97dc931a49f625f4711db4b555fecd34ec
-Pull request: #94
-Merged main runtime commit: 44143f612cbf8b7adf6d591abe74aac2c6397704
-Final promoted main/recovery commit: 3b749c8d7a320b71446245f99c694fdf85d9ccc4
-Version: 1.0.8+9
-Owner decision: ACCEPTED on 2026-08-01
-```
-
-## Batch 06 acceptance record
-
-```text
-Batch ID: 06
-Title: Premium entitlement foundation
-Status: ACCEPTED
-Base: 3b749c8d7a320b71446245f99c694fdf85d9ccc4
-Tested runtime commit: 52fe6a52ad117e9eccb922e535b9d6752af7e695
-Acceptance evidence head: a626a501db3b1d24573f6002087b2f0d88b16ce3
-Pull request: #96
-Merged main runtime commit: 2eea2d3fc0583ace77526bae9a918c940e470d24
-Version: 1.0.9+10
+Base: 87cdded675716a761372d0b7064d13ec3a8e40f8
+Tested runtime commit: 5ae058122d927c7e35257fb80ca5fa879f14b784
+Pull request: #98
+Merged main runtime commit: db48338e6528b61e1e486d6d158c9d62e641c977
+Version: 1.0.10+11
 Android package: com.nearmeu.nearmeu
-Build #40 / run 30706204824: PASS
-Quality #439 / run 30706204828: PASS
-Acceptance-head Build #44 / run 30709123869: PASS
-Acceptance-head Quality #443 / run 30709123867: PASS
-Recoverable artifact ID: 8820525497
-Recoverable artifact digest: sha256:7a6023c00bc328438efa4135f411286ae98c39485ff2c35f4385697eb78ea4e7
-Tested signed debug APK SHA-256: 2df1a743c313ec8b90b73d52677e2de2360b02c3858e1f9dbd1735c1534a016f
-Signed release artifact ID: 8820623151
-Signed release artifact digest: sha256:0998f97e18470ba2602c5dd84ae173c560f31b86c55f832e1af43200e63af65c
-Signed release APK SHA-256: 4aac231c92283884cc8af1a5d88ad517c29ae716c7e541d9aa6a8be85d9f4b72
-Production getMyPremiumEntitlement deployment: PASS
-Production sendPrivateMediaMessage update: PASS
-Direct-update/history/media preservation: PASS
-Free text messaging: PASS
-Free outbound voice lock: PASS
-Free outbound photo/video lock: PASS
-Prior received/local media remains accessible: PASS
-Owner decision: ACCEPTED on 2026-08-01
+Build #79 / run 30746260270: PASS
+Quality #480 / run 30746260318: PASS
+Recoverable artifact ID: 8833110504
+Recoverable artifact digest: sha256:75892030fb34647b64b89fd6f1ac3a94b48acac6bf24217eb63b69a5feb5c6fc
+Physically tested signed debug APK SHA-256: 2af784329a1594a761877110c671508b19f8cd1cc2542d9079cc46a7b80025d1
+Signed release artifact ID: 8833182373
+Signed release artifact digest: sha256:4bc19b26851ab9349a578fb9fe64b6d609af16e0ff9da2432194a25106e4b403
+Signed release APK SHA-256: 19a100dcfa64dc00bb71e918452d8c70d902d2b42ced8e72e6ef04eef5568442
+Direct update continuity: PASS
+Premium text restore: PASS
+Premium sent photo restore: PASS
+Clear Chat non-resurrection: PASS
+Delete for Me non-resurrection: PASS
+Delete for Everyone / Unsend non-resurrection: PASS
+Cross-account Clear Chat isolation: PASS
+Seven-day delivery-cloud regression: PASS
+Free Premium recovery authorization: BACKEND-ENFORCED PASS
+Receiver media pre/post-download recovery: OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS
+Owner decision: ACCEPTED on 2026-08-02
 ```
 
-Accepted scope includes trusted private Premium entitlement truth, server-side outbound media/voice authorization, visible Free-user locks, stale-token refresh/retry hardening, and preservation of Free text plus incoming/local media. Google Play purchase verification, six-month recovery and owner-admin grant mutation remain later work.
+Accepted Batch 07 scope includes separate per-user Premium recovery, six-calendar-month recorded retention, idempotent encrypted-local restore, Clear Chat cutoff enforcement, Delete-for-Me cleanup, Unsend/Delete-for-Everyone cleanup, recovery-media isolation, Auth-delete cleanup/retry handling and trusted Premium authorization for restore access.
 
 ## Canonical local workspace
 
-The active owner working copy is `F:\NearMeU`. After every promoted batch it must be synchronized to promoted `main`.
+The active owner working copy is `F:\NearMeU`. After promotion it must be synchronized to promoted `main` before Batch 08 starts.
 
 ## Current gate
 
-Batch 06 runtime and acceptance are complete. Final documentation PR merge and recovery-branch fast-forward complete the promotion; Batch 07 is next.
+Batch 07 runtime acceptance is complete. Remaining closeout work is documentation PR merge, recovery-branch promotion and canonical local workspace sync. Batch 08 must not start before those complete.
