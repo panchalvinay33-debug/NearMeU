@@ -19,6 +19,7 @@ import 'login_screen.dart';
 import 'nearby_screen.dart';
 import 'notification_settings_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'profile_sharing_screen.dart';
 import 'terms_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -236,6 +237,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: 'Update your profile info',
                       onTap: () =>
                           _open(const EditProfileScreen(), reloadUser: true),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.share_rounded,
+                      title: 'Share My Profile',
+                      subtitle: 'Manage your private, revocable NearMeU profile link',
+                      onTap: () => _open(const ProfileSharingScreen()),
                     ),
                   ],
                 ),
