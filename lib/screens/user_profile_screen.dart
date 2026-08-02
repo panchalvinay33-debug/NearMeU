@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
+import '../services/audio_call_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/user_avatar.dart';
+import 'audio_call_screen.dart';
 import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -17,11 +22,13 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final UserService _userService = UserService();
+  final AudioCallService _audioCallService = AudioCallService();
 
   bool _isLoadingBlockState = true;
   bool _isBlockedEitherWay = false;
   bool _blockedByMe = false;
   bool _actionLoading = false;
+  bool _callLoading = false;
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
   AppUser get user => widget.user;
@@ -149,13 +156,40 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       return;
     }
 
-    Navigator.push(
+    await Navigator.push<void>(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) =>
             ChatScreen(otherUserId: user.uid, otherUserName: displayName),
       ),
     );
+  }
+
+  Future<void> _startAudioCall() async {
+    if (currentUser == null || _isBlockedEitherWay || _callLoading) return;
+    setState(() => _callLoading = true);
+    try {
+      final session = await _audioCallService.startCall(user.uid);
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => AudioCallScreen.outgoing(session: session),
+        ),
+      );
+    } on AudioCallException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start audio call.')),
+      );
+    } finally {
+      if (mounted) setState(() => _callLoading = false);
+    }
   }
 
   Future<void> _blockUser() async {
@@ -284,16 +318,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
 
-    final chatEnabled = !_isBlockedEitherWay;
+    final interactionEnabled = !_isBlockedEitherWay;
 
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: chatEnabled ? () => _openChat(displayName) : null,
+            onPressed: interactionEnabled ? () => _openChat(displayName) : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: chatEnabled
+              backgroundColor: interactionEnabled
                   ? AppColors.primary
                   : Colors.grey.shade800,
               foregroundColor: AppColors.textPrimary,
@@ -306,8 +340,43 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             icon: const Icon(Icons.chat_bubble_outline),
             label: Text(
-              chatEnabled ? 'Chat Now' : 'Chat unavailable',
+              interactionEnabled ? 'Chat Now' : 'Chat unavailable',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: interactionEnabled && !_callLoading
+                ? () => unawaited(_startAudioCall())
+                : null,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: BorderSide(
+                color: interactionEnabled
+                    ? AppColors.primary
+                    : Colors.grey.shade700,
+              ),
+              minimumSize: const Size.fromHeight(58),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+            ),
+            icon: _callLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : const Icon(Icons.call_rounded),
+            label: const Text(
+              'Audio Call',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -359,8 +428,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             child: Text(
               _blockedByMe
-                  ? 'This user is blocked. Nearby/chat access restricted.'
-                  : 'This user is unavailable for chat.',
+                  ? 'This user is blocked. Nearby/chat/call access restricted.'
+                  : 'This user is unavailable for chat or calls.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.textSecondary,
