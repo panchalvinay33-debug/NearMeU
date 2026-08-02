@@ -21,8 +21,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   bool _isLoadingBlockState = true;
   bool _isBlockedEitherWay = false;
-  bool _blockedByMe = false;
-  bool _actionLoading = false;
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
   AppUser get user => widget.user;
@@ -43,11 +41,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
 
     try {
-      final blockedByMe = await _userService.isUserBlockedByMe(
-        currentUserId: currentUser!.uid,
-        targetUserId: user.uid,
-      );
-
       final blockedEitherWay = await _userService.isBlockedEitherWay(
         currentUserId: currentUser!.uid,
         otherUserId: user.uid,
@@ -55,7 +48,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (!mounted) return;
       setState(() {
-        _blockedByMe = blockedByMe;
         _isBlockedEitherWay = blockedEitherWay;
         _isLoadingBlockState = false;
       });
@@ -159,124 +151,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Future<void> _blockUser() async {
-    if (currentUser == null || _actionLoading) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'Block user?',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: const Text(
-            'Blocked user nearby list aur chat access se hide ho jayega.',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: AppColors.textPrimary,
-              ),
-              child: const Text('Block'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm != true) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
-    try {
-      await _userService.blockUser(
-        currentUserId: currentUser!.uid,
-        targetUserId: user.uid,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _blockedByMe = true;
-        _isBlockedEitherWay = true;
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User blocked')));
-
-      Navigator.pop(context, true);
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to block user')));
-    }
-  }
-
-  Future<void> _unblockUser() async {
-    if (currentUser == null || _actionLoading) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
-    try {
-      await _userService.unblockUser(
-        currentUserId: currentUser!.uid,
-        targetUserId: user.uid,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _blockedByMe = false;
-        _isBlockedEitherWay = false;
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User unblocked')));
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to unblock user')));
-    }
-  }
-
   Widget _buildActionButtons(String displayName) {
     if (_isLoadingBlockState) {
       return const Padding(
@@ -312,43 +186,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _actionLoading
-                ? null
-                : _blockedByMe
-                ? _unblockUser
-                : _blockUser,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _blockedByMe
-                  ? Colors.greenAccent
-                  : Colors.redAccent,
-              side: BorderSide(
-                color: _blockedByMe ? Colors.greenAccent : Colors.redAccent,
-              ),
-              minimumSize: const Size.fromHeight(58),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-            ),
-            icon: _actionLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textPrimary,
-                    ),
-                  )
-                : Icon(_blockedByMe ? Icons.lock_open : Icons.block),
-            label: Text(
-              _blockedByMe ? 'Unblock User' : 'Block User',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
         if (_isBlockedEitherWay) ...[
           const SizedBox(height: 14),
           Container(
@@ -358,12 +195,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Text(
-              _blockedByMe
-                  ? 'This user is blocked. Nearby/chat/call access restricted.'
-                  : 'This user is unavailable for chat or calls.',
+            child: const Text(
+              'This user is unavailable for chat or calls.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
               ),
