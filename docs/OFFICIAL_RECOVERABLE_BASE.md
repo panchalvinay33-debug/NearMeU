@@ -1,6 +1,6 @@
 # NearMeU Official Recoverable Base
 
-Last promoted: pending final Batch 07 documentation merge on 2026-08-02
+Last promoted: 2026-08-02
 
 ## Current accepted base
 
@@ -37,7 +37,7 @@ Known evidence gap: receiver-media pre-download/post-download recovery eligibili
 
 Owner workspace: `F:\NearMeU`.
 
-After the final documentation merge and recovery-branch promotion, synchronize this workspace to promoted `main` before Batch 08 starts.
+After recovery-branch promotion, synchronize this workspace to promoted `main` before Batch 08 starts.
 
 ## Recovery procedure
 
@@ -81,4 +81,4 @@ Install only an APK signed by the permanent matching certificate and use update 
 
 Batch 08 — profile sharing and deep-link recovery.
 
-Batch 07 is closed after the final docs merge, recovery-branch fast-forward and `F:\NearMeU` sync complete.
+Batch 07 is closed after recovery-branch fast-forward and `F:\NearMeU` sync complete.
