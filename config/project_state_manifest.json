@@ -1,22 +1,22 @@
 {
-  "schemaVersion": 16,
+  "schemaVersion": 17,
   "project": "NearMeU",
   "repository": "panchalvinay33-debug/NearMeU",
   "lastUpdated": "2026-08-02",
   "canonicalLocalWorkspace": "F:\\NearMeU",
   "developmentState": {
     "sourceBranch": "main",
-    "activeBatch": null,
-    "activeBatchBranch": null,
-    "activeBatchVersion": null,
-    "nextBatch": "09",
-    "nextBatchTitle": "agora-audio-calling",
-    "runtimeWorkMayStartFromAcceptedBase": false
+    "activeBatch": "09",
+    "activeBatchBranch": "batch/09-agora-audio-calling",
+    "activeBatchVersion": "1.0.12+13",
+    "nextBatch": "10",
+    "nextBatchTitle": "agora-video-calling",
+    "runtimeWorkMayStartFromAcceptedBase": true
   },
   "acceptedRuntimeBase": {
     "name": "official-recoverable-base",
     "recoveryBranch": "stable/official-recoverable-base",
-    "finalDocumentedRecoverySha": "pending-batch-08-closeout-docs-merge",
+    "finalDocumentedRecoverySha": "7f8b0c1f147a8de420ac54fa25c215fc22a7b299",
     "runtimeMergeSha": "f83a6e92457f728f177dc062dcc9171c141a9217",
     "testedRuntimeCommitSha": "fdc9b22322a96b793fff3058b1ca990f656e80a1",
     "pullRequest": 100,
@@ -81,7 +81,11 @@
     "profileSharingAndroidHttpsDeepLinks": "accepted-batch-08",
     "profileSharingCustomSchemeFallback": "implemented-batch-08-not-separately-physically-captured",
     "profileSharingWebPreview": "accepted-batch-08",
-    "voiceVideoCalling": "agora-selected-planned-batches-09-10",
+    "audioCalling": "batch-09-in-progress",
+    "audioCallingPremiumInitiation": "batch-09-in-progress",
+    "audioCallingFreePremiumReceive": "batch-09-in-progress",
+    "audioCallingTrustedAgoraTokens": "batch-09-in-progress",
+    "videoCalling": "planned-batch-10",
     "ownerPremiumAdministration": "planned-batch-11",
     "playStoreReadiness": "planned-batch-12",
     "iosRelease": "deferred"
@@ -96,8 +100,8 @@
     {"id":"06","status":"accepted"},
     {"id":"07","status":"accepted"},
     {"id":"08","status":"accepted"},
-    {"id":"09","status":"planned-next"},
-    {"id":"10","status":"planned"},
+    {"id":"09","status":"in-progress"},
+    {"id":"10","status":"planned-next"},
     {"id":"11","status":"planned"},
     {"id":"12","status":"planned"}
   ]
