@@ -15,7 +15,6 @@ const {
   isTerminalCallStatus,
   normalizeUid,
   participantRole,
-  pointerAvailable,
   safeDisplayName,
   validCallId,
 } = require("./audio_call_logic");
@@ -64,7 +63,10 @@ async function requireActiveProfile(uid) {
   const snapshot = await db.collection("users").doc(uid).get();
   const data = snapshot.exists ? snapshot.data() : null;
   if (!data || data.isSuspended === true || !safeDisplayName(data.nickname)) {
-    throw new HttpsError("failed-precondition", "An active NearMeU profile is required.");
+    throw new HttpsError(
+      "failed-precondition",
+      "An active NearMeU profile is required.",
+    );
   }
   return snapshot;
 }
@@ -134,12 +136,24 @@ function publicCallState(callId, data, viewerUid, includeRtcAccess = false) {
   return response;
 }
 
-async function deleteMatchingPointers(transaction, data, callId) {
+function callStillBlocks(data, nowMillis) {
+  if (!data || isTerminalCallStatus(data.status)) return false;
+  if (data.status === "ringing") {
+    return Number(data.ringExpiresAtMillis || 0) > nowMillis;
+  }
+  return Number(data.expiresAtMillis || 0) > nowMillis;
+}
+
+async function readMatchingPointers(transaction, data) {
   const refs = [activePointerRef(data.callerUid), activePointerRef(data.calleeUid)];
   const snapshots = await Promise.all(refs.map((ref) => transaction.get(ref)));
-  snapshots.forEach((snapshot, index) => {
+  return { refs, snapshots };
+}
+
+function deleteMatchingPointerSnapshots(transaction, pointerReads, callId) {
+  pointerReads.snapshots.forEach((snapshot, index) => {
     if (snapshot.exists && snapshot.get("callId") === callId) {
-      transaction.delete(refs[index]);
+      transaction.delete(pointerReads.refs[index]);
     }
   });
 }
@@ -150,7 +164,13 @@ async function finishCall(callId, status, endedByUid = null) {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return null;
     const data = snapshot.data();
-    if (isTerminalCallStatus(data.status)) return data;
+    const pointerReads = await readMatchingPointers(transaction, data);
+
+    if (isTerminalCallStatus(data.status)) {
+      deleteMatchingPointerSnapshots(transaction, pointerReads, callId);
+      return data;
+    }
+
     const nowMillis = Date.now();
     transaction.update(ref, {
       status,
@@ -159,7 +179,7 @@ async function finishCall(callId, status, endedByUid = null) {
       endedAtMillis: nowMillis,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    await deleteMatchingPointers(transaction, data, callId);
+    deleteMatchingPointerSnapshots(transaction, pointerReads, callId);
     return { ...data, status, endedByUid, endedAtMillis: nowMillis };
   });
 }
@@ -213,14 +233,18 @@ async function sendIncomingCallPush(callId, callerName, calleeUid) {
     response.responses.forEach((item, index) => {
       if (item.success) return;
       const code = item.error && item.error.code;
-      if (code !== "messaging/registration-token-not-registered" &&
-          code !== "messaging/invalid-registration-token") {
+      if (
+        code !== "messaging/registration-token-not-registered" &&
+        code !== "messaging/invalid-registration-token"
+      ) {
         return;
       }
       const invalid = chunk[index];
       if (!invalid) return;
       cleanup.delete(invalid.snapshot.ref);
-      cleanup.delete(db.collection("deviceTokenOwners").doc(tokenDocumentId(invalid.token)));
+      cleanup.delete(
+        db.collection("deviceTokenOwners").doc(tokenDocumentId(invalid.token)),
+      );
       cleanupWrites += 2;
     });
     if (cleanupWrites > 0) await cleanup.commit();
@@ -239,7 +263,10 @@ exports.startAudioCall = onCall(
     const callerUid = requireAuthenticatedUid(request);
     const calleeUid = normalizeUid(request.data && request.data.calleeUid);
     if (!calleeUid || calleeUid === callerUid) {
-      throw new HttpsError("invalid-argument", "Choose another NearMeU user to call.");
+      throw new HttpsError(
+        "invalid-argument",
+        "Choose another NearMeU user to call.",
+      );
     }
 
     const [callerProfile, calleeProfile, entitlement, blocked] = await Promise.all([
@@ -249,7 +276,9 @@ exports.startAudioCall = onCall(
       blockedEitherWay(callerUid, calleeUid),
     ]);
     requirePremiumEntitlement(entitlement, "audio-call-initiation");
-    if (blocked) throw new HttpsError("not-found", "This user is unavailable for calls.");
+    if (blocked) {
+      throw new HttpsError("not-found", "This user is unavailable for calls.");
+    }
 
     const callId = createCallId();
     const channelName = channelNameForCall(callId);
@@ -267,9 +296,60 @@ exports.startAudioCall = onCall(
         transaction.get(callerPointer),
         transaction.get(calleePointer),
       ]);
-      if (!pointerAvailable(callerActive.exists ? callerActive.data() : null, nowMillis) ||
-          !pointerAvailable(calleeActive.exists ? calleeActive.data() : null, nowMillis)) {
-        throw new HttpsError("resource-exhausted", "One of you is already in another call.");
+
+      const pointerEntries = [
+        { ref: callerPointer, snapshot: callerActive },
+        { ref: calleePointer, snapshot: calleeActive },
+      ];
+      const referencedCalls = new Map();
+
+      for (const entry of pointerEntries) {
+        if (!entry.snapshot.exists) continue;
+        const oldCallId = entry.snapshot.get("callId");
+        if (!validCallId(oldCallId) || referencedCalls.has(oldCallId)) continue;
+        referencedCalls.set(oldCallId, await transaction.get(callRef(oldCallId)));
+      }
+
+      for (const entry of pointerEntries) {
+        if (!entry.snapshot.exists) continue;
+        const pointerData = entry.snapshot.data();
+        const oldCallId = pointerData.callId;
+        const pointerExpiresAt = Number(pointerData.expiresAtMillis || 0);
+        const oldCallSnapshot = validCallId(oldCallId)
+          ? referencedCalls.get(oldCallId)
+          : null;
+        const oldCallData = oldCallSnapshot && oldCallSnapshot.exists
+          ? oldCallSnapshot.data()
+          : null;
+        const stale =
+          !validCallId(oldCallId) ||
+          pointerExpiresAt <= nowMillis ||
+          !oldCallData ||
+          !callStillBlocks(oldCallData, nowMillis);
+
+        if (stale) {
+          transaction.delete(entry.ref);
+          if (
+            oldCallSnapshot &&
+            oldCallSnapshot.exists &&
+            oldCallData &&
+            !isTerminalCallStatus(oldCallData.status) &&
+            !callStillBlocks(oldCallData, nowMillis)
+          ) {
+            transaction.update(oldCallSnapshot.ref, {
+              status: oldCallData.status === "ringing" ? "missed" : "expired",
+              endedAt: admin.firestore.FieldValue.serverTimestamp(),
+              endedAtMillis: nowMillis,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+          continue;
+        }
+
+        throw new HttpsError(
+          "resource-exhausted",
+          "One of you is already in another call.",
+        );
       }
 
       const callData = {
@@ -289,7 +369,11 @@ exports.startAudioCall = onCall(
         expiresAtMillis,
       };
       transaction.create(ref, callData);
-      const pointerData = { callId, expiresAtMillis, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      const pointerData = {
+        callId,
+        expiresAtMillis,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
       transaction.set(callerPointer, pointerData);
       transaction.set(calleePointer, pointerData);
     });
@@ -320,10 +404,14 @@ exports.getAudioCall = onCall(
     const uid = requireAuthenticatedUid(request);
     const callId = requireCallId(request);
     const snapshot = await callRef(callId).get();
-    if (!snapshot.exists) throw new HttpsError("not-found", "Audio call is unavailable.");
+    if (!snapshot.exists) {
+      throw new HttpsError("not-found", "Audio call is unavailable.");
+    }
     const data = snapshot.data();
     const role = participantRole(data, uid);
-    if (!role) throw new HttpsError("permission-denied", "Audio call is unavailable.");
+    if (!role) {
+      throw new HttpsError("permission-denied", "Audio call is unavailable.");
+    }
 
     const otherUid = role === "caller" ? data.calleeUid : data.callerUid;
     const [viewerProfile, otherProfile, blocked] = await Promise.all([
@@ -336,16 +424,24 @@ exports.getAudioCall = onCall(
       throw new HttpsError("not-found", "Audio call is unavailable.");
     }
 
-    if (data.status === "ringing" && Date.now() >= Number(data.ringExpiresAtMillis || 0)) {
+    if (
+      data.status === "ringing" &&
+      Date.now() >= Number(data.ringExpiresAtMillis || 0)
+    ) {
       const finished = await finishCall(callId, "missed", null);
       return publicCallState(callId, finished, uid, false);
     }
-    if (!isTerminalCallStatus(data.status) && Date.now() >= Number(data.expiresAtMillis || 0)) {
+    if (
+      !isTerminalCallStatus(data.status) &&
+      Date.now() >= Number(data.expiresAtMillis || 0)
+    ) {
       const finished = await finishCall(callId, "expired", null);
       return publicCallState(callId, finished, uid, false);
     }
 
-    const includeRtc = data.status === "accepted" || (role === "caller" && data.status === "ringing");
+    const includeRtc =
+      data.status === "accepted" ||
+      (role === "caller" && data.status === "ringing");
     return publicCallState(callId, data, uid, includeRtc);
   },
 );
@@ -365,12 +461,19 @@ exports.respondAudioCall = onCall(
 
     const updated = await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
-      if (!snapshot.exists) throw new HttpsError("not-found", "Audio call is unavailable.");
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Audio call is unavailable.");
+      }
       const data = snapshot.data();
       if (data.calleeUid !== uid) {
-        throw new HttpsError("permission-denied", "Only the receiver can answer this call.");
+        throw new HttpsError(
+          "permission-denied",
+          "Only the receiver can answer this call.",
+        );
       }
       if (data.status !== "ringing") return data;
+
+      const pointerReads = await readMatchingPointers(transaction, data);
       const nowMillis = Date.now();
       if (nowMillis >= Number(data.ringExpiresAtMillis || 0)) {
         transaction.update(ref, {
@@ -379,7 +482,7 @@ exports.respondAudioCall = onCall(
           endedAtMillis: nowMillis,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        await deleteMatchingPointers(transaction, data, callId);
+        deleteMatchingPointerSnapshots(transaction, pointerReads, callId);
         return { ...data, status: "missed", endedAtMillis: nowMillis };
       }
       if (!accept) {
@@ -390,9 +493,15 @@ exports.respondAudioCall = onCall(
           endedAtMillis: nowMillis,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        await deleteMatchingPointers(transaction, data, callId);
-        return { ...data, status: "declined", endedByUid: uid, endedAtMillis: nowMillis };
+        deleteMatchingPointerSnapshots(transaction, pointerReads, callId);
+        return {
+          ...data,
+          status: "declined",
+          endedByUid: uid,
+          endedAtMillis: nowMillis,
+        };
       }
+
       transaction.update(ref, {
         status: "accepted",
         acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -409,7 +518,12 @@ exports.respondAudioCall = onCall(
         throw new HttpsError("not-found", "Audio call is unavailable.");
       }
     }
-    return publicCallState(callId, updated, uid, updated.status === "accepted");
+    return publicCallState(
+      callId,
+      updated,
+      uid,
+      updated.status === "accepted",
+    );
   },
 );
 
@@ -424,9 +538,11 @@ exports.endAudioCall = onCall(
     if (!participantRole(data, uid)) {
       throw new HttpsError("permission-denied", "Audio call is unavailable.");
     }
-    const status = data.status === "ringing" && data.callerUid === uid ? "ended" : "ended";
-    const finished = await finishCall(callId, status, uid);
-    return { success: true, status: finished ? finished.status : status };
+    const finished = await finishCall(callId, "ended", uid);
+    return {
+      success: true,
+      status: finished ? finished.status : "ended",
+    };
   },
 );
 
@@ -447,8 +563,15 @@ exports.expireStaleAudioCalls = onSchedule(
       .get();
     for (const document of snapshot.docs) {
       const data = document.data();
-      if (isTerminalCallStatus(data.status)) continue;
-      await finishCall(document.id, data.status === "ringing" ? "missed" : "expired", null);
+      if (isTerminalCallStatus(data.status)) {
+        await finishCall(document.id, data.status, null);
+        continue;
+      }
+      await finishCall(
+        document.id,
+        data.status === "ringing" ? "missed" : "expired",
+        null,
+      );
     }
   },
 );
