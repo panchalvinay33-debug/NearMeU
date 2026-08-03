@@ -93,21 +93,21 @@ function agoraCredentials() {
 function issueRtcAccess(uid, channelName) {
   const { appId, appCertificate } = agoraCredentials();
   const agoraUid = agoraUidFromFirebaseUid(uid);
-  const privilegeExpireTs = Math.floor(Date.now() / 1000) + RTC_TOKEN_SECONDS;
   const token = RtcTokenBuilder.buildTokenWithUid(
     appId,
     appCertificate,
     channelName,
     agoraUid,
     RtcRole.PUBLISHER,
-    privilegeExpireTs,
+    RTC_TOKEN_SECONDS,
+    RTC_TOKEN_SECONDS,
   );
   return {
     appId,
     channelName,
     agoraUid,
     token,
-    tokenExpiresAtMillis: privilegeExpireTs * 1000,
+    tokenExpiresAtMillis: Date.now() + RTC_TOKEN_SECONDS * 1000,
   };
 }
 
