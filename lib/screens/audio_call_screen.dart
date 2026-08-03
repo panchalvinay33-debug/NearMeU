@@ -39,6 +39,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
   RtcEngineEventHandler? _handler;
   Timer? _pollTimer;
   Timer? _durationTimer;
+  Timer? _joinWatchdog;
   bool _loading = true;
   bool _answering = false;
   bool _ending = false;
@@ -60,7 +61,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   Future<void> _initialize() async {
     try {
-      var session = _session ?? await _service.getCall(widget.callId);
+      final session = _session ?? await _service.getCall(widget.callId);
       if (!mounted) return;
       setState(() {
         _session = session;
@@ -100,7 +101,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
       setState(() => _session = latest);
 
       if (latest.isTerminal) {
-        await _leaveAgora();
+        unawaited(_leaveAgora());
         _scheduleClose();
         return;
       }
@@ -143,13 +144,14 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     } catch (_) {
       // A simultaneous caller cancel or timeout is equivalent to a decline here.
     } finally {
-      if (mounted) Navigator.of(context).maybePop();
+      if (mounted) Navigator.of(context).pop();
     }
   }
 
   Future<void> _joinAgora(AudioCallSession session) async {
     if (_engine != null || _engineJoining || !session.hasRtcAccess) return;
     _engineJoining = true;
+    if (mounted) setState(() => _error = null);
     try {
       final permission = await _permissionRecorder.hasPermission();
       if (!permission) {
@@ -168,27 +170,31 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
       final handler = RtcEngineEventHandler(
         onJoinChannelSuccess: (connection, elapsed) {
-          if (!mounted) return;
+          _joinWatchdog?.cancel();
+          if (!mounted || _ending) return;
           setState(() => _localJoined = true);
         },
         onUserJoined: (connection, remoteUid, elapsed) {
-          if (!mounted) return;
+          _joinWatchdog?.cancel();
+          if (!mounted || _ending) return;
           setState(() => _remoteJoined = true);
           _startDurationTimer();
         },
         onUserOffline: (connection, remoteUid, reason) {
-          if (!mounted) return;
+          if (!mounted || _ending) return;
           setState(() => _remoteJoined = false);
           unawaited(_endCall(remoteEnded: true));
         },
         onConnectionStateChanged: (connection, state, reason) {
-          if (!mounted) return;
+          if (!mounted || _ending) return;
           if (state == ConnectionStateType.connectionStateFailed) {
+            _joinWatchdog?.cancel();
             setState(() => _error = 'Call connection failed. Please try again.');
           }
         },
         onError: (errorCode, message) {
-          if (!mounted) return;
+          if (!mounted || _ending) return;
+          _joinWatchdog?.cancel();
           setState(
             () => _error = message.trim().isNotEmpty
                 ? message.trim()
@@ -197,10 +203,26 @@ class _AudioCallScreenState extends State<AudioCallScreen>
         },
       );
       engine.registerEventHandler(handler);
+
+      // Own the engine before joinChannel so call controls and End are never
+      // left waiting for a native join operation to complete.
+      _engine = engine;
+      _handler = handler;
+      if (mounted) setState(() {});
+
       await engine.enableAudio();
       await engine.disableVideo();
       await engine.setDefaultAudioRouteToSpeakerphone(true);
       await engine.setEnableSpeakerphone(true);
+
+      _joinWatchdog?.cancel();
+      _joinWatchdog = Timer(const Duration(seconds: 12), () {
+        if (!mounted || _ending || _localJoined) return;
+        setState(
+          () => _error = 'Audio connection timed out. End the call and try again.',
+        );
+      });
+
       await engine.joinChannel(
         token: session.token!,
         channelId: session.channelName!,
@@ -215,11 +237,10 @@ class _AudioCallScreenState extends State<AudioCallScreen>
           enableAudioRecordingOrPlayout: true,
         ),
       );
-      _engine = engine;
-      _handler = handler;
     } catch (error) {
+      _joinWatchdog?.cancel();
       await _leaveAgora();
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted && !_ending) setState(() => _error = error.toString());
     } finally {
       _engineJoining = false;
     }
@@ -227,18 +248,26 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   Future<void> _toggleMute() async {
     final engine = _engine;
-    if (engine == null) return;
+    if (engine == null || _ending) return;
     final next = !_muted;
-    await engine.muteLocalAudioStream(next);
-    if (mounted) setState(() => _muted = next);
+    try {
+      await engine.muteLocalAudioStream(next);
+      if (mounted) setState(() => _muted = next);
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Mute control failed. Please try again.');
+    }
   }
 
   Future<void> _toggleSpeaker() async {
     final engine = _engine;
-    if (engine == null) return;
+    if (engine == null || _ending) return;
     final next = !_speakerOn;
-    await engine.setEnableSpeakerphone(next);
-    if (mounted) setState(() => _speakerOn = next);
+    try {
+      await engine.setEnableSpeakerphone(next);
+      if (mounted) setState(() => _speakerOn = next);
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Speaker control failed. Please try again.');
+    }
   }
 
   void _startDurationTimer() {
@@ -280,16 +309,28 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     _ending = true;
     _pollTimer?.cancel();
     _durationTimer?.cancel();
-    await _leaveAgora();
+    _joinWatchdog?.cancel();
+
+    // Leave the screen immediately. Native Agora release and the trusted
+    // backend end-call request continue independently so the End control can
+    // never appear frozen to the user.
+    if (mounted) Navigator.of(context).pop();
+    unawaited(_leaveAgora());
     if (!remoteEnded) {
-      try {
-        await _service.endCall(widget.callId);
-      } catch (_) {}
+      unawaited(_endBackendCall());
     }
-    if (mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<void> _endBackendCall() async {
+    try {
+      await _service.endCall(widget.callId);
+    } catch (_) {
+      // The backend also self-heals stale call pointers on future call starts.
+    }
   }
 
   Future<void> _leaveAgora() async {
+    _joinWatchdog?.cancel();
     final engine = _engine;
     _engine = null;
     final handler = _handler;
@@ -297,16 +338,21 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     _localJoined = false;
     _remoteJoined = false;
     if (engine == null) return;
+
     try {
-      await engine.leaveChannel();
+      await engine.leaveChannel().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    try {
       if (handler != null) engine.unregisterEventHandler(handler);
-      await engine.release();
+    } catch (_) {}
+    try {
+      await engine.release().timeout(const Duration(seconds: 2));
     } catch (_) {}
   }
 
   void _scheduleClose() {
     Future<void>.delayed(const Duration(seconds: 2), () {
-      if (mounted) Navigator.of(context).maybePop();
+      if (mounted) Navigator.of(context).pop();
     });
   }
 
@@ -322,6 +368,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _durationTimer?.cancel();
+    _joinWatchdog?.cancel();
     unawaited(_leaveAgora());
     unawaited(_permissionRecorder.dispose());
     super.dispose();
@@ -453,7 +500,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
                         icon: _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
                         label: _muted ? 'Unmute' : 'Mute',
                         active: _muted,
-                        onPressed: _engine == null
+                        onPressed: _engine == null || _ending
                             ? null
                             : () => unawaited(_toggleMute()),
                       ),
@@ -469,7 +516,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
                             : Icons.hearing_rounded,
                         label: 'Speaker',
                         active: _speakerOn,
-                        onPressed: _engine == null
+                        onPressed: _engine == null || _ending
                             ? null
                             : () => unawaited(_toggleSpeaker()),
                       ),
