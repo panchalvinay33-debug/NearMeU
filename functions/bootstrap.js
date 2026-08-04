@@ -28,4 +28,5 @@ module.exports = {
   ...require("./announcement_push_functions.js"),
   ...require("./app_version_functions.js"),
   ...require("./admin_session_functions.js"),
+  ...require("./admin_business_functions.js"),
 };
