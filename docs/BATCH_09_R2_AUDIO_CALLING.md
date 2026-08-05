@@ -1,6 +1,6 @@
 # Batch 09 R2 — Clean Audio Calling Restart
 
-Status: 09-R2-A CONTRACT LOGIC IMPLEMENTED / CI GATE PENDING
+Status: 09-R2-A2 IMPLEMENTED / FRESH CI RETRIGGERED
 
 Base: current `main` at branch creation time.
 
@@ -26,26 +26,28 @@ A physically working audio-call checkpoint was later destabilized while adding c
 ## Current R2-A checkpoint
 
 Implemented without consumer-app changes:
-- fresh call-ID generation and validation;
-- deterministic NearMeU Agora channel naming;
-- deterministic non-zero Agora UID mapping from Firebase UID;
-- exact caller/callee participant-role evaluation;
-- narrow ringing/accepted state transition rules;
-- terminal-state immutability;
-- conservative active-call pointer expiry/reuse rule;
-- bounded safe display-name projection;
-- focused Node contract tests covering the above.
+- fresh isolated `audioCallsR2` and `activeAudioCallsR2` backend collections;
+- Premium-only server-authorized initiation;
+- active-profile, suspension, bidirectional block and overlap checks;
+- ringing / accepted / declined / ended / missed / expired lifecycle;
+- stale active-call cleanup;
+- exact `agora-token` version `2.0.5` with generated lockfile;
+- separate participant-only `getAudioRtcAccessR2` callable;
+- short-lived RTC credentials generated from Firebase Secret Manager values;
+- callee RTC denial before acceptance;
+- terminal, expired, blocked and suspended-call RTC denial;
+- focused Node source/security contract tests;
+- controlled deployment script limited to R2 backend functions.
 
-Not yet added:
-- no Agora package/dependency;
-- no RTC token generation;
-- no deployable audio-call Cloud Function export;
-- no Flutter/Android UI or permission changes;
-- no Nearby/Chats changes;
-- no notification changes;
-- no call-history changes.
+Still intentionally not added:
+- no Flutter/Android calling UI;
+- no Nearby or Chats integration;
+- no incoming-call notification integration;
+- no call history;
+- no mute/speaker extras;
+- no video.
 
-This separation is intentional. Deployable backend work starts only after this contract checkpoint passes CI.
+Quality Gate #577 passed backend, Firestore, Dart analysis and Flutter tests but became abnormally stuck during the debug APK build. A harmless documentation checkpoint retriggers a fresh full Quality Gate; R2-B implementation remains blocked until that new run completes green.
 
 ## Slice plan
 
