@@ -26,6 +26,7 @@ module.exports = {
   ...require("./profile_sharing_functions.js"),
   ...require("./audio_call_functions.js"),
   ...require("./audio_call_ring_cleanup_functions.js"),
+  ...require("./audio_call_history_safe_functions.js"),
   ...require("./announcement_media_functions.js"),
   ...require("./announcement_push_functions.js"),
   ...require("./app_version_functions.js"),
