@@ -34,4 +34,5 @@ module.exports = {
   ...require("./admin_messaging_functions.js"),
   ...require("./audio_call_r2_functions.js"),
   ...require("./audio_call_r2_rtc_functions.js"),
+  ...require("./audio_call_r2_incoming_functions.js"),
 };
