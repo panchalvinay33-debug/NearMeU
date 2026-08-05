@@ -1,0 +1,40 @@
+name: Batch 09 R2 Flutter dependency lock
+
+on:
+  push:
+    branches:
+      - batch/09-r2-audio-calling
+    paths:
+      - .github/workflows/batch09-r2-flutter-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: batch/09-r2-audio-calling
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve exact Flutter dependency lock
+        run: flutter pub get
+      - name: Analyze R2 audio call files
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/services/audio_call_r2_service.dart lib/screens/audio_call_r2_screen.dart lib/screens/user_profile_screen.dart
+      - name: Commit resolved lockfile
+        shell: bash
+        run: |
+          if git diff --quiet -- pubspec.lock; then
+            echo "Flutter lockfile already resolved."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.lock
+          git commit -m "Batch 09 R2-B: lock Agora Flutter dependency"
+          git push origin HEAD:batch/09-r2-audio-calling
