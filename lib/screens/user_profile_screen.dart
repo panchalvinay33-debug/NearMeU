@@ -1,9 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../models/app_user.dart';
+import '../services/audio_call_r2_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/user_avatar.dart';
+import 'audio_call_r2_screen.dart';
 import 'chat_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -17,11 +20,13 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final UserService _userService = UserService();
+  final AudioCallR2Service _audioCallService = AudioCallR2Service();
 
   bool _isLoadingBlockState = true;
   bool _isBlockedEitherWay = false;
   bool _blockedByMe = false;
   bool _actionLoading = false;
+  bool _callLoading = false;
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
   AppUser get user => widget.user;
@@ -35,9 +40,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _loadBlockState() async {
     if (currentUser == null) {
       if (!mounted) return;
-      setState(() {
-        _isLoadingBlockState = false;
-      });
+      setState(() => _isLoadingBlockState = false);
       return;
     }
 
@@ -46,12 +49,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         currentUserId: currentUser!.uid,
         targetUserId: user.uid,
       );
-
       final blockedEitherWay = await _userService.isBlockedEitherWay(
         currentUserId: currentUser!.uid,
         otherUserId: user.uid,
       );
-
       if (!mounted) return;
       setState(() {
         _blockedByMe = blockedByMe;
@@ -60,35 +61,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _isLoadingBlockState = false;
-      });
+      setState(() => _isLoadingBlockState = false);
     }
   }
 
   String _locationText() {
     final parts = <String>[];
-
     if (user.city != null && user.city!.trim().isNotEmpty) {
       parts.add(user.city!.trim());
     }
-
     if (user.state != null &&
         user.state!.trim().isNotEmpty &&
         user.state!.trim() != user.city?.trim()) {
       parts.add(user.state!.trim());
     }
-
-    if (parts.isEmpty) {
-      return 'Location unavailable';
-    }
-
-    return parts.join(', ');
+    return parts.isEmpty ? 'Location unavailable' : parts.join(', ');
   }
 
-  Widget _buildAvatar() {
-    return UserAvatar(user: user, radius: 70);
-  }
+  Widget _buildAvatar() => UserAvatar(user: user, radius: 70);
 
   Widget _infoCard({
     required IconData icon,
@@ -139,140 +129,129 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _openChat(String displayName) async {
     if (currentUser == null) return;
-
     if (_isBlockedEitherWay) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You cannot chat with this user right now.'),
-        ),
+        const SnackBar(content: Text('You cannot chat with this user right now.')),
       );
       return;
     }
-
-    Navigator.push(
+    await Navigator.push<void>(
       context,
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) =>
             ChatScreen(otherUserId: user.uid, otherUserName: displayName),
       ),
     );
   }
 
+  Future<void> _startAudioCall() async {
+    if (currentUser == null || _callLoading || _isBlockedEitherWay) return;
+    setState(() => _callLoading = true);
+    try {
+      final session = await _audioCallService.startCall(user.uid);
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => AudioCallR2Screen.outgoing(session: session),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => _callLoading = false);
+    }
+  }
+
   Future<void> _blockUser() async {
     if (currentUser == null || _actionLoading) return;
-
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Block user?',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
           ),
-          title: const Text(
-            'Block user?',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
+        ),
+        content: const Text(
+          'Blocked user nearby list aur chat access se hide ho jayega.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
-          content: const Text(
-            'Blocked user nearby list aur chat access se hide ho jayega.',
-            style: TextStyle(color: AppColors.textSecondary),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: AppColors.textPrimary,
+            ),
+            child: const Text('Block'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: AppColors.textPrimary,
-              ),
-              child: const Text('Block'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
-
     if (confirm != true) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
+    setState(() => _actionLoading = true);
     try {
       await _userService.blockUser(
         currentUserId: currentUser!.uid,
         targetUserId: user.uid,
       );
-
       if (!mounted) return;
-
       setState(() {
         _blockedByMe = true;
         _isBlockedEitherWay = true;
         _actionLoading = false;
       });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User blocked')));
-
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User blocked')),
+      );
       Navigator.pop(context, true);
     } catch (_) {
       if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to block user')));
+      setState(() => _actionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to block user')),
+      );
     }
   }
 
   Future<void> _unblockUser() async {
     if (currentUser == null || _actionLoading) return;
-
-    setState(() {
-      _actionLoading = true;
-    });
-
+    setState(() => _actionLoading = true);
     try {
       await _userService.unblockUser(
         currentUserId: currentUser!.uid,
         targetUserId: user.uid,
       );
-
       if (!mounted) return;
-
       setState(() {
         _blockedByMe = false;
         _isBlockedEitherWay = false;
         _actionLoading = false;
       });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User unblocked')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User unblocked')),
+      );
     } catch (_) {
       if (!mounted) return;
-
-      setState(() {
-        _actionLoading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to unblock user')));
+      setState(() => _actionLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to unblock user')),
+      );
     }
   }
 
@@ -283,17 +262,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
-
-    final chatEnabled = !_isBlockedEitherWay;
-
+    final interactionEnabled = !_isBlockedEitherWay;
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: chatEnabled ? () => _openChat(displayName) : null,
+            onPressed: interactionEnabled ? () => _openChat(displayName) : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: chatEnabled
+              backgroundColor: interactionEnabled
                   ? AppColors.primary
                   : Colors.grey.shade800,
               foregroundColor: AppColors.textPrimary,
@@ -306,8 +283,43 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             icon: const Icon(Icons.chat_bubble_outline),
             label: Text(
-              chatEnabled ? 'Chat Now' : 'Chat unavailable',
+              interactionEnabled ? 'Chat Now' : 'Chat unavailable',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: interactionEnabled && !_callLoading
+                ? _startAudioCall
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: interactionEnabled
+                  ? Colors.green.shade700
+                  : Colors.grey.shade800,
+              foregroundColor: Colors.white,
+              disabledForegroundColor: AppColors.textSecondary,
+              disabledBackgroundColor: Colors.grey.shade800,
+              minimumSize: const Size.fromHeight(60),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+            ),
+            icon: _callLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.call_outlined),
+            label: Text(
+              _callLoading ? 'Starting call…' : 'Audio Call',
+              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -360,7 +372,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             child: Text(
               _blockedByMe
                   ? 'This user is blocked. Nearby/chat access restricted.'
-                  : 'This user is unavailable for chat.',
+                  : 'This user is unavailable for chat or calls.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.textSecondary,
@@ -378,7 +390,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final displayName = user.nickname.trim().isEmpty
         ? 'Unknown User'
         : user.nickname.trim();
-
     final displayAge = user.age != null && user.age! > 0 ? ', ${user.age}' : '';
 
     return Scaffold(
