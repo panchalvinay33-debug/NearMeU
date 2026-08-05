@@ -11,6 +11,7 @@ import 'services/notification_service.dart';
 import 'services/observability_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/app_version_gate.dart';
+import 'widgets/audio_call_r2_foreground_lifecycle.dart';
 import 'widgets/deep_link_lifecycle.dart';
 import 'widgets/message_delivery_lifecycle.dart';
 import 'widgets/presence_lifecycle.dart';
@@ -95,12 +96,15 @@ class NearMeUApp extends StatelessWidget {
           ),
         );
       },
-      home: DeepLinkLifecycle(
+      home: AudioCallR2ForegroundLifecycle(
         navigatorKey: rootNavigatorKey,
-        child: const AppVersionGate(
-          child: PresenceLifecycle(
-            child: MessageDeliveryLifecycle(
-              child: SuspensionGuard(child: AuthGateScreen()),
+        child: DeepLinkLifecycle(
+          navigatorKey: rootNavigatorKey,
+          child: const AppVersionGate(
+            child: PresenceLifecycle(
+              child: MessageDeliveryLifecycle(
+                child: SuspensionGuard(child: AuthGateScreen()),
+              ),
             ),
           ),
         ),
