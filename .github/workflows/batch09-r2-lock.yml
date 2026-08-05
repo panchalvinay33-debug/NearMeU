@@ -1,0 +1,43 @@
+name: Batch 09 R2 dependency lock
+
+on:
+  push:
+    branches:
+      - batch/09-r2-audio-calling
+    paths:
+      - .github/workflows/batch09-r2-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: batch/09-r2-audio-calling
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Resolve exact tested Agora token dependency
+        working-directory: functions
+        run: npm install --save-exact agora-token@2.0.5
+      - name: Run backend tests
+        working-directory: functions
+        run: npm test
+      - name: Commit exact package files
+        shell: bash
+        run: |
+          if git diff --quiet -- functions/package.json functions/package-lock.json; then
+            echo "Dependency lock already resolved."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/package.json functions/package-lock.json
+          git commit -m "Batch 09 R2: lock Agora token dependency"
+          git push origin HEAD:batch/09-r2-audio-calling
