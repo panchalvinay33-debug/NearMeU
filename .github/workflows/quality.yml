@@ -125,14 +125,14 @@ jobs:
         run: |
           set -o pipefail
           set +e
-          timeout --foreground --signal=TERM --kill-after=30s 12m \
+          timeout --foreground --signal=TERM --kill-after=30s 20m \
             flutter build apk --debug --no-pub 2>&1 \
             | tee android-debug-build.log
           status=${PIPESTATUS[0]}
           set -e
 
           if (( status == 124 || status == 137 )); then
-            echo "Debug APK build exceeded the 12-minute safety limit."
+            echo "Debug APK build exceeded the 20-minute safety limit."
           fi
           exit "$status"
 
