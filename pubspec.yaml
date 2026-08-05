@@ -26,6 +26,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   google_sign_in: ^6.3.0
 
+  agora_rtc_engine: 6.5.4
   geolocator: ^13.0.1
   geocoding: ^3.0.0
   image_picker: ^1.1.2
