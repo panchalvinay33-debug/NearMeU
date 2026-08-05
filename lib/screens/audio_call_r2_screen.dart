@@ -8,7 +8,7 @@ import '../services/audio_call_r2_service.dart';
 import '../theme/app_colors.dart';
 
 class AudioCallR2Screen extends StatefulWidget {
-  const AudioCallR2Screen.outgoing({
+  AudioCallR2Screen.outgoing({
     super.key,
     required AudioCallR2Session session,
   }) : initialSession = session,
