@@ -18,13 +18,13 @@ if ($currentBranch -ne 'batch/09-r2-audio-calling') {
   throw "Expected branch batch/09-r2-audio-calling, found $currentBranch"
 }
 if (-not [string]::IsNullOrWhiteSpace((& git status --porcelain))) {
-  throw 'Working tree must be clean before R2-A deployment.'
+  throw 'Working tree must be clean before R2 deployment.'
 }
 
-Write-Host 'Running NearMeU Functions tests before R2-A deployment...'
+Write-Host 'Running NearMeU Functions tests before R2 deployment...'
 npm test --prefix functions
 if ($LASTEXITCODE -ne 0) {
-  throw 'Function tests failed. R2-A deployment stopped.'
+  throw 'Function tests failed. R2 deployment stopped.'
 }
 
 $targets = @(
@@ -33,13 +33,14 @@ $targets = @(
   'functions:respondAudioCallR2',
   'functions:endAudioCallR2',
   'functions:expireStaleAudioCallsR2',
-  'functions:getAudioRtcAccessR2'
+  'functions:getAudioRtcAccessR2',
+  'functions:getIncomingAudioCallR2'
 ) -join ','
 
-Write-Host 'Deploying only Batch 09 R2-A lifecycle and RTC access functions...'
+Write-Host 'Deploying only Batch 09 R2 lifecycle, RTC and foreground incoming functions...'
 firebase deploy --project nearmeu-e82c7 --only $targets
 if ($LASTEXITCODE -ne 0) {
-  throw 'R2-A backend deployment failed.'
+  throw 'R2 backend deployment failed.'
 }
 
-Write-Host 'PASS Batch 09 R2-A lifecycle and RTC access backend deployed.'
+Write-Host 'PASS Batch 09 R2 backend deployed.'
