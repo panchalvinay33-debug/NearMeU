@@ -57,6 +57,36 @@ class AudioCallR2Session {
   }
 }
 
+class IncomingAudioCallR2 {
+  const IncomingAudioCallR2({
+    required this.callId,
+    required this.callerUid,
+    required this.callerName,
+    required this.ringExpiresAtMillis,
+  });
+
+  final String callId;
+  final String callerUid;
+  final String callerName;
+  final int ringExpiresAtMillis;
+
+  factory IncomingAudioCallR2.fromMap(Map<dynamic, dynamic> data) {
+    final expiry = data['ringExpiresAtMillis'];
+    final name = data['callerName']?.toString().trim() ?? '';
+    return IncomingAudioCallR2(
+      callId: data['callId']?.toString() ?? '',
+      callerUid: data['callerUid']?.toString() ?? '',
+      callerName: name.isEmpty ? 'NearMeU user' : name,
+      ringExpiresAtMillis: expiry is num ? expiry.toInt() : 0,
+    );
+  }
+
+  bool get isValid =>
+      callId.isNotEmpty &&
+      callerUid.isNotEmpty &&
+      ringExpiresAtMillis > DateTime.now().millisecondsSinceEpoch;
+}
+
 class AudioRtcAccessR2 {
   const AudioRtcAccessR2({
     required this.callId,
@@ -138,6 +168,22 @@ class AudioCallR2Service {
         'action': accept ? 'accept' : 'decline',
       },
     );
+  }
+
+  Future<IncomingAudioCallR2?> getIncomingCall() async {
+    try {
+      final result = await _functions
+          .httpsCallable('getIncomingAudioCallR2')
+          .call<dynamic>();
+      final payload = result.data;
+      if (payload == null) return null;
+      if (payload is! Map) return null;
+      final incoming = IncomingAudioCallR2.fromMap(payload);
+      return incoming.isValid ? incoming : null;
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'unauthenticated') return null;
+      throw _mapException(error);
+    }
   }
 
   Future<AudioRtcAccessR2> getRtcAccess(String callId) async {
