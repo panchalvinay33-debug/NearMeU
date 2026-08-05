@@ -5,6 +5,7 @@ on:
     branches:
       - batch/09-r2-audio-calling
     paths:
+      - pubspec.yaml
       - .github/workflows/batch09-r2-flutter-lock.yml
 
 permissions:
@@ -25,7 +26,14 @@ jobs:
       - name: Resolve exact Flutter dependency lock
         run: flutter pub get
       - name: Analyze R2 audio call files
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/services/audio_call_r2_service.dart lib/screens/audio_call_r2_screen.dart lib/screens/user_profile_screen.dart
+        run: >-
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          lib/services/audio_call_r2_service.dart
+          lib/screens/audio_call_r2_screen.dart
+          lib/screens/user_profile_screen.dart
+          lib/widgets/audio_call_r2_foreground_lifecycle.dart
+          lib/main.dart
+          test/audio_call_r2_contract_test.dart
       - name: Commit resolved lockfile
         shell: bash
         run: |
