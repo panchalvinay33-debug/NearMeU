@@ -1,6 +1,6 @@
 # Batch 09 R2 — Clean Audio Calling Restart
 
-Status: PLANNING / CLEAN RESTART
+Status: 09-R2-A CONTRACT LOGIC IMPLEMENTED / CI GATE PENDING
 
 Base: current `main` at branch creation time.
 
@@ -22,6 +22,30 @@ A physically working audio-call checkpoint was later destabilized while adding c
 5. Call history is the final slice and must not be allowed to destabilize call establishment or existing chat behavior.
 6. No Agora secret may be committed to source, docs, logs or screenshots. Existing Firebase Secret Manager values remain authoritative.
 7. No video/camera work is allowed in Batch 09 R2.
+
+## Current R2-A checkpoint
+
+Implemented without consumer-app changes:
+- fresh call-ID generation and validation;
+- deterministic NearMeU Agora channel naming;
+- deterministic non-zero Agora UID mapping from Firebase UID;
+- exact caller/callee participant-role evaluation;
+- narrow ringing/accepted state transition rules;
+- terminal-state immutability;
+- conservative active-call pointer expiry/reuse rule;
+- bounded safe display-name projection;
+- focused Node contract tests covering the above.
+
+Not yet added:
+- no Agora package/dependency;
+- no RTC token generation;
+- no deployable audio-call Cloud Function export;
+- no Flutter/Android UI or permission changes;
+- no Nearby/Chats changes;
+- no notification changes;
+- no call-history changes.
+
+This separation is intentional. Deployable backend work starts only after this contract checkpoint passes CI.
 
 ## Slice plan
 
