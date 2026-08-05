@@ -124,29 +124,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          : > android-debug-build.log
-          (
-            while true; do
-              sleep 60
-              echo "Android debug build still running at $(date -u +%FT%TZ)"
-              tail -n 20 android-debug-build.log || true
-            done
-          ) &
-          heartbeat_pid=$!
-          trap 'kill "$heartbeat_pid" 2>/dev/null || true' EXIT
-
           set +e
-          timeout --signal=TERM --kill-after=30s 12m \
-            flutter build apk --debug --no-pub \
-            > android-debug-build.log 2>&1
-          status=$?
+          timeout --foreground --signal=TERM --kill-after=30s 12m \
+            flutter build apk --debug --no-pub 2>&1 \
+            | tee android-debug-build.log
+          status=${PIPESTATUS[0]}
           set -e
 
-          kill "$heartbeat_pid" 2>/dev/null || true
-          wait "$heartbeat_pid" 2>/dev/null || true
-          trap - EXIT
-
-          tail -n 300 android-debug-build.log || true
           if (( status == 124 || status == 137 )); then
             echo "Debug APK build exceeded the 12-minute safety limit."
           fi
