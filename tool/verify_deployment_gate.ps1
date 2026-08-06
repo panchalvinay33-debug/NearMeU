@@ -9,11 +9,16 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifestPath = Join-Path $repoRoot 'config\official_base_manifest.json'
 $projectStatePath = Join-Path $repoRoot 'config\project_state_manifest.json'
 $ecosystemPath = Join-Path $repoRoot 'docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md'
+$startRulesPath = Join-Path $repoRoot 'docs\PROJECT_START_DEPLOYMENT_RULES.md'
 if (-not (Test-Path $manifestPath)) { Fail 'Missing official base manifest.' }
 if (-not (Test-Path $projectStatePath)) { Fail 'Missing project state manifest.' }
 if (-not (Test-Path $ecosystemPath)) { Fail 'Missing NearMeU ecosystem boundary document.' }
+if (-not (Test-Path $startRulesPath)) { Fail 'Missing permanent project start/deployment rules document.' }
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $state = Get-Content $projectStatePath -Raw | ConvertFrom-Json
+
+if (-not $state.developmentState.permanentStartAndDeploymentRulesEnabled) { Fail 'Permanent project start/deployment governance rule is not enabled.' }
+if ([string]$state.officialTruth.projectStartDeploymentRules -ne 'docs/PROJECT_START_DEPLOYMENT_RULES.md') { Fail 'Project start/deployment rule source-of-truth path mismatch.' }
 
 Set-Location $repoRoot
 
@@ -58,6 +63,7 @@ if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load
 
 Write-Host ''
 Write-Host 'NearMeU DEPLOYMENT GATE PASS' -ForegroundColor Green
+Write-Host 'Operating rule  : PERMANENT START + DEPLOYMENT GOVERNANCE ENABLED' -ForegroundColor Green
 Write-Host "Branch          : $branch"
 Write-Host "Git SHA         : $localSha"
 Write-Host "Version         : $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
