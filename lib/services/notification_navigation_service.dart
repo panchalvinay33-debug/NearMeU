@@ -26,6 +26,7 @@ class NotificationNavigationService {
   NotificationDestination? _pendingDestination;
   String? _lastOpenedKey;
   DateTime? _lastOpenedAt;
+  String? _openAudioCallId;
   bool _appShellReady = false;
   bool _opening = false;
 
@@ -46,6 +47,12 @@ class NotificationNavigationService {
     queueDestination(NotificationDestination.privateChat(chatId));
   }
 
+  void queueAudioCallId(String? value) {
+    final callId = NotificationRoute.normalizedCallId(value);
+    if (callId == null || callId == _openAudioCallId) return;
+    queueDestination(NotificationDestination.audioCall(callId));
+  }
+
   void queueRemoteData(Map<String, dynamic> data) {
     final destination = NotificationRoute.fromData(data);
     if (destination != null) queueDestination(destination);
@@ -57,6 +64,7 @@ class NotificationNavigationService {
   }
 
   void queueDestination(NotificationDestination destination) {
+    if (destination.isAudioCall && destination.value == _openAudioCallId) return;
     _pendingDestination = destination;
     unawaited(_flushPendingRoute());
   }
@@ -92,15 +100,20 @@ class NotificationNavigationService {
 
       if (destination.isAudioCall) {
         final callId = NotificationRoute.normalizedCallId(destination.value);
-        if (callId == null) return;
+        if (callId == null || callId == _openAudioCallId) return;
         _lastOpenedKey = key;
         _lastOpenedAt = now;
-        await navigator.push<void>(
-          MaterialPageRoute<void>(
-            fullscreenDialog: true,
-            builder: (_) => AudioCallScreen(callId: callId, incoming: true),
-          ),
-        );
+        _openAudioCallId = callId;
+        try {
+          await navigator.push<void>(
+            MaterialPageRoute<void>(
+              fullscreenDialog: true,
+              builder: (_) => AudioCallScreen(callId: callId, incoming: true),
+            ),
+          );
+        } finally {
+          if (_openAudioCallId == callId) _openAudioCallId = null;
+        }
         return;
       }
 
