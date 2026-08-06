@@ -64,7 +64,20 @@ class PresenceService {
         .snapshots()
         .listen(
           (profile) {
-            if (profile.exists) unawaited(_publishDesiredState());
+            if (!profile.exists) return;
+
+            final desiredOnline =
+                _lifecycleState == AppLifecycleState.resumed;
+            final actualOnline = profile.data()?['isOnline'] == true;
+
+            // Presence is authoritative for foreground/background state. Some
+            // older screens still touch lastSeen and may also flip isOnline.
+            // If Firestore drifts from the desired lifecycle state, invalidate
+            // the local cache so the next publish repairs it immediately.
+            if (actualOnline != desiredOnline) {
+              _lastPublishedOnline = null;
+            }
+            unawaited(_publishDesiredState());
           },
           onError: (Object error, StackTrace stackTrace) {
             developer.log(
