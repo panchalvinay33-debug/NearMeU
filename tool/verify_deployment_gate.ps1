@@ -7,13 +7,18 @@ function Fail([string]$Message) {
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifestPath = Join-Path $repoRoot 'config\official_base_manifest.json'
+$projectStatePath = Join-Path $repoRoot 'config\project_state_manifest.json'
+$ecosystemPath = Join-Path $repoRoot 'docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md'
 if (-not (Test-Path $manifestPath)) { Fail 'Missing official base manifest.' }
+if (-not (Test-Path $projectStatePath)) { Fail 'Missing project state manifest.' }
+if (-not (Test-Path $ecosystemPath)) { Fail 'Missing NearMeU ecosystem boundary document.' }
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+$state = Get-Content $projectStatePath -Raw | ConvertFrom-Json
 
 Set-Location $repoRoot
 
 $branch = (git branch --show-current).Trim()
-if ($branch -ne 'main') { Fail "Production deploys require main; current branch is '$branch'." }
+if ($branch -ne 'main') { Fail "Production deploys require NearMeU main; current branch is '$branch'. Never deploy shared Firebase from NearMeU-Admin or a historical Admin branch." }
 
 $dirty = git status --porcelain
 if ($dirty) {
@@ -27,6 +32,12 @@ if ($LASTEXITCODE -ne 0) { Fail 'git fetch failed.' }
 $localSha = (git rev-parse HEAD).Trim()
 $remoteSha = (git rev-parse origin/main).Trim()
 if ($localSha -ne $remoteSha) { Fail "Local main ($localSha) does not exactly match origin/main ($remoteSha)." }
+
+if (-not $state.ecosystem) { Fail 'Project state is missing ecosystem ownership metadata.' }
+if ([string]$state.ecosystem.consumerRepository -ne 'panchalvinay33-debug/NearMeU') { Fail 'Consumer repository ownership metadata mismatch.' }
+if ([string]$state.ecosystem.adminRepository -ne 'panchalvinay33-debug/NearMeU-Admin') { Fail 'Admin companion repository metadata mismatch.' }
+if ([string]$state.ecosystem.sharedBackendOwnerRepository -ne 'panchalvinay33-debug/NearMeU') { Fail 'Shared backend owner must remain the NearMeU repository unless governance explicitly changes it.' }
+if ([string]$state.ecosystem.sharedFirebaseProjectId -ne [string]$manifest.identity.firebaseProjectId) { Fail 'Shared Firebase project metadata mismatch.' }
 
 $pubspec = Get-Content (Join-Path $repoRoot 'pubspec.yaml') -Raw
 $expectedVersion = "version: $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
@@ -47,10 +58,14 @@ if ($LASTEXITCODE -ne 0 -or -not $expectedExports) { Fail 'Unable to load accept
 
 Write-Host ''
 Write-Host 'NearMeU DEPLOYMENT GATE PASS' -ForegroundColor Green
-Write-Host "Branch     : $branch"
-Write-Host "Git SHA    : $localSha"
-Write-Host "Version    : $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
-Write-Host "Firebase   : $($manifest.identity.firebaseProjectId)"
-Write-Host "Functions  : $(@($expectedExports).Count) accepted exports load successfully"
+Write-Host "Branch          : $branch"
+Write-Host "Git SHA         : $localSha"
+Write-Host "Version         : $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
+Write-Host "Firebase        : $($manifest.identity.firebaseProjectId)"
+Write-Host "Consumer repo   : $($state.ecosystem.consumerRepository)"
+Write-Host "Admin companion : $($state.ecosystem.adminRepository)"
+Write-Host "Admin status    : $($state.ecosystem.adminDevelopmentStatus)"
+Write-Host "Shared backend  : $($state.ecosystem.sharedBackendOwnerRepository)"
+Write-Host "Functions       : $(@($expectedExports).Count) accepted exports load successfully"
 Write-Host ''
-Write-Host 'Production deployment is permitted from this exact source state, subject to the batch-specific owner approval and required CI/physical gates.' -ForegroundColor Cyan
+Write-Host 'Production deployment is permitted from this exact shared-backend source state only. Historical Admin branches are reference-only and must never be deployed directly. Any Admin-related backend change must be rebuilt from current accepted NearMeU main and separately tested against both app contracts.' -ForegroundColor Cyan
