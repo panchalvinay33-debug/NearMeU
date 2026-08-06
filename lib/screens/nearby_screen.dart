@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,7 +43,46 @@ class _NearbyScreenState extends State<NearbyScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_applyFilters);
-    _loadNearby(refreshLocation: true);
+    unawaited(_initializeNearby());
+  }
+
+  Future<void> _initializeNearby() async {
+    final uid = currentUser?.uid;
+    if (uid == null) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Please sign in again.';
+        });
+      }
+      return;
+    }
+
+    try {
+      final results = await Future.wait<Object?>([
+        _userService.getUser(uid),
+        _nearbyService.loadCachedCandidates(),
+      ]);
+      final profile = results[0] as AppUser?;
+      final cached = results[1] as NearbyLoadResult;
+      if (!mounted) return;
+      setState(() {
+        _currentProfile = profile;
+        _allCandidates = cached.users;
+        _showingSavedSnapshot = cached.fromCache;
+        _isLoading = profile == null && cached.users.isEmpty;
+        _errorMessage = null;
+      });
+      _applyFilters();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Nearby device snapshot could not be restored',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    await _loadNearby(refreshLocation: true);
   }
 
   @override
@@ -68,8 +108,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
     if (mounted) {
       setState(() {
-        if (_currentProfile == null) _isLoading = true;
-        _isRefreshing = _currentProfile != null;
+        if (_currentProfile == null && _allCandidates.isEmpty) {
+          _isLoading = true;
+        }
+        _isRefreshing = _currentProfile != null || _allCandidates.isNotEmpty;
         _errorMessage = null;
       });
     }
@@ -98,11 +140,14 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
       if (!mounted) return;
       setState(() {
-        _currentProfile = profile;
-        _allCandidates = nearbyResult.users;
+        _currentProfile = profile ?? _currentProfile;
+        if (nearbyResult.users.isNotEmpty || _allCandidates.isEmpty) {
+          _allCandidates = nearbyResult.users;
+        }
         _showingSavedSnapshot = nearbyResult.fromCache;
         _isLoading = false;
         _isRefreshing = false;
+        _errorMessage = null;
       });
       _applyFilters();
 
@@ -125,8 +170,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
       setState(() {
         _isLoading = false;
         _isRefreshing = false;
-        _errorMessage =
-            'Could not load people right now. Check your connection and retry.';
+        if (_allCandidates.isEmpty) {
+          _errorMessage =
+              'Could not load people right now. Check your connection and retry.';
+        } else {
+          _showingSavedSnapshot = true;
+        }
       });
     }
   }
@@ -296,7 +345,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
+    if (_isLoading && _allCandidates.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       );
@@ -387,7 +436,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Connection unavailable. Showing your last saved Nearby list.',
+                      'Showing your last saved Nearby list while NearMeU refreshes in the background.',
                       style: TextStyle(color: Colors.white70),
                     ),
                   ),
