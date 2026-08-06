@@ -1,150 +1,236 @@
 # NearMeU Master Project Audit
 
-Last organized: 2026-08-02
+Last organized: 2026-08-06
 
-This is the human-readable source of truth for NearMeU's accepted runtime, recovery position, current batch status and recovery procedure. Use it together with `config/project_state_manifest.json` and `docs/OFFICIAL_RECOVERABLE_BASE.md`.
+This audit records the accepted NearMeU history, current recovery position, why important corrective changes were made, and which evidence is authoritative. Operational rules live in `docs/PROJECT_OPERATING_BLUEPRINT.md`; exact machine recovery values live in `config/official_base_manifest.json`.
 
-## 1. Current official state
+## 1. Project identity
 
 | Item | Official value |
 |---|---|
 | Repository | `panchalvinay33-debug/NearMeU` |
-| Development source of truth | `main` |
+| Canonical PC workspace | `F:\NearMeU` |
+| Development source | `main` |
 | Recovery branch | `stable/official-recoverable-base` |
-| Latest accepted batch | Batch 08 — profile sharing and deep-link recovery |
-| Tested runtime commit | `fdc9b22322a96b793fff3058b1ca990f656e80a1` |
-| Merged main runtime commit | `f83a6e92457f728f177dc062dcc9171c141a9217` |
-| Accepted PR | `#100` |
-| Android application ID | `com.nearmeu.nearmeu` |
+| Android package | `com.nearmeu.nearmeu` |
 | Firebase project | `nearmeu-e82c7` |
 | Version | `1.0.11+12` |
-| Physically tested signed debug APK SHA-256 | `4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412` |
-| Signed release APK SHA-256 | `ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde` |
-| Build | #90 / `30750777554` — PASS |
-| Quality | #493 / `30750777555` — PASS |
-| Owner acceptance | 2026-08-02 — ACCEPTED |
-| Next batch | Batch 09 — Agora audio calling |
+| Permanent signing cert SHA-256 | `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B` |
+| Accepted product boundary | Batches 00–08 only |
+| Future runtime work | LOCKED until explicit owner unlock |
 
-## 2. Accepted Batch 08 scope
+Exact current official source SHA is intentionally stored only in `config/official_base_manifest.json` so recovery scripts and documentation use one value.
 
-Batch 08 adds privacy-safe profile sharing and Android deep-link recovery without changing accepted chat, Premium, deletion or recovery semantics.
+## 2. Accepted batch history
 
-Accepted behavior:
+| Batch | Scope | Status |
+|---|---|---|
+| 00 | Governance, roadmap and controlled process | ACCEPTED |
+| 01 | Chat reliability and message-state truth | ACCEPTED |
+| 02 | Photo/video/voice-message reliability | ACCEPTED |
+| 03 | Local-first persistence + seven-day temporary delivery cloud | ACCEPTED |
+| 04 | Clear Chat / delete / unsend semantics | ACCEPTED |
+| 05 | Identity continuity, close/reactivation | ACCEPTED |
+| 06 | Premium entitlement foundation | ACCEPTED |
+| 07 | Six-month Premium backup/restore architecture | ACCEPTED with deferred receiver-media evidence |
+| 08 | Profile sharing + deep-link recovery | ACCEPTED; re-certification closeout underway |
 
-- sharing is explicit opt-in;
-- public URLs use opaque revocable identifiers rather than Firebase UID/email/location;
-- public web preview is generic and reveals no private profile details;
-- signed-in active users resolve shared profiles through trusted backend logic;
-- bidirectional blocks prevent shared-link bypass;
-- suspended, missing, closed or permanently deleted profiles do not resolve;
-- sharing can be disabled/re-enabled;
-- reset rotates the identifier and invalidates the old URL;
-- warm-start and cold-start HTTPS app links open the correct profile after the same-batch navigation-race fix;
-- Auth deletion cleans up profile-sharing mappings;
-- existing Batch 07 recovery behavior remains unchanged.
+No Batch09/Admin/calling experiment is part of the accepted runtime.
 
-Known evidence notes: Batch 07 receiver-media pre/post-download recovery remains OWNER-DEFERRED / NOT PASS. Batch 08 custom-scheme fallback is implemented but was not separately captured as an independent physical screenshot; HTTPS warm/cold handling was physically verified.
+## 3. Original Base08 acceptance — 2026-08-02
 
-## 3. Acceptance evidence
+Original Base08 added privacy-safe profile sharing and Android deep-link recovery without intentionally changing accepted chat, Premium, deletion or recovery semantics.
 
-```text
-Tested runtime: fdc9b22322a96b793fff3058b1ca990f656e80a1
-Merged main runtime: f83a6e92457f728f177dc062dcc9171c141a9217
-PR: #100
-Version: 1.0.11+12
-Build #90 / run 30750777554: PASS
-Quality #493 / run 30750777555: PASS
-Recoverable artifact ID: 8834500159
-Recoverable artifact digest: sha256:f2515b2ce44e7d8ab4edbddb8060975dcc1c13e236a7a51f852f7a106b298c49
-Tested debug APK SHA-256: 4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412
-Signed release artifact ID: 8834548293
-Signed release artifact digest: sha256:fc7348a6088c587670fda6d6bbde0e5c8ad9cb63fd7aa9156087132b3dfc762a
-Signed release APK SHA-256: ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde
-Owner acceptance: 2026-08-02
-```
+Authoritative original evidence:
 
-Physical/backend matrix accepted: initial Profile Sharing load, opaque URL generation, Android share flow, generic web preview, warm/cold HTTPS deep links, disable/re-enable, rotation/old-link invalidation, block-bypass prevention and regression smoke all passed by owner report and/or backend evidence as recorded in `docs/BATCH_08_PHYSICAL_TEST.md`.
+- Tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+- Merged runtime: `f83a6e92457f728f177dc062dcc9171c141a9217`
+- Accepted PR: `#100`
+- Original closeout commit: `7f8b0c1f147a8de420ac54fa25c215fc22a7b299`
+- Build #90 / run `30750777554`: PASS
+- Quality #493 / run `30750777555`: PASS
+- Recoverable artifact ID: `8834500159`
+- Recoverable artifact digest: `sha256:f2515b2ce44e7d8ab4edbddb8060975dcc1c13e236a7a51f852f7a106b298c49`
+- Physically tested debug APK SHA-256: `4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412`
+- Signed release artifact ID: `8834548293`
+- Signed release artifact digest: `sha256:fc7348a6088c587670fda6d6bbde0e5c8ad9cb63fd7aa9156087132b3dfc762a`
+- Signed release APK SHA-256: `ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde`
+- Owner acceptance: 2026-08-02
 
-## 4. Production deployment
+Original accepted behavior included explicit opt-in sharing, opaque revocable identifiers, generic privacy-safe web preview, authenticated resolution, bidirectional block checks, sharing disable/re-enable, reset/rotation, HTTPS warm/cold app links and Auth-delete cleanup.
 
-Batch 08 profile-sharing Functions and Firebase Hosting were deployed to `nearmeu-e82c7` and operationally verified on-device. The public Hosting preview also worked. Batch 08 did not change Firestore or Storage rules.
+Evidence notes retained from original acceptance:
 
-## 5. Canonical PC and recovery paths
+- Batch07 receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS.
+- Batch08 custom `nearmeu://` fallback is implemented but was not separately screenshot-verified. HTTPS warm/cold handling was physically verified.
 
-| Purpose | Path |
-|---|---|
-| Canonical repository | `F:\NearMeU` |
-| Local recovery folder | `F:\NearMeU\local_recovery` |
-| Local tested APK target | `F:\NearMeU\local_recovery\NearMeU-Final-Tested-Base.apk` |
-| Android platform tools | `C:\Users\dell\Downloads\platform-tools` |
+## 4. Why Base08 was re-certified on 2026-08-06
 
-The local recovery folder is owner-controlled and must not be committed.
+Post-Base08 experimental work (Admin/calling) made the repository and production history harder to reason about. The owner explicitly chose to stop future work and return NearMeU to a clean, stable Base08 boundary before continuing anything else.
 
-## 6. Recovery procedure
+A cleanup branch restored the Base08 source tree and fresh physical regression testing was performed instead of relying only on old acceptance evidence.
+
+PR `#112` — `Cleanup: restore exact accepted Base 08` — merged on 2026-08-06 with merge SHA `b6837ce2dd90bdc4db87a153089fcaf1cf74a441` after Base08 restoration plus narrowly scoped stabilization fixes.
+
+## 5. Stabilization defects found during fresh re-certification
+
+### 5.1 Firestore chat-index defect
+
+Symptom: Chats/messages could fail with a Firestore failed-precondition requiring the normal collection descending index on `messages.timestamp`.
+
+Cause: a later custom field override had replaced Firestore's automatic single-field collection index behavior.
+
+Production correction restored the automatic field behavior using a clear-exemption operation. Repository cleanup prevents the stale custom timestamp override from being reintroduced.
+
+Result: Chats physically loaded again.
+
+### 5.2 Delivered grey-double-tick defect
+
+Client delivery acknowledgement could submit up to 200 message IDs while the backend accepted only 100, allowing a backlog to reject the whole acknowledgement call.
+
+Fix: backend delivery acknowledgement limit aligned to 200.
+
+Result: fresh two-phone test physically verified single tick → grey delivered double tick → blue read double tick.
+
+### 5.3 Online-presence defect
+
+The chat screen periodically wrote last-seen state with `isOnline:false`. PresenceService cached its last published `true`, so it could fail to repair the externally changed stored state.
+
+Fix: PresenceService compares stored profile state with desired lifecycle state and forces a corrective publish when they differ.
+
+Result: fresh two-phone test physically verified mutual Online status.
+
+### 5.4 About-screen version defect
+
+The About screen hardcoded `Version 1.0.0` while the real package version is `1.0.11+12`.
+
+PR `#114` changes About to use runtime `PackageInfo` and display `Version <version> (Build <buildNumber>)`. Automated candidate evidence is recorded in `config/official_base_manifest.json`. Focused physical About-screen verification is the remaining runtime closeout check at the time of this audit revision.
+
+## 6. Fresh Base08 physical re-certification results
+
+Owner-reported fresh PASS evidence includes:
+
+- install/session continuity;
+- Nearby;
+- Chats;
+- two-way text messaging;
+- photo/video/voice messaging;
+- message actions including unsend/delete-for-me/clear plus restart behavior;
+- block/safety flows;
+- Premium gating and owner Premium flow;
+- Profile Sharing regression;
+- restart/network smoke;
+- two-device App Check setup;
+- mutual Online presence;
+- grey delivered double tick;
+- blue read double tick;
+- bidirectional two-device messaging.
+
+The final About runtime-version display check remains tracked in the official base manifest until owner confirmation.
+
+## 7. Fresh automated re-certification evidence
+
+For the Base08 stabilization state before the About-only correction:
+
+- Quality run `31077990662` / #612: PASS
+- Recoverable build run `31077990677` / #166: PASS
+- Recoverable artifact ID `8958542675`
+- Recoverable artifact digest `sha256:a44c7a8d9f4f4098e0bde90c48d165b8a3198a173c67f63bb81a6b92e425aa9f`
+
+For the About version-display candidate:
+
+- PR `#114`
+- Branch head `f0906b3be18e633102db07a6d74e837717d8cc60`
+- Tested PR merge ref `04c0050ac13a9930996a59c351fea98c3971bbfb`
+- Quality run `31081417470` / #614: PASS
+- Recoverable run `31081418948` / #167: PASS
+- Recoverable artifact ID `8959924645`
+- Artifact digest `sha256:e9fa15ed8056fd44210b6f89917627236cfaa44d430209766351e63aab9bb27d`
+- Signed debug APK SHA-256 `532e1b521f0fc92b63da8e4e68188e2788f2fda5996a8f753191b1594246c069`
+- Permanent signing certificate verified
+
+Do not mark PR114 as final accepted runtime until focused physical version display acceptance and merge/closeout gates complete.
+
+## 8. Post-Base08 experiment cleanup
+
+Historical Admin A01–A08 branches, Batch09 variants, Batch09 checkpoints, owner-control planning and safety branches were not accepted as the product base. On 2026-08-06 their branch tips were neutralized to the Base08-clean main state where deletion tooling was unavailable.
+
+Closed PRs remain historical GitHub records only; they are not accepted source.
+
+The final desired long-lived branch model is only:
+
+- `main`
+- `stable/official-recoverable-base`
+
+## 9. Production Firebase boundary
+
+Source rollback does not automatically delete already deployed Cloud Functions. Therefore an exact Base08 closeout requires a production-state audit.
+
+Accepted Functions are defined by `functions/bootstrap.js`, which globally enforces App Check for client-invoked v2 HTTPS/callable functions and exports the accepted Base08 function modules.
+
+Run:
 
 ```powershell
-cd "F:\NearMeU"
-git fetch origin
-git checkout stable/official-recoverable-base
-git reset --hard origin/stable/official-recoverable-base
-git rev-parse HEAD
+cd F:\NearMeU
+.\tool\audit_production_state.ps1
 ```
 
-Immutable tested Batch 08 runtime:
+Unexpected deployed Admin/calling/post-Base08 Functions are production drift and must be resolved before final recovery promotion.
+
+No user data is deleted as part of source cleanup or normal recovery.
+
+## 10. One-command recovery
+
+Normal source recovery is:
 
 ```powershell
-git checkout fdc9b22322a96b793fff3058b1ca990f656e80a1
+cd F:\NearMeU
+.\tool\restore_official_base.ps1
 ```
 
-Merged Batch 08 runtime:
+The script reads the official SHA from `config/official_base_manifest.json`; operators do not need to remember old branch/commit identifiers.
+
+The script refuses to destroy uncommitted work unless `-Force` is intentionally supplied.
+
+## 11. Deployment process
+
+Before production deployment:
 
 ```powershell
-git checkout f83a6e92457f728f177dc062dcc9171c141a9217
+cd F:\NearMeU
+.\tool\verify_deployment_gate.ps1
 ```
 
-## 7. Phone recovery rule
+Deployment is allowed only from clean `main` exactly matching `origin/main`. Feature-branch production deploys are prohibited.
 
-Install only a permanent-certificate-matching APK using update mode:
+After deployment run the production-state audit and block acceptance if unexplained drift exists.
 
-```powershell
-cd "C:\Users\dell\Downloads\platform-tools"
-.\adb.exe install -r "F:\NearMeU\local_recovery\NearMeU-Final-Tested-Base.apk"
-```
+Full governing sequence:
 
-Do not uninstall or clear app data for normal upgrades. Debug App Check tokens are installation-specific and must never be committed or documented.
+`Freeze → Code → CI → Signed APK → Physical Test → Owner PASS → Merge → Exact-main Deploy → Production Audit → Docs → Recovery Promote → Local Sync → Branch Cleanup → Next Batch Unlock`
 
-## 8. Backup requirements
+## 12. Backup and ownership requirements
 
-A complete recoverable base includes repository + exact accepted SHA, recovery branch, accepted APK/hash, signing-certificate evidence, permanent keystore in at least two encrypted owner-controlled locations, passwords separately, Firebase ownership/recovery access, Functions/Rules/Hosting source, deployment evidence, and owner acceptance evidence.
+A recoverable accepted base includes source SHA, recovery branch, official manifest, signed APK/hash, signing-certificate evidence, workflow/artifact IDs, production audit evidence and owner acceptance.
 
-Never commit secrets, keys, passwords, App Check debug tokens, test credentials or live user data.
+The permanent keystore must exist in at least two encrypted owner-controlled locations with passwords stored separately. Firebase/Google ownership recovery access must also be preserved.
 
-## 9. Execution roadmap
+Secrets, keystores, App Check debug tokens, credentials and live user data must never be committed.
 
-Accepted: Batches 00–08.
+## 13. Future roadmap state
 
-Next:
+Future runtime work is LOCKED. There is no active Batch09.
 
-- Batch 09 — Agora audio calling
-- Batch 10 — Agora video calling
-- Batch 11 — owner-only Premium administration / purchase verification
-- Batch 12 — full regression and Play Store readiness
+If the owner later chooses to continue, scope will be selected again and started fresh from the then-current official base. Old experimental branches must not be revived as the starting point.
 
-No later runtime batch starts until Batch 08 final docs are merged, recovery branch is promoted and `F:\NearMeU` is synchronized.
+## 14. Document precedence
 
-## 10. Change control
-
-`Select → Code → CI → Signed APK → Physical Test → Fix if needed → Owner Accept → Merge → Documents Update → Backup/Recovery Promote → Next Batch.`
-
-`main` is development truth. `stable/official-recoverable-base` is last indisputably recoverable truth.
-
-## 11. Document precedence
-
-1. `docs/MASTER_PROJECT_AUDIT.md`
-2. `config/project_state_manifest.json`
-3. `docs/OFFICIAL_RECOVERABLE_BASE.md`
-4. `docs/PRODUCT_DECISIONS.md`
-5. `docs/EXECUTION_BATCH_PLAN.md`
+1. `docs/PROJECT_OPERATING_BLUEPRINT.md`
+2. `config/official_base_manifest.json`
+3. `docs/MASTER_PROJECT_AUDIT.md`
+4. `docs/OFFICIAL_RECOVERABLE_BASE.md`
+5. `config/project_state_manifest.json`
 6. `docs/TEST_BATCH_REGISTER.md`
-7. Current `main` source, rules and workflows
-8. Topic-specific runbooks and historical records
+7. `docs/EXECUTION_BATCH_PLAN.md`
+8. accepted `main` source/rules/workflows
+9. historical documents, old PRs/branches/issues
