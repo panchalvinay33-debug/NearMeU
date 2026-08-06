@@ -16,6 +16,7 @@ Whenever NearMeU work starts, the operator must first confirm:
 - shared backend owner repository: `panchalvinay33-debug/NearMeU`
 - production deployment branch: `main`
 - official recovery branch: `stable/official-recoverable-base`
+- planned RTC provider for Batch09/10: Agora
 
 NearMeU and NearMeU-Admin are one product ecosystem but remain separate applications, repositories, releases and recovery boundaries.
 
@@ -84,14 +85,28 @@ When a future Admin feature needs backend support, do not directly revive an old
 
 Normal work in one repository must not modify files in the other repository automatically. Cross-project changes must be intentional, reviewed and documented.
 
-## 6. Admin timing rule
+## 6. RTC provider and credential rule
+
+Agora is the planned RTC provider for Batch09 Audio Calling and Batch10 Video Calling. An Agora project named `NearMeU` has already been created and RTC service is available.
+
+The provider/setup source of truth is `docs/RTC_PROVIDER_AGORA.md`.
+
+Security rules:
+
+- Agora App ID may be used by the client where required, but its exact value does not need to be duplicated in governance documents.
+- Agora App Certificate, token-signing secret, REST credentials and equivalent privileged secrets must never be committed to the repository or shipped inside the client.
+- production calling must use short-lived server-issued RTC tokens.
+- if a privileged Agora credential is exposed or committed, rotate it before production use.
+- configured Agora service does not mean Batch09/10 is implemented, accepted, deployed or PASS.
+
+## 7. Admin timing rule
 
 NearMeU-Admin development remains PAUSED while the consumer app completes its launch path.
 
 The planned order after Base08 lock is:
 
-1. Batch09 - Audio Calling
-2. Batch10 - Video Calling
+1. Batch09 - Audio Calling (Agora RTC)
+2. Batch10 - Video Calling (Agora RTC)
 3. Batch11 - Google Play Premium verification
 4. Batch12 - Production hardening
 5. Batch13 - Play Store Internal / Closed Testing
@@ -100,7 +115,7 @@ The planned order after Base08 lock is:
 
 Admin may resume only after the consumer public-launch phase is complete and the owner explicitly unlocks Admin work.
 
-## 7. Permanent operating-system rule
+## 8. Permanent operating-system rule
 
 These rules are not temporary Base08 instructions. They remain the default NearMeU project/deployment operating system for future batches unless an explicit governance change is reviewed and accepted.
 
