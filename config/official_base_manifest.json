@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "project": "NearMeU",
-  "status": "BASE08_RECERTIFICATION_GOVERNANCE_R2_PRODUCTION_AUDIT_PENDING",
+  "status": "BASE08_RECERTIFICATION_PRODUCTION_AUDIT_PENDING",
   "lastUpdated": "2026-08-06",
   "acceptedProductBoundary": {
     "throughBatch": "08",
@@ -30,14 +30,42 @@
     "projectStateScript": "tool/show_project_state.ps1",
     "productionAuditScript": "tool/audit_production_state.ps1",
     "deploymentGateScript": "tool/verify_deployment_gate.ps1",
-    "resolutionOrder": ["immutableTagName", "currentOfficialSourceSha", "stable/official-recoverable-base"]
+    "resolutionOrder": [
+      "immutableTagName",
+      "currentOfficialSourceSha",
+      "stable/official-recoverable-base"
+    ]
   },
   "currentRecertificationCandidate": {
-    "mainSha": "92341b4a9641ea1174186724d970feb4ffa12fdb",
-    "presenceConsistencyPullRequest": 116,
-    "presenceConsistencyHeadSha": "2e7d1c37229cb75fa89b3a4ba9dd884095fdc47f",
-    "presenceConsistencyMergeSha": "92341b4a9641ea1174186724d970feb4ffa12fdb",
-    "candidateStatus": "MERGED_MAIN_AWAITING_GOVERNANCE_R2_AND_PRODUCTION_AUDIT"
+    "runtimeTestedSha": "87f5b05461f0e211c1f710dabba27255436ef7cd",
+    "mergedMainSha": "f01c8ea9bbd43728f839ee24b5f7280d9ba2d4c7",
+    "candidateStatus": "MERGED_AND_PHYSICALLY_TESTED_AWAITING_PRODUCTION_AUDIT_AND_FINAL_PROMOTION",
+    "presenceConsistency": {
+      "pullRequest": 116,
+      "headSha": "2e7d1c37229cb75fa89b3a4ba9dd884095fdc47f",
+      "mergeSha": "92341b4a9641ea1174186724d970feb4ffa12fdb",
+      "qualityWorkflowRun": 31092699982,
+      "qualityWorkflowNumber": 621,
+      "recoverableWorkflowRun": 31092701023,
+      "recoverableWorkflowNumber": 173,
+      "recoverableArtifactId": 8964462769,
+      "recoverableArtifactDigest": "sha256:ae8dbd1d4f92d25484c381d28cd928c7417ca4b1634008dd6ab66112c9db4ac6",
+      "ownerPhysicalResult": "PASS"
+    },
+    "cacheFirstLowConnectivity": {
+      "pullRequest": 117,
+      "headSha": "87f5b05461f0e211c1f710dabba27255436ef7cd",
+      "mergeSha": "f01c8ea9bbd43728f839ee24b5f7280d9ba2d4c7",
+      "qualityWorkflowRun": 31096360825,
+      "qualityWorkflowNumber": 623,
+      "recoverableWorkflowRun": 31096360976,
+      "recoverableWorkflowNumber": 174,
+      "recoverableArtifactId": 8965916278,
+      "recoverableArtifactDigest": "sha256:76d1a213498949be4550997381b8f8513f2e95e2c7b21b30293b9281f4ca366d",
+      "ownerPhysicalNormalConnectivity": "PASS",
+      "ownerPhysicalOfflineCache": "PASS",
+      "ownerPhysicalReconnectRefresh": "PASS"
+    }
   },
   "finalVersionDisplayCandidate": {
     "pullRequest": 114,
@@ -69,14 +97,19 @@
     "twoPhoneDeliveredGreyDoubleTick": "PASS",
     "twoPhoneReadBlueDoubleTick": "PASS",
     "twoPhoneBidirectionalMessaging": "PASS",
-    "aboutRuntimeVersion": "PASS"
+    "aboutRuntimeVersion": "PASS",
+    "presenceAcrossNearbyChatsAndChatHeader": "PASS",
+    "cacheFirstNormalConnectivity": "PASS",
+    "cacheFirstOffline": "PASS",
+    "cacheFirstReconnect": "PASS"
   },
   "base08StabilizationFixes": [
     "Firestore automatic messages.timestamp collection index restored",
     "delivery acknowledgement batch limit aligned to 200",
     "presence service self-heals stale externally written offline state",
     "About screen reads runtime package version/build and passed owner physical check",
-    "PR #116 separates chat read/dispose behavior from lifecycle-owned presence and makes trusted chat preview online state freshness-aware"
+    "PR #116 separates chat read/dispose behavior from lifecycle-owned presence and makes trusted chat preview online state freshness-aware",
+    "PR #117 makes Nearby and Chats cache-first so previously loaded data remains immediately usable on weak/offline connectivity while trusted refresh happens in the background"
   ],
   "persistentEvidenceGaps": [
     "Batch07 receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS",
@@ -87,5 +120,5 @@
     "unexpectedPostBase08FunctionsMustBeZero": true,
     "consoleOnlyPermanentRuleChangesAllowed": false
   },
-  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until governance R2 is merged, production audit is clean, final documentation is synchronized and the owner explicitly accepts promotion."
+  "acceptanceRule": "Do not promote the immutable tag/recovery branch until governance is merged, production audit is PASS with zero unexpected post-Base08 drift, final documentation is synchronized and the owner explicitly accepts promotion. The promotion script must also prove that only governance/evidence paths changed after runtimeTestedSha."
 }
