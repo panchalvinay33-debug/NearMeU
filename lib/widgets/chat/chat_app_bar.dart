@@ -8,6 +8,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool isOnline;
   final String? photoUrl;
   final VoidCallback? onBack;
+  final VoidCallback? onAudioCall;
   final VoidCallback? onMenu;
 
   const ChatAppBar({
@@ -17,6 +18,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isOnline,
     this.photoUrl,
     this.onBack,
+    this.onAudioCall,
     this.onMenu,
   });
 
@@ -33,6 +35,33 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           color: AppColors.textPrimary,
           fontSize: 22,
           fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+    String? tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Icon(
+            icon,
+            color: onTap == null ? Colors.white30 : AppColors.textPrimary,
+          ),
         ),
       ),
     );
@@ -70,12 +99,12 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Stack(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 46,
+                height: 46,
                 padding: const EdgeInsets.all(2),
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
@@ -109,7 +138,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
             ],
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +149,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -132,26 +161,23 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     color: isOnline
                         ? AppColors.online
                         : AppColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: isOnline ? FontWeight.w700 : FontWeight.w400,
                   ),
                 ),
               ],
             ),
           ),
-          InkWell(
-            borderRadius: BorderRadius.circular(14),
+          _actionButton(
+            icon: Icons.call_rounded,
+            onTap: onAudioCall,
+            tooltip: 'Audio call',
+          ),
+          const SizedBox(width: 6),
+          _actionButton(
+            icon: Icons.more_vert,
             onTap: onMenu,
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.cardBorder),
-              ),
-              child: const Icon(Icons.more_vert, color: AppColors.textPrimary),
-            ),
+            tooltip: 'More',
           ),
         ],
       ),
