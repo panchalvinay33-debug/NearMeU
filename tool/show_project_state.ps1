@@ -26,6 +26,16 @@ Write-Host "Accepted boundary : Batch $($manifest.acceptedProductBoundary.throug
 Write-Host "Manifest status   : $($manifest.status)"
 Write-Host "Official source   : $($manifest.recovery.currentOfficialSourceSha)"
 Write-Host "Recovery branch   : $($manifest.identity.recoveryBranch)"
+if ($state -and $state.ecosystem) {
+    Write-Host ''
+    Write-Host 'NearMeU ecosystem:' -ForegroundColor Cyan
+    Write-Host "  Consumer repo   : $($state.ecosystem.consumerRepository)"
+    Write-Host "  Admin repo      : $($state.ecosystem.adminRepository)"
+    Write-Host "  Admin package   : $($state.ecosystem.adminAndroidApplicationId)"
+    Write-Host "  Shared backend  : $($state.ecosystem.sharedBackendOwnerRepository)"
+    Write-Host "  Admin status    : $($state.ecosystem.adminDevelopmentStatus)" -ForegroundColor Yellow
+    Write-Host '  Admin branches  : PRESERVE AS REFERENCE while Admin is paused; do not direct-merge/deploy.' -ForegroundColor Yellow
+}
 if ($manifest.currentRecertificationCandidate) {
     Write-Host "Current candidate : $($manifest.currentRecertificationCandidate.mainSha)"
     Write-Host "Candidate status  : $($manifest.currentRecertificationCandidate.candidateStatus)"
@@ -68,4 +78,5 @@ Write-Host 'Useful commands:' -ForegroundColor Cyan
 Write-Host '  .\tool\restore_official_base.ps1   # restore source to official base'
 Write-Host '  .\tool\verify_deployment_gate.ps1  # pre-production deploy safety gate'
 Write-Host '  .\tool\audit_production_state.ps1  # detect deployed function drift'
+Write-Host '  docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md # consumer/Admin ownership and branch rules'
 Write-Host '========================================' -ForegroundColor Cyan
