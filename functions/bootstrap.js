@@ -25,4 +25,5 @@ module.exports = {
   ...require("./announcement_push_functions.js"),
   ...require("./app_version_functions.js"),
   ...require("./audio_call_functions.js"),
+  ...require("./audio_call_safety_functions.js"),
 };
