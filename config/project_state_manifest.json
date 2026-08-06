@@ -1,9 +1,21 @@
 {
-  "schemaVersion": 19,
+  "schemaVersion": 20,
   "project": "NearMeU",
   "lastUpdated": "2026-08-06",
   "canonicalLocalWorkspace": "F:\\NearMeU",
   "repository": "panchalvinay33-debug/NearMeU",
+  "ecosystem": {
+    "consumerRepository": "panchalvinay33-debug/NearMeU",
+    "adminRepository": "panchalvinay33-debug/NearMeU-Admin",
+    "consumerAndroidApplicationId": "com.nearmeu.nearmeu",
+    "adminAndroidApplicationId": "com.nearmeu.admin",
+    "sharedFirebaseProjectId": "nearmeu-e82c7",
+    "sharedBackendOwnerRepository": "panchalvinay33-debug/NearMeU",
+    "adminDevelopmentStatus": "PAUSED_UNTIL_CONSUMER_LAUNCH_OWNER_RESUME",
+    "adminHistoricalBranchesAreReferenceOnly": true,
+    "adminHistoricalBranchesPreserveDuringPause": true,
+    "boundaryDocument": "docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md"
+  },
   "developmentState": {
     "sourceBranch": "main",
     "recoveryBranch": "stable/official-recoverable-base",
@@ -24,6 +36,7 @@
   "officialTruth": {
     "machineManifest": "config/official_base_manifest.json",
     "operatingBlueprint": "docs/PROJECT_OPERATING_BLUEPRINT.md",
+    "ecosystemBoundary": "docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md",
     "changeLedger": "docs/CHANGE_LEDGER.md",
     "oneCommandRecovery": "tool/restore_official_base.ps1",
     "deploymentGate": "tool/verify_deployment_gate.ps1",
@@ -89,6 +102,7 @@
   ],
   "futureRoadmap": {
     "status": "locked",
-    "rule": "Future scope must be explicitly unlocked by the owner and started fresh from the promoted official recoverable base. Historical post-Base08 branches are not starting points."
+    "adminCompanionTrack": "paused-until-consumer-launch-owner-resume",
+    "rule": "Future scope must be explicitly unlocked by the owner and started fresh from the promoted official recoverable base. Historical post-Base08 branches are not starting points. Historical Admin backend branches are preserved references while Admin is paused and must not be directly merged or deployed."
   }
 }
