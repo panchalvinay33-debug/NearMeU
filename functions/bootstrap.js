@@ -33,4 +33,5 @@ module.exports = {
   ...require("./admin_recovery_functions.js"),
   ...require("./admin_messaging_functions.js"),
   ...require("./admin_system_functions.js"),
+  ...require("./admin_audit_functions.js"),
 };
