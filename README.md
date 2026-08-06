@@ -11,8 +11,20 @@ For the exact current truth, open these in order:
 1. [`docs/PROJECT_OPERATING_BLUEPRINT.md`](docs/PROJECT_OPERATING_BLUEPRINT.md) — how NearMeU is developed, tested, deployed, backed up and recovered.
 2. [`config/official_base_manifest.json`](config/official_base_manifest.json) — machine-readable accepted/candidate SHA, artifacts, gates and recovery target.
 3. [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) — detailed project/evidence audit.
-4. [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) — accepted recovery evidence.
-5. [`docs/INDEX.md`](docs/INDEX.md) — full documentation map.
+4. [`docs/CHANGE_LEDGER.md`](docs/CHANGE_LEDGER.md) — what changed, when, where it merged and why.
+5. [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) — accepted recovery evidence.
+6. [`docs/INDEX.md`](docs/INDEX.md) — full documentation map.
+
+## One-command project summary
+
+From the canonical PC workspace:
+
+```powershell
+cd F:\NearMeU
+.\tool\show_project_state.ps1
+```
+
+This prints the accepted Base boundary, official recovery SHA, current local SHA/branch, version, fresh physical results, pending closeout gates, persistent evidence gaps and future-work lock.
 
 ## Project identity
 
@@ -31,8 +43,6 @@ For the exact current truth, open these in order:
 Do not copy accepted SHAs or artifact hashes from this README. Those values deliberately live in one machine-readable source: `config/official_base_manifest.json`.
 
 ## One-command recovery
-
-From the canonical PC workspace:
 
 ```powershell
 cd F:\NearMeU
@@ -89,8 +99,8 @@ functions/               Firebase Cloud Functions and tests
 lib/                     Flutter application code
 rules_tests/             Firebase emulator security tests
 test/                    Flutter tests
-docs/                    Blueprint, audit, acceptance and release docs
-tool/                    Recovery, deployment and audit scripts
+docs/                    Blueprint, audit, ledger, acceptance and release docs
+tool/                    State, recovery, deployment and production-audit scripts
 .github/workflows/       CI and signed-build workflows
 ```
 
