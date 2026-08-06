@@ -15,7 +15,8 @@ Read these in this order:
 5. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — accepted/recovery evidence record.
 6. [`TEST_BATCH_REGISTER.md`](TEST_BATCH_REGISTER.md) — batch acceptance status and persistent evidence gaps.
 7. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled work order; future runtime work is currently locked after Base08.
-8. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — product behavior decisions.
+8. [`FUTURE_ROADMAP.md`](FUTURE_ROADMAP.md) — gated post-Base08 roadmap with dependencies, acceptance matrices, forbidden scope and rollback rules. Planning only until owner unlock.
+9. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — product behavior decisions.
 
 ## Project identity
 
@@ -57,12 +58,14 @@ When any document conflicts, use:
 1. `docs/PROJECT_OPERATING_BLUEPRINT.md`
 2. `config/official_base_manifest.json`
 3. `docs/MASTER_PROJECT_AUDIT.md`
-4. `docs/OFFICIAL_RECOVERABLE_BASE.md`
-5. `config/project_state_manifest.json`
-6. `docs/TEST_BATCH_REGISTER.md`
-7. `docs/EXECUTION_BATCH_PLAN.md`
-8. accepted `main` source/rules/workflows
-9. historical plans, old PRs and old branches
+4. `docs/CHANGE_LEDGER.md`
+5. `docs/OFFICIAL_RECOVERABLE_BASE.md`
+6. `config/project_state_manifest.json`
+7. `docs/TEST_BATCH_REGISTER.md`
+8. `docs/EXECUTION_BATCH_PLAN.md`
+9. `docs/FUTURE_ROADMAP.md` for future planning only
+10. accepted `main` source/rules/workflows
+11. historical plans, old PRs and old branches
 
 ## Important external state
 
