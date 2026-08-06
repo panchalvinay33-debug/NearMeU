@@ -58,8 +58,25 @@ if (-not (Test-Path $firebaseRcPath)) { Fail '.firebaserc missing.' }
 $firebaseRc = Get-Content $firebaseRcPath -Raw
 if ($firebaseRc -notmatch [regex]::Escape($manifest.identity.firebaseProjectId)) { Fail 'Firebase project mismatch.' }
 
-$expectedExports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
-if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load accepted deployable Cloud Function exports.' }
+$project = [string]$manifest.identity.firebaseProjectId
+$previousGcloudProject = $env:GCLOUD_PROJECT
+$previousGoogleCloudProject = $env:GOOGLE_CLOUD_PROJECT
+$previousGcpProject = $env:GCP_PROJECT
+$previousFirebaseConfig = $env:FIREBASE_CONFIG
+try {
+    $env:GCLOUD_PROJECT = $project
+    $env:GOOGLE_CLOUD_PROJECT = $project
+    $env:GCP_PROJECT = $project
+    $env:FIREBASE_CONFIG = '{"projectId":"' + $project + '"}'
+
+    $expectedExports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
+    if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load accepted deployable Cloud Function exports.' }
+} finally {
+    $env:GCLOUD_PROJECT = $previousGcloudProject
+    $env:GOOGLE_CLOUD_PROJECT = $previousGoogleCloudProject
+    $env:GCP_PROJECT = $previousGcpProject
+    $env:FIREBASE_CONFIG = $previousFirebaseConfig
+}
 
 Write-Host ''
 Write-Host 'NearMeU DEPLOYMENT GATE PASS' -ForegroundColor Green
