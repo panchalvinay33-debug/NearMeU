@@ -17,9 +17,7 @@ if ($repoRoot -ne $expectedRoot) {
     Write-Host "WARNING: canonical NearMeU workspace is $expectedRoot; current repo is $repoRoot" -ForegroundColor Yellow
 }
 
-if (-not (Test-Path $manifestPath)) {
-    Fail "Missing config/official_base_manifest.json"
-}
+if (-not (Test-Path $manifestPath)) { Fail 'Missing config/official_base_manifest.json' }
 
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.identity.repository -ne 'panchalvinay33-debug/NearMeU') { Fail 'Repository identity mismatch in official base manifest.' }
@@ -37,17 +35,49 @@ if ($dirty -and -not $Force) {
     exit 2
 }
 
-$targetSha = [string]$manifest.recovery.currentOfficialSourceSha
-if ([string]::IsNullOrWhiteSpace($targetSha)) { Fail 'Official source SHA is empty.' }
-
-Write-Host "Recovering NearMeU to official source SHA: $targetSha" -ForegroundColor Cyan
-
-git fetch --prune origin
+Write-Host 'Fetching main, recovery branch and immutable tags...' -ForegroundColor Cyan
+git fetch --prune --tags origin
 if ($LASTEXITCODE -ne 0) { Fail 'git fetch failed.' }
 
-# Verify the accepted commit exists before changing the working tree.
-git cat-file -e "$targetSha^{commit}" 2>$null
-if ($LASTEXITCODE -ne 0) { Fail "Official accepted SHA $targetSha is not available after fetch." }
+$targetSha = $null
+$resolvedFrom = $null
+$tagName = [string]$manifest.recovery.immutableTagName
+$tagStatus = [string]$manifest.recovery.immutableTagStatus
+
+if (-not [string]::IsNullOrWhiteSpace($tagName) -and $tagStatus -eq 'PROMOTED') {
+    git rev-parse -q --verify "refs/tags/$tagName^{commit}" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $targetSha = (git rev-parse "refs/tags/$tagName^{commit}").Trim()
+        $resolvedFrom = "immutable tag $tagName"
+    } else {
+        Fail "Manifest says immutable tag '$tagName' is PROMOTED, but the tag is unavailable. Do not guess a recovery target."
+    }
+}
+
+if (-not $targetSha) {
+    $manifestSha = [string]$manifest.recovery.currentOfficialSourceSha
+    if (-not [string]::IsNullOrWhiteSpace($manifestSha)) {
+        git cat-file -e "$manifestSha^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $targetSha = $manifestSha
+            $resolvedFrom = 'official manifest SHA'
+        }
+    }
+}
+
+if (-not $targetSha) {
+    $recoveryRef = "origin/$($manifest.identity.recoveryBranch)"
+    git rev-parse -q --verify "$recoveryRef^{commit}" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $targetSha = (git rev-parse "$recoveryRef^{commit}").Trim()
+        $resolvedFrom = "recovery branch $recoveryRef"
+    }
+}
+
+if (-not $targetSha) { Fail 'No valid official recovery target could be resolved from tag, manifest SHA or recovery branch.' }
+
+Write-Host "Recovering NearMeU from $resolvedFrom" -ForegroundColor Cyan
+Write-Host "Target SHA: $targetSha" -ForegroundColor Cyan
 
 if ($Force -and $dirty) {
     git reset --hard
@@ -60,29 +90,26 @@ git switch main
 if ($LASTEXITCODE -ne 0) { Fail 'Unable to switch to main.' }
 
 git reset --hard $targetSha
-if ($LASTEXITCODE -ne 0) { Fail 'Unable to reset to official source SHA.' }
+if ($LASTEXITCODE -ne 0) { Fail 'Unable to reset to official recovery target.' }
 
 $currentSha = (git rev-parse HEAD).Trim()
 if ($currentSha -ne $targetSha) { Fail "Recovery SHA mismatch. Expected $targetSha, got $currentSha" }
 
 $pubspec = Get-Content (Join-Path $repoRoot 'pubspec.yaml') -Raw
 $expectedVersion = "version: $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
-if ($pubspec -notmatch [regex]::Escape($expectedVersion)) {
-    Fail "pubspec version does not match manifest ($expectedVersion)."
-}
+if ($pubspec -notmatch [regex]::Escape($expectedVersion)) { Fail "pubspec version does not match manifest ($expectedVersion)." }
 
 $firebaseRc = Join-Path $repoRoot '.firebaserc'
 if (Test-Path $firebaseRc) {
     $firebaseText = Get-Content $firebaseRc -Raw
-    if ($firebaseText -notmatch [regex]::Escape($manifest.identity.firebaseProjectId)) {
-        Fail 'Firebase project in .firebaserc does not match official manifest.'
-    }
+    if ($firebaseText -notmatch [regex]::Escape($manifest.identity.firebaseProjectId)) { Fail 'Firebase project in .firebaserc does not match official manifest.' }
 }
 
 Write-Host ''
 Write-Host 'NearMeU OFFICIAL BASE SOURCE RECOVERY PASS' -ForegroundColor Green
 Write-Host "Repository : $($manifest.identity.repository)"
 Write-Host "Workspace  : $repoRoot"
+Write-Host "Resolved   : $resolvedFrom"
 Write-Host "Git SHA    : $currentSha"
 Write-Host "Version    : $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
 Write-Host "Firebase   : $($manifest.identity.firebaseProjectId)"
