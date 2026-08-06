@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "project": "NearMeU",
-  "status": "BASE08_RECERTIFICATION_FINAL_VERSION_CHECK_PENDING",
+  "status": "BASE08_RECERTIFICATION_PRODUCTION_AUDIT_PENDING",
   "lastUpdated": "2026-08-06",
   "acceptedProductBoundary": {
     "throughBatch": "08",
@@ -30,16 +30,13 @@
     "projectStateScript": "tool/show_project_state.ps1",
     "productionAuditScript": "tool/audit_production_state.ps1",
     "deploymentGateScript": "tool/verify_deployment_gate.ps1",
-    "resolutionOrder": [
-      "immutableTagName",
-      "currentOfficialSourceSha",
-      "stable/official-recoverable-base"
-    ]
+    "resolutionOrder": ["immutableTagName", "currentOfficialSourceSha", "stable/official-recoverable-base"]
   },
   "finalVersionDisplayCandidate": {
     "pullRequest": 114,
     "branchHeadSha": "f0906b3be18e633102db07a6d74e837717d8cc60",
     "testedMergeRefSha": "04c0050ac13a9930996a59c351fea98c3971bbfb",
+    "mergedMainSha": "8b5cd677b5f4367ab658b67e81aab28b77ab17fd",
     "qualityWorkflowRun": 31081417470,
     "qualityWorkflowNumber": 614,
     "recoverableWorkflowRun": 31081418948,
@@ -48,8 +45,8 @@
     "recoverableArtifactDigest": "sha256:e9fa15ed8056fd44210b6f89917627236cfaa44d430209766351e63aab9bb27d",
     "signedDebugApkSha256": "532e1b521f0fc92b63da8e4e68188e2788f2fda5996a8f753191b1594246c069",
     "automatedGates": "PASS",
-    "physicalAboutVersionCheck": "PENDING",
-    "expectedAboutLabel": "Version 1.0.11 (Build 12)"
+    "physicalAboutVersionCheck": "PASS",
+    "observedAboutLabel": "Version 1.0.11 (Build 12)"
   },
   "freshBase08PhysicalRecertification": {
     "loginSession": "PASS",
@@ -64,13 +61,14 @@
     "twoPhoneOnlinePresence": "PASS",
     "twoPhoneDeliveredGreyDoubleTick": "PASS",
     "twoPhoneReadBlueDoubleTick": "PASS",
-    "twoPhoneBidirectionalMessaging": "PASS"
+    "twoPhoneBidirectionalMessaging": "PASS",
+    "aboutRuntimeVersion": "PASS"
   },
   "base08StabilizationFixes": [
     "Firestore automatic messages.timestamp collection index restored",
     "delivery acknowledgement batch limit aligned to 200",
     "presence service self-heals stale externally written offline state",
-    "About screen runtime version display candidate in PR 114"
+    "About screen now reads runtime version/build; owner physically verified Version 1.0.11 (Build 12)"
   ],
   "persistentEvidenceGaps": [
     "Batch07 receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS",
@@ -81,5 +79,5 @@
     "unexpectedPostBase08FunctionsMustBeZero": true,
     "consoleOnlyPermanentRuleChangesAllowed": false
   },
-  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until automated gates, focused physical acceptance, merge, production audit, documentation and owner acceptance are all complete."
+  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until production audit, final documentation, recovery promotion and owner acceptance are complete."
 }
