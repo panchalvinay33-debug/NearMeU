@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../constants/app_constants.dart';
 import '../models/app_user.dart';
 import '../models/chat_preview_model.dart';
 import 'local_preview_cache.dart';
@@ -24,6 +26,7 @@ class TrustedReadService {
       <String, List<ChatPreviewModel>>{};
   static final Map<String, List<AppUser>> _memoryNearbyCache =
       <String, List<AppUser>>{};
+  static final Set<String> _coldChatCacheServed = <String>{};
 
   final FirebaseFunctions _functions;
   final FirebaseFirestore _firestore;
@@ -32,6 +35,50 @@ class TrustedReadService {
 
   Future<List<ChatPreviewModel>> getChatPreviews() async {
     final uid = _auth.currentUser?.uid;
+
+    if (uid != null && !_coldChatCacheServed.contains(uid)) {
+      final cached = await _readCachedChatPreviews(uid);
+      _coldChatCacheServed.add(uid);
+      if (cached.isNotEmpty) {
+        unawaited(_refreshChatPreviewsInBackground());
+        return cached;
+      }
+    }
+
+    return _getFreshChatPreviews(uid);
+  }
+
+  Future<void> _refreshChatPreviewsInBackground() async {
+    try {
+      await _getFreshChatPreviews(_auth.currentUser?.uid);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Background chat preview refresh deferred',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<List<ChatPreviewModel>> _readCachedChatPreviews(String uid) async {
+    final memoryChats = _memoryChatCache[uid];
+    if (memoryChats != null && memoryChats.isNotEmpty) {
+      return List<ChatPreviewModel>.unmodifiable(
+        _dedupeChatPreviews(memoryChats),
+      );
+    }
+
+    final cachedChats = await _previewCache.loadChatPreviews(uid);
+    if (cachedChats.isEmpty) return const <ChatPreviewModel>[];
+    final deduped = _dedupeChatPreviews(cachedChats);
+    _memoryChatCache[uid] = List<ChatPreviewModel>.unmodifiable(deduped);
+    if (deduped.length != cachedChats.length) {
+      await _previewCache.saveChatPreviews(uid, deduped);
+    }
+    return deduped;
+  }
+
+  Future<List<ChatPreviewModel>> _getFreshChatPreviews(String? uid) async {
     Object? callableError;
     StackTrace? callableStackTrace;
 
@@ -67,22 +114,8 @@ class TrustedReadService {
         );
       }
 
-      final memoryChats = _memoryChatCache[uid];
-      if (memoryChats != null && memoryChats.isNotEmpty) {
-        return List<ChatPreviewModel>.unmodifiable(
-          _dedupeChatPreviews(memoryChats),
-        );
-      }
-
-      final cachedChats = await _previewCache.loadChatPreviews(uid);
-      if (cachedChats.isNotEmpty) {
-        final deduped = _dedupeChatPreviews(cachedChats);
-        _memoryChatCache[uid] = List<ChatPreviewModel>.unmodifiable(deduped);
-        if (deduped.length != cachedChats.length) {
-          await _previewCache.saveChatPreviews(uid, deduped);
-        }
-        return deduped;
-      }
+      final cachedChats = await _readCachedChatPreviews(uid);
+      if (cachedChats.isNotEmpty) return cachedChats;
     }
 
     if (callableError != null) {
@@ -189,6 +222,14 @@ class TrustedReadService {
     return 'Message';
   }
 
+  bool _isEffectivelyOnline(Map<String, dynamic> user) {
+    if (user['isOnline'] != true) return false;
+    final lastSeen = user['lastSeen'];
+    if (lastSeen is! Timestamp) return false;
+    return DateTime.now().difference(lastSeen.toDate()).abs() <=
+        const Duration(minutes: AppConstants.presenceFreshnessMinutes);
+  }
+
   Future<List<ChatPreviewModel>> _getChatPreviewsFromFirestore(
     String uid,
   ) async {
@@ -293,9 +334,7 @@ class TrustedReadService {
               : currentReadState['unreadCount'] is num
               ? (currentReadState['unreadCount'] as num).toInt()
               : 0,
-          isOtherUserOnline: otherData['isOnline'] is bool
-              ? otherData['isOnline'] as bool
-              : null,
+          isOtherUserOnline: _isEffectivelyOnline(otherData),
         ),
       );
     }
