@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/audio_call_model.dart';
 import '../services/audio_call_service.dart';
+import '../services/call_device_service.dart';
 import '../theme/app_colors.dart';
 
 class AudioCallHistoryScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class AudioCallHistoryScreen extends StatefulWidget {
 
 class _AudioCallHistoryScreenState extends State<AudioCallHistoryScreen> {
   final AudioCallService _calls = AudioCallService();
+  final CallDeviceService _device = CallDeviceService();
   late Future<List<AudioCallModel>> _history;
 
   @override
@@ -25,6 +27,17 @@ class _AudioCallHistoryScreenState extends State<AudioCallHistoryScreen> {
   Future<void> _refresh() async {
     setState(() => _history = _calls.history());
     await _history;
+  }
+
+  Future<void> _openCallNotificationSettings() async {
+    try {
+      await _device.openCallNotificationSettings();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open call notification settings. $error')),
+      );
+    }
   }
 
   String _statusLabel(AudioCallModel call, String currentUid) {
@@ -70,6 +83,13 @@ class _AudioCallHistoryScreenState extends State<AudioCallHistoryScreen> {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         title: const Text('Calls'),
+        actions: [
+          IconButton(
+            tooltip: 'Call notification settings',
+            onPressed: _openCallNotificationSettings,
+            icon: const Icon(Icons.notifications_active_outlined),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
