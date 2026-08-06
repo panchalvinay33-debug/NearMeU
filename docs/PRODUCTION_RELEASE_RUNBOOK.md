@@ -1,238 +1,227 @@
-# NearMeU production release runbook
+# NearMeU Production Deployment and Release Runbook
 
-This runbook covers the controlled path from a green `main` branch to Firebase activation and a Google Play internal-test App Bundle. Never deploy Firebase resources or build a production artifact from an unreviewed feature branch.
+Last updated: 2026-08-06
 
-## 1. Locked V1 behavior
+This runbook defines the only supported path from accepted/reviewed NearMeU source to Firebase production and later Google Play distribution.
 
-The release candidate includes:
+## 1. Absolute rule
 
-- Trusted Nearby discovery with saved-device fallback and privacy-safe approximate location.
-- Trusted chat previews with mixed current/legacy conversation repair.
-- Encrypted account-specific local chat history.
-- Seven-day cloud retention for new private messages while downloaded history remains on the device.
-- Profile photo add, change, remove and display.
-- Private compressed photo messages.
-- Private compressed video messages with a maximum duration of two minutes.
-- Authenticated media download without public download URLs.
-- Receiver download acknowledgement followed by cloud-media cleanup.
-- Encrypted pending-upload recovery when confirmation is uncertain.
-- Delete-for-me local file cleanup.
-- Trusted 60-minute Unsend with immediate media deletion and scheduled cleanup retry.
-- Account deletion cleanup for the encrypted database, cache and private local media.
+Never deploy production Firebase resources and never build a production-distribution artifact from an unmerged feature branch.
 
-A device-local history cannot be recovered after app-data clearing, uninstalling or losing the device unless a separate encrypted backup feature is added later.
+Production deployment source must be:
 
-## 2. One-time GitHub setup
+- branch `main`;
+- clean working tree;
+- exact match to `origin/main`;
+- reviewed/merged source;
+- applicable CI green;
+- correct package/project/version identity.
 
-Create a protected GitHub Environment named `production-release`. Add required reviewers so a signed build cannot start without manual approval.
+Before deployment:
 
-Add these environment secrets:
-
-- `ANDROID_UPLOAD_KEYSTORE_BASE64`: base64-encoded private upload keystore bytes.
-- `ANDROID_KEYSTORE_PASSWORD`: upload keystore password.
-- `ANDROID_KEY_PASSWORD`: private key password.
-- `ANDROID_KEY_ALIAS`: upload key alias.
-
-Keep the original keystore and passwords in a separate secure backup. Losing the upload key can delay or block future updates. Never commit a real `.jks`, `.keystore`, or `key.properties` file.
-
-Example local encoding command:
-
-```bash
-base64 -w 0 upload-keystore.jks
+```powershell
+cd F:\NearMeU
+.\tool\verify_deployment_gate.ps1
 ```
 
-Paste the output directly into the GitHub environment secret. Do not paste it into issues, pull requests, chat or logs.
+If this gate fails, do not deploy.
 
-## 3. Versioning rule
+## 2. Project identity
 
-The single release version source is `pubspec.yaml`:
+- Repository: `panchalvinay33-debug/NearMeU`
+- Canonical PC workspace: `F:\NearMeU`
+- Firebase project: `nearmeu-e82c7`
+- Android package: `com.nearmeu.nearmeu`
+- Version source: `pubspec.yaml`
+- Permanent signing identity: protected GitHub signing secrets; certificate fingerprint recorded in `config/official_base_manifest.json`
+
+## 3. Version rule
+
+`pubspec.yaml` is the single source:
 
 ```yaml
-version: 1.0.0+1
+version: X.Y.Z+N
 ```
 
-- `1.0.0` becomes Android `versionName`.
-- `1` becomes Android `versionCode`.
-- Every Play upload must use a versionCode greater than every previously uploaded build.
-- Increase the version before triggering a new production AAB, including rejection fixes and internal-test replacements.
+- `X.Y.Z` → Android versionName.
+- `N` → Android versionCode.
+- Every Google Play upload must use a versionCode greater than every previously uploaded build.
+- Never hardcode versionName/versionCode independently in Android Gradle configuration.
+- About screen must display runtime package information, not a hardcoded version string.
 
-The Android Gradle configuration reads both values from Flutter. Do not hardcode them in `android/app/build.gradle.kts`.
+## 4. Required pre-deploy gates
 
-## 4. Required green gates
+Applicable candidate checks must pass:
 
-Before Firebase deployment or a signed artifact, confirm the latest `main` quality run passed:
+- formatter;
+- Flutter analyze/compile checks;
+- Flutter tests;
+- Firebase Rules emulator tests;
+- Cloud Functions tests/module load;
+- signed APK/release build gates as applicable;
+- permanent signing certificate verification.
 
-- Dart formatter and Flutter analyze.
-- Flutter unit/widget tests.
-- Debug APK build.
-- Firestore and Cloud Storage emulator security tests.
-- Cloud Functions tests and secure module loading.
-- Unsigned release-build refusal.
+Also verify:
 
-Also confirm:
+- all intended PRs are merged;
+- no known launch-blocking fix remains open;
+- local `F:\NearMeU` matches `origin/main`;
+- the batch has owner authorization to deploy;
+- `config/official_base_manifest.json` and `docs/PROJECT_OPERATING_BLUEPRINT.md` describe the correct project identity.
 
-- All intended pull requests are merged.
-- No emergency security fix remains open.
-- `git status` is clean on the deployment PC.
-- The local commit exactly matches `origin/main`.
-
-## 5. Firebase production deployment
-
-Run from the repository root on the verified `main` commit.
+## 5. Synchronize the deployment PC
 
 ```powershell
 cd F:\NearMeU
 git fetch --prune origin
 git switch main
 git reset --hard origin/main
+.\tool\verify_deployment_gate.ps1
+```
 
-firebase login
-firebase use nearmeu-e82c7
+Do not deploy from a Downloads clone, old backup folder or detached experimental SHA.
 
+## 6. Validate dependencies before Firebase deployment
+
+```powershell
 npm ci --prefix functions --no-audit --no-fund
 npm test --prefix functions
 flutter pub get
 flutter test
 ```
 
-Deploy in this order so indexes and rules are available before the new callable and scheduled functions receive traffic:
+## 7. Firebase deployment order
+
+Use the smallest targeted deploy that safely implements the accepted change.
+
+When a batch changes the full Firebase stack, use this order:
 
 ```powershell
-firebase deploy --only firestore --project nearmeu-e82c7
-firebase firestore:indexes --project nearmeu-e82c7
+firebase deploy --only firestore:indexes,firestore:rules --project nearmeu-e82c7
 firebase deploy --only storage --project nearmeu-e82c7
 firebase deploy --only functions --project nearmeu-e82c7
 ```
 
-The configured Firebase resources are:
+Deploy Hosting only when the accepted batch changes Hosting:
 
-- `firestore.rules`
-- `firestore.indexes.json`
-- `storage.rules`
-- Cloud Functions loaded from `functions/bootstrap.js`
-
-After deployment, verify that these callable/scheduled capabilities exist in `asia-south1` where applicable:
-
-- Trusted private-message sending.
-- Trusted chat previews and legacy repair.
-- Trusted Nearby candidates.
-- Private media-message creation.
-- Receiver media-download acknowledgement.
-- Seven-day private-message purge.
-- Trusted private-message Unsend.
-- Pending private-media deletion retry.
-
-Do not edit production Firestore or Storage rules only in the Firebase console. CLI deployment overwrites console rules, so the repository files remain the source of truth.
-
-## 6. Firebase console checks
-
-Before enabling a Play internal test:
-
-1. Confirm all required Firestore indexes show `Enabled`; do not proceed while a new index is still building.
-2. Register the Play signing and upload certificate SHA-256 fingerprints in Firebase.
-3. Confirm Google Sign-In works with the Play-distributed certificate.
-4. Register and validate Firebase App Check Play Integrity for `com.nearmeu.nearmeu`.
-5. Confirm App Check enforcement does not lock out the intended internal-test build.
-6. Confirm Cloud Storage rules show the repository deployment timestamp.
-7. Confirm FCM, Crashlytics, Analytics and Performance use `nearmeu-e82c7`.
-8. Confirm scheduled functions have a successful first invocation or no-error health state.
-
-## 7. Build the signed AAB
-
-From GitHub Actions:
-
-1. Open **Build signed production AAB**.
-2. Select **Run workflow** on the `main` branch.
-3. Approve the `production-release` environment review.
-4. Confirm the workflow validates the version, decodes the private keystore, verifies the alias, builds an obfuscated release AAB, verifies the bundle signature and removes signing files.
-
-Download and retain both workflow artifacts:
-
-- Signed AAB, SHA-256 checksum and release metadata.
-- Dart obfuscation symbols for that exact version and commit.
-
-Verify the downloaded AAB checksum before upload:
-
-```bash
-sha256sum -c app-release.aab.sha256
+```powershell
+firebase deploy --only hosting --project nearmeu-e82c7
 ```
 
-## 8. Google Play internal testing
+Why this order:
 
-Upload the AAB to the internal-testing track first. Complete or verify:
+1. required indexes/rules become available first;
+2. Storage policy is updated before functions rely on it;
+3. Functions receive traffic only after their data/security prerequisites exist;
+4. Hosting is independent and deployed only when necessary.
 
-- App name, icon, feature graphic, phone screenshots, short description and full description.
-- Privacy policy URL.
-- Data safety declarations for location, account/profile data, messages, photos/videos, diagnostics, analytics, app performance and fraud/security use.
-- Disclosure that chat history is primarily retained on the user's device and old cloud messages expire.
-- App access instructions if review requires an authenticated flow.
-- Content rating questionnaire.
-- Target audience and age declarations.
-- Ads declaration.
-- Account deletion disclosure and working in-app deletion path.
-- Contact details and release notes.
+Do not use a stale local `firestore.indexes.json`. Always synchronize `main` first.
 
-Do not promote directly to production after the first successful upload.
+## 8. Console-only configuration prohibition
 
-## 9. Two-device acceptance test
+Repository-managed Firestore rules, indexes and Storage rules must not live only in Firebase Console.
 
-Install only from Google Play internal testing and test with two physical Android devices and two separate adult accounts.
+CLI deployment can overwrite console edits. Permanent project truth belongs in source control.
 
-### Account and profile
+Emergency console actions must be reflected back into accepted source before closeout.
 
-- Fresh install and Google Sign-In.
-- Profile completion and permissions denied/allowed paths.
-- Profile photo add, change and remove.
-- Logout/login and account switching.
+## 9. Post-deploy production audit
 
-### Nearby and presence
+Immediately after deployment:
 
-- Nearby candidate loading for both accounts.
-- Any-distance and explicit-radius behavior.
-- Saved Nearby list when the network is unavailable.
-- Background/foreground presence and admin online counts.
-- Blocked/suspended accounts do not appear incorrectly.
+```powershell
+.\tool\audit_production_state.ps1
+```
 
-### Text and legacy chat
+The audit compares deployed Cloud Functions against accepted `functions/bootstrap.js` exports.
 
-- Two-way text, emoji, reply, seen and notification opening.
-- Recent and older conversations appear together in Chats.
-- A legacy parent chat is repaired without duplicating the conversation.
-- Local history remains visible after temporarily disabling the network.
-- Reopen the app and confirm local history remains.
+Unexpected deployed Functions are production drift and block acceptance/promotion.
 
-### Photo and video
+Examples:
 
-- Send gallery and camera photos in both directions.
-- Send short and near-two-minute compressed videos in both directions.
-- Verify upload progress and retry behavior.
-- Receiver downloads successfully and can open/play the local file.
-- Unrelated accounts cannot read private media.
-- After receiver acknowledgement, confirm the cloud object is deleted or queued for cleanup.
-- Confirm the downloaded local copy remains available after cloud cleanup.
+- abandoned Admin function;
+- old calling function;
+- function deployed from a feature branch;
+- function removed from accepted source but still running in Firebase.
 
-### Message actions and retention
+Resolve drift before declaring the batch closed.
 
-- Unsend text, photo and video within 60 minutes.
-- Confirm Unsend removes local sender media and cloud media.
-- Confirm an Unsend attempt after 60 minutes is rejected.
-- Delete for me removes the local message and local files only for that account.
-- Confirm new messages carry the seven-day retention policy.
-- Do not wait seven days manually; verify scheduled-function logs and use emulator/unit coverage for the expiry boundary.
+## 10. Firestore/index verification
 
-### Account deletion and observability
+After index/rule changes:
 
-- Account deletion removes the encrypted local database, caches and private local media.
-- Block/unblock, report limits and suspension handling.
-- Play Integrity App Check, Crashlytics non-fatals, Analytics navigation and Performance startup trace.
-- No email, raw UID, exact coordinates, token, profile name, message text or media path appears in telemetry dashboards.
+- confirm required indexes are enabled/ready;
+- confirm no stale custom field exemption breaks normal automatic collection indexes;
+- exercise the affected query physically;
+- never mark a query defect fixed solely because the deployment command succeeded.
 
-Record the tested AAB SHA-256, commit, version, devices, Android versions, Firebase project, test accounts and result.
+## 11. App Check
 
-## 10. Promotion decision
+Debug physical testing may use installation-specific App Check debug tokens.
 
-Promote to closed testing only when there are no launch-blocking crashes, authentication failures, message-delivery failures, broken media downloads, privacy leaks, retention failures or App Check rejection loops.
+Production/Play builds must use the approved production provider (Play Integrity where configured) and correct certificate fingerprints.
 
-Promote to production gradually and watch Crashlytics, ANRs, login success, notification delivery, function errors, Storage usage, retention cleanup and account deletion.
+Never commit App Check debug tokens.
 
-If Google Play rejects a release, fix the stated issue, increment the versionCode, build a new signed AAB through the same workflow and submit again. Keep every uploaded artifact and its symbol set traceable to its Git commit.
+## 12. Android signed artifacts
+
+Permanent signing secrets live in protected GitHub secrets/environment, not the repository.
+
+Retain:
+
+- artifact ID;
+- artifact digest;
+- APK/AAB SHA-256;
+- exact Git source/merge-ref;
+- signing certificate fingerprint;
+- workflow run ID.
+
+A physical acceptance is valid only for the exact artifact that was tested.
+
+## 13. Google Play path
+
+Do not promote the first successful build directly to production.
+
+Recommended release path:
+
+1. internal testing;
+2. two-device physical acceptance from Play-distributed build;
+3. closed testing;
+4. gradual production rollout;
+5. monitor crashes/ANRs/auth/message delivery/functions/App Check/storage/retention/deletion.
+
+If Play rejects a release, fix the issue, increment versionCode, rebuild through the controlled workflow, and preserve traceability to the exact Git SHA.
+
+## 14. Production rollback / base recovery
+
+Source rollback:
+
+```powershell
+cd F:\NearMeU
+.\tool\restore_official_base.ps1
+```
+
+Then audit deployed functions:
+
+```powershell
+.\tool\audit_production_state.ps1
+```
+
+Source recovery does not automatically delete deployed functions. Resolve only confirmed production drift and redeploy accepted resources if required.
+
+Never delete user data merely to return source/backend code to an accepted base.
+
+## 15. Acceptance/promotion rule
+
+A production-changing batch cannot become official recovery truth until:
+
+- exact candidate CI PASS;
+- signing PASS;
+- owner physical acceptance PASS;
+- production deploy PASS;
+- production-state audit PASS;
+- docs/manifest updated;
+- recovery branch promoted;
+- canonical local workspace synchronized.
+
+The full governing process is defined in `docs/PROJECT_OPERATING_BLUEPRINT.md`.
