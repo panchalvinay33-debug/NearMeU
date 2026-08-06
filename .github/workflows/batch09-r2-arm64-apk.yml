@@ -1,0 +1,71 @@
+name: Batch 09 R2 ARM64 signed APK
+
+on:
+  push:
+    branches:
+      - batch/09-r2-audio-calling
+    paths:
+      - .github/workflows/batch09-r2-arm64-apk.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Validate signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_STORE_PASSWORD ANDROID_KEY_PASSWORD; do
+            test -n "${!required:-}" || { echo "Missing $required"; exit 1; }
+          done
+      - name: Restore permanent signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/nearmeu-upload.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=nearmeu-upload.jks
+          EOF
+          chmod 600 android/app/nearmeu-upload.jks android/key.properties
+      - name: Build signed ARM64 release APK
+        run: flutter build apk --release --target-platform android-arm64 --no-pub
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose --print-certs "$APK"
+      - name: Upload signed ARM64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-signed-arm64-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/app/nearmeu-upload.jks android/key.properties
