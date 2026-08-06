@@ -1,10 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-class AboutScreen extends StatelessWidget {
+class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
   @override
+  State<AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends State<AboutScreen> {
+  String _version = 'Loading…';
+  String _build = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _version = info.version;
+        _build = info.buildNumber;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _version = 'Unavailable';
+        _build = '';
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final versionLabel = _build.isEmpty
+        ? 'Version $_version'
+        : 'Version $_version  •  Build $_build';
+
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
@@ -21,7 +57,6 @@ class AboutScreen extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 10),
-
             Container(
               height: 100,
               width: 100,
@@ -35,27 +70,21 @@ class AboutScreen extends StatelessWidget {
                 size: 60,
               ),
             ),
-
             const SizedBox(height: 20),
-
             const Text(
-              "NearMeU",
+              'NearMeU',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 30,
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 6),
-
             Text(
-              "Version 1.0.0",
+              versionLabel,
               style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
             ),
-
             const SizedBox(height: 30),
-
             Card(
               color: const Color(0xFF1E1E1E),
               shape: RoundedRectangleBorder(
@@ -67,18 +96,16 @@ class AboutScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "About NearMeU",
+                      'About NearMeU',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     SizedBox(height: 15),
-
                     Text(
-                      "NearMeU is a privacy-first platform designed to help adults discover and connect with nearby people in a safe, secure and respectful environment.",
+                      'NearMeU is a privacy-first platform designed to help adults discover and connect with nearby people in a safe, secure and respectful environment.',
                       style: TextStyle(
                         color: Colors.white70,
                         height: 1.6,
@@ -89,9 +116,7 @@ class AboutScreen extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 18),
-
             Card(
               color: const Color(0xFF1E1E1E),
               shape: RoundedRectangleBorder(
@@ -103,64 +128,39 @@ class AboutScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Features",
+                      'Features',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
                       ),
                     ),
-
                     SizedBox(height: 15),
-
                     ListTile(
                       leading: Icon(Icons.lock, color: Colors.deepPurple),
-                      title: Text(
-                        "Privacy First",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      title: Text('Privacy First', style: TextStyle(color: Colors.white)),
                     ),
-
                     ListTile(
-                      leading: Icon(
-                        Icons.location_on,
-                        color: Colors.deepPurple,
-                      ),
-                      title: Text(
-                        "Nearby Discovery",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      leading: Icon(Icons.location_on, color: Colors.deepPurple),
+                      title: Text('Nearby Discovery', style: TextStyle(color: Colors.white)),
                     ),
-
                     ListTile(
                       leading: Icon(Icons.chat, color: Colors.deepPurple),
-                      title: Text(
-                        "Secure Chat",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      title: Text('Secure Chat', style: TextStyle(color: Colors.white)),
                     ),
                     ListTile(
                       leading: Icon(Icons.shield, color: Colors.deepPurple),
-                      title: Text(
-                        "Safe Community",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      title: Text('Safe Community', style: TextStyle(color: Colors.white)),
                     ),
-
                     ListTile(
                       leading: Icon(Icons.flash_on, color: Colors.deepPurple),
-                      title: Text(
-                        "Fast & Lightweight",
-                        style: TextStyle(color: Colors.white),
-                      ),
+                      title: Text('Fast & Lightweight', style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 18),
-
             Card(
               color: const Color(0xFF1E1E1E),
               shape: RoundedRectangleBorder(
@@ -172,29 +172,22 @@ class AboutScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Support",
+                      'Support',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-
                     SizedBox(height: 15),
-
                     Row(
                       children: [
                         Icon(Icons.email, color: Colors.deepPurple),
-
                         SizedBox(width: 10),
-
                         Expanded(
                           child: Text(
-                            "supportnearmeu@gmail.com",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
-                            ),
+                            'supportnearmeu@gmail.com',
+                            style: TextStyle(color: Colors.white70, fontSize: 16),
                           ),
                         ),
                       ],
@@ -203,22 +196,17 @@ class AboutScreen extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             const Text(
-              "Made with ❤️ in India",
+              'Made with ❤️ in India',
               style: TextStyle(color: Colors.white70, fontSize: 16),
             ),
-
-            SizedBox(height: 10),
-
+            const SizedBox(height: 10),
             Text(
-              "© 2026 NearMeU Technologies\nAll Rights Reserved.",
+              '© 2026 NearMeU Technologies\nAll Rights Reserved.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade500, height: 1.5),
             ),
-
             const SizedBox(height: 30),
           ],
         ),
