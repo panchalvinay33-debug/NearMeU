@@ -37,10 +37,43 @@ if ($head -ne $originMain) { Fail "Local main ($head) does not match origin/main
 if ([string]$manifest.status -ne 'READY_FOR_PROMOTION') {
     Fail "Manifest status must be READY_FOR_PROMOTION; current status is '$($manifest.status)'."
 }
+if ([string]$manifest.production.firebaseProductionAudit -ne 'PASS') {
+    Fail "Production audit must be PASS; current value is '$($manifest.production.firebaseProductionAudit)'."
+}
 
-$manifestSha = [string]$manifest.recovery.currentOfficialSourceSha
-if ($manifestSha -ne $head) {
-    Fail "Manifest official source SHA ($manifestSha) must equal current main HEAD ($head) before promotion."
+$testedRuntimeSha = [string]$manifest.currentRecertificationCandidate.runtimeTestedSha
+if ([string]::IsNullOrWhiteSpace($testedRuntimeSha)) {
+    Fail 'Manifest currentRecertificationCandidate.runtimeTestedSha is missing.'
+}
+
+git cat-file -e "$testedRuntimeSha^{commit}" 2>$null
+if ($LASTEXITCODE -ne 0) { Fail "Physically-tested runtime SHA does not resolve: $testedRuntimeSha" }
+
+git merge-base --is-ancestor $testedRuntimeSha $head
+if ($LASTEXITCODE -ne 0) {
+    Fail "Physically-tested runtime SHA $testedRuntimeSha is not an ancestor of current main $head."
+}
+
+# The runtime was physically tested at runtimeTestedSha. Between that SHA and the
+# final immutable closeout snapshot, only non-runtime governance/evidence paths
+# may change. Any consumer/runtime/Firebase source change requires a new APK and
+# focused physical re-test before promotion.
+$changedPaths = @(git diff --name-only "$testedRuntimeSha..$head")
+$forbiddenPaths = @()
+foreach ($path in $changedPaths) {
+    $allowed = (
+        $path -eq 'README.md' -or
+        $path.StartsWith('.github/') -or
+        $path.StartsWith('config/') -or
+        $path.StartsWith('docs/') -or
+        $path.StartsWith('tool/')
+    )
+    if (-not $allowed) { $forbiddenPaths += $path }
+}
+if ($forbiddenPaths.Count -gt 0) {
+    Write-Host 'Runtime/source drift detected after the physically-tested candidate:' -ForegroundColor Red
+    $forbiddenPaths | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    Fail 'Final promotion requires a new signed APK and physical re-test for these runtime changes.'
 }
 
 $tagName = [string]$manifest.recovery.immutableTagName
@@ -55,23 +88,26 @@ if ($LASTEXITCODE -eq 0) { Fail "Tag '$tagName' already exists locally. Promotio
 $remoteTag = git ls-remote --tags origin "refs/tags/$tagName"
 if ($remoteTag) { Fail "Tag '$tagName' already exists on origin. Promotion refuses to move it." }
 
-Write-Host "Creating immutable acceptance tag $tagName at $head" -ForegroundColor Cyan
+Write-Host "Preparing immutable acceptance tag $tagName at $head" -ForegroundColor Cyan
 git tag -a $tagName $head -m "NearMeU official recoverable Base $($manifest.acceptedProductBoundary.throughBatch) accepted $($manifest.lastUpdated)"
 if ($LASTEXITCODE -ne 0) { Fail 'Unable to create acceptance tag.' }
 
-git push origin "refs/tags/$tagName"
-if ($LASTEXITCODE -ne 0) { Fail 'Unable to push acceptance tag.' }
-
-Write-Host "Promoting recovery branch $($manifest.identity.recoveryBranch) to $head" -ForegroundColor Cyan
-git push origin "HEAD:refs/heads/$($manifest.identity.recoveryBranch)"
-if ($LASTEXITCODE -ne 0) { Fail 'Unable to fast-forward recovery branch. Do not force automatically; inspect branch protection/history.' }
-
-$remoteRecovery = (git rev-parse "origin/$($manifest.identity.recoveryBranch)").Trim()
-if ($remoteRecovery -ne $head) {
-    git fetch origin $($manifest.identity.recoveryBranch)
-    $remoteRecovery = (git rev-parse "origin/$($manifest.identity.recoveryBranch)").Trim()
+$recoveryBranch = [string]$manifest.identity.recoveryBranch
+Write-Host "Atomically promoting tag + recovery branch to $head" -ForegroundColor Cyan
+git push --atomic origin "HEAD:refs/heads/$recoveryBranch" "refs/tags/$tagName"
+if ($LASTEXITCODE -ne 0) {
+    git tag -d $tagName *> $null
+    Fail 'Atomic tag/recovery promotion failed. Nothing should be force-moved automatically.'
 }
+
+git fetch origin $recoveryBranch --tags
+if ($LASTEXITCODE -ne 0) { Fail 'Unable to verify promoted refs.' }
+
+$remoteRecovery = (git rev-parse "origin/$recoveryBranch").Trim()
 if ($remoteRecovery -ne $head) { Fail 'Recovery branch did not resolve to promoted main HEAD.' }
+
+$remoteTagSha = (git rev-list -n 1 $tagName).Trim()
+if ($remoteTagSha -ne $head) { Fail 'Immutable tag did not resolve to promoted main HEAD.' }
 
 $bundleDir = [string]$manifest.recovery.localBundleDirectory
 if ([string]::IsNullOrWhiteSpace($bundleDir)) { $bundleDir = Join-Path $repoRoot 'local_recovery' }
@@ -88,20 +124,38 @@ $bundleHashPath = "$bundlePath.sha256"
 
 Copy-Item $manifestPath (Join-Path $bundleDir "official_base_manifest-$tagName.json") -Force
 
+$apkHash = $null
+$apkDest = $null
 if ($AcceptedApkPath) {
     if (-not (Test-Path $AcceptedApkPath)) { Fail "Accepted APK path not found: $AcceptedApkPath" }
     $apkDest = Join-Path $bundleDir ("NearMeU-$tagName.apk")
     Copy-Item $AcceptedApkPath $apkDest -Force
     $apkHash = (Get-FileHash -Algorithm SHA256 $apkDest).Hash.ToLowerInvariant()
     "$apkHash  $([IO.Path]::GetFileName($apkDest))" | Set-Content -Encoding ascii "$apkDest.sha256"
-    Write-Host "Accepted APK copied with SHA-256 $apkHash" -ForegroundColor Green
 }
+
+$evidence = [ordered]@{
+    project = 'NearMeU'
+    promotedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+    promotedMainSha = $head
+    physicallyTestedRuntimeSha = $testedRuntimeSha
+    immutableTag = $tagName
+    recoveryBranch = $recoveryBranch
+    bundlePath = $bundlePath
+    bundleSha256 = $bundleHash
+    acceptedApkPath = $apkDest
+    acceptedApkSha256 = $apkHash
+}
+$evidencePath = Join-Path $bundleDir ("promotion-evidence-$tagName.json")
+$evidence | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 $evidencePath
 
 Write-Host ''
 Write-Host 'NearMeU OFFICIAL BASE PROMOTION PASS' -ForegroundColor Green
 Write-Host "Main / recovery SHA : $head"
+Write-Host "Tested runtime SHA  : $testedRuntimeSha"
 Write-Host "Immutable tag       : $tagName"
 Write-Host "Offline bundle      : $bundlePath"
 Write-Host "Bundle SHA-256      : $bundleHash"
+Write-Host "Promotion evidence  : $evidencePath"
 Write-Host ''
-Write-Host 'Final documentation step: update manifest immutableTagStatus to PROMOTED and record the bundle/hash evidence in the closeout ledger.' -ForegroundColor Yellow
+Write-Host 'No post-tag repository commit is required: tag existence + local promotion evidence are the promotion proof.' -ForegroundColor Green
