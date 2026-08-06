@@ -9,6 +9,9 @@ Superseded references preserved for recovery only:
 - Working client checkpoint: `8898cb48353751ddd39ea8601eedd63b403c880b`
 - PR #108 — attempted safe call-history patch
 
+Permanent build/version policy:
+- `docs/BUILD_AND_VERSION_POLICY.md`
+
 ## Why R2 exists
 
 A physically working audio-call checkpoint was later destabilized while adding call history. The original and corrective branches are preserved for forensic comparison, but no further development should continue on them. R2 rebuilds audio calling from clean current `main` using small acceptance-gated slices.
@@ -22,6 +25,28 @@ A physically working audio-call checkpoint was later destabilized while adding c
 5. Call history is the final slice and must not be allowed to destabilize call establishment or existing chat behavior.
 6. No Agora secret may be committed to source, docs, logs or screenshots. Existing Firebase Secret Manager values remain authoritative.
 7. No video/camera work is allowed in Batch 09 R2.
+8. A successfully tested/accepted APK must be reused when source, build configuration, dependencies, signing, architecture and version identity have not changed. Do not repeat the full Flutter/Gradle/Agora native rebuild merely to obtain the same binary again.
+9. Every owner-distributed APK must have a visible version identity before installation via its filename and after installation inside NearMeU.
+10. APK handoff filenames must include version name, build number, architecture and build type; ambiguous names such as only `app-release.apk` are compiler outputs, not final owner-facing artifact names.
+
+## Version identity requirement
+
+Current branch version source of truth is `pubspec.yaml`:
+
+`version: 1.0.11+12`
+
+This means:
+- version name: `1.0.11`;
+- build/version code: `12`.
+
+Required owner-facing artifact naming examples:
+- `NearMeU-v1.0.11-b12-universal-release.apk`
+- `NearMeU-v1.0.11-b12-arm64-release.apk`
+- `NearMeU-v1.0.11-b12-arm64-release.zip`
+
+Before installation, the filename must make the exact build obvious. After installation, NearMeU must show at minimum `NearMeU version 1.0.11` and `Build 12` in Settings/About or an equivalent stable screen. Runtime package metadata must be read using `package_info_plus`; do not maintain a second hard-coded version string in the UI.
+
+Every accepted APK checkpoint should record commit SHA, version/build, architecture, build type, signing identity/fingerprint reference, artifact SHA-256, CI run and physical-test state.
 
 ## Current R2-A checkpoint
 
@@ -105,9 +130,13 @@ Gate: call history physical PASS plus full regression smoke of Nearby, Chats, te
 Batch 09 R2 may merge only after:
 - all CI is green on final head;
 - permanently signed direct-update APK is produced;
+- owner-facing APK/ZIP uses the mandatory versioned filename convention;
+- the installed app shows its exact runtime version/build in Settings/About;
+- version/build metadata matches the distributed APK filename;
+- accepted/tested APK artifacts are reused rather than unnecessarily rebuilt when their inputs are unchanged;
 - two-device physical matrix passes;
 - existing app data/login/history survive update;
-- accepted checkpoints are recorded;
+- accepted checkpoints are recorded with commit + version/build + architecture + digest;
 - production functions correspond exactly to the accepted source;
 - owner explicitly accepts the final result.
 
