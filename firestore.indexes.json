@@ -66,16 +66,6 @@
     },
     {
       "collectionGroup": "messages",
-      "fieldPath": "timestamp",
-      "indexes": [
-        {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION_GROUP"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "messages",
       "fieldPath": "cloudExpiresAt",
       "indexes": [
         {
