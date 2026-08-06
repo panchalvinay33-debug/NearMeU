@@ -120,8 +120,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _recordingTimer?.cancel();
     if (_isRecordingVoice) unawaited(_recorder.cancel());
     unawaited(_recorder.dispose());
-    final user = currentUser;
-    if (user != null) unawaited(_userService.updateLastSeen(user.uid));
     _messageController.dispose();
     _messageFocusNode.dispose();
     _scrollController.dispose();
@@ -151,12 +149,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (user == null || _isBlocked || _isAcknowledgingRead) return;
     _isAcknowledgingRead = true;
     try {
-      await Future.wait<void>([
-        _userService.updateLastSeen(user.uid),
-        _functions.httpsCallable('markPrivateChatRead').call<void>(
-          <String, dynamic>{'otherUserId': widget.otherUserId},
-        ),
-      ]);
+      await _functions.httpsCallable('markPrivateChatRead').call<void>(
+        <String, dynamic>{'otherUserId': widget.otherUserId},
+      );
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'not-found' || error.code == 'unimplemented') {
         try {
