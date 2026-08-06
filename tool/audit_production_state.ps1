@@ -14,8 +14,8 @@ Set-Location $repoRoot
 $project = [string]$manifest.identity.firebaseProjectId
 if ($project -ne 'nearmeu-e82c7') { Fail "Unexpected Firebase project '$project'." }
 
-$expected = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
-if ($LASTEXITCODE -ne 0 -or $expected.Count -eq 0) { Fail 'Unable to enumerate accepted function exports from functions/bootstrap.js.' }
+$expected = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
+if ($LASTEXITCODE -ne 0 -or $expected.Count -eq 0) { Fail 'Unable to enumerate accepted deployable Cloud Function exports from functions/bootstrap.js.' }
 $expected = @($expected | ForEach-Object { $_.Trim() } | Sort-Object -Unique)
 
 Write-Host "Auditing Firebase project $project ..." -ForegroundColor Cyan
@@ -50,7 +50,7 @@ $actual = @($actual | Sort-Object -Unique)
 
 if ($actual.Count -eq 0) {
     Write-Host 'WARNING: Firebase CLI returned no parseable function IDs. Raw output shape may have changed.' -ForegroundColor Yellow
-    Write-Host 'Expected exports from accepted source:'
+    Write-Host 'Expected deployable functions from accepted source:'
     $expected | ForEach-Object { Write-Host "  $_" }
     exit 2
 }
@@ -59,8 +59,8 @@ $extras = @($actual | Where-Object { $_ -notin $expected })
 $missing = @($expected | Where-Object { $_ -notin $actual })
 
 Write-Host ''
-Write-Host "Expected accepted functions: $($expected.Count)"
-Write-Host "Deployed functions found   : $($actual.Count)"
+Write-Host "Expected accepted deployable functions: $($expected.Count)"
+Write-Host "Deployed functions found             : $($actual.Count)"
 
 if ($extras.Count -gt 0) {
     Write-Host ''
@@ -70,17 +70,17 @@ if ($extras.Count -gt 0) {
 
 if ($missing.Count -gt 0) {
     Write-Host ''
-    Write-Host 'ACCEPTED FUNCTIONS MISSING FROM PRODUCTION:' -ForegroundColor Yellow
+    Write-Host 'ACCEPTED DEPLOYABLE FUNCTIONS MISSING FROM PRODUCTION:' -ForegroundColor Yellow
     $missing | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
 }
 
 if ($extras.Count -eq 0 -and $missing.Count -eq 0) {
     Write-Host ''
     Write-Host 'NearMeU PRODUCTION FUNCTION AUDIT PASS' -ForegroundColor Green
-    Write-Host 'Deployed Cloud Functions exactly match accepted functions/bootstrap.js exports.'
+    Write-Host 'Deployed Cloud Functions exactly match accepted deployable Firebase trigger exports.'
     exit 0
 }
 
 Write-Host ''
-Write-Host 'Production does not exactly match accepted source. Do not close/promote a batch until drift is resolved.' -ForegroundColor Red
+Write-Host 'Production does not exactly match accepted deployable source. Do not close/promote a batch until drift is resolved.' -ForegroundColor Red
 exit 3
