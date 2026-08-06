@@ -1,0 +1,30 @@
+import 'package:flutter/services.dart';
+
+class CallDeviceService {
+  static const MethodChannel _channel =
+      MethodChannel('com.nearmeu.nearmeu/call_device');
+
+  Future<void> enterCallMode() async {
+    await _channel.invokeMethod<void>('enterCallMode');
+  }
+
+  Future<void> leaveCallMode() async {
+    await _channel.invokeMethod<void>('leaveCallMode');
+  }
+
+  Future<void> setSpeaker(bool enabled) async {
+    await _channel.invokeMethod<void>('setSpeaker', <String, dynamic>{
+      'enabled': enabled,
+    });
+  }
+
+  Future<void> setProximityEnabled(bool enabled) async {
+    await _channel.invokeMethod<void>('setProximityEnabled', <String, dynamic>{
+      'enabled': enabled,
+    });
+  }
+
+  Future<bool> bluetoothAvailable() async {
+    return await _channel.invokeMethod<bool>('isBluetoothAvailable') ?? false;
+  }
+}
