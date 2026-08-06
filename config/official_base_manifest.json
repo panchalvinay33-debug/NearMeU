@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "project": "NearMeU",
-  "status": "BASE08_RECERTIFICATION_PRODUCTION_AUDIT_PENDING",
+  "status": "BASE08_RECERTIFICATION_GOVERNANCE_R2_PRODUCTION_AUDIT_PENDING",
   "lastUpdated": "2026-08-06",
   "acceptedProductBoundary": {
     "throughBatch": "08",
@@ -31,6 +31,13 @@
     "productionAuditScript": "tool/audit_production_state.ps1",
     "deploymentGateScript": "tool/verify_deployment_gate.ps1",
     "resolutionOrder": ["immutableTagName", "currentOfficialSourceSha", "stable/official-recoverable-base"]
+  },
+  "currentRecertificationCandidate": {
+    "mainSha": "92341b4a9641ea1174186724d970feb4ffa12fdb",
+    "presenceConsistencyPullRequest": 116,
+    "presenceConsistencyHeadSha": "2e7d1c37229cb75fa89b3a4ba9dd884095fdc47f",
+    "presenceConsistencyMergeSha": "92341b4a9641ea1174186724d970feb4ffa12fdb",
+    "candidateStatus": "MERGED_MAIN_AWAITING_GOVERNANCE_R2_AND_PRODUCTION_AUDIT"
   },
   "finalVersionDisplayCandidate": {
     "pullRequest": 114,
@@ -68,7 +75,8 @@
     "Firestore automatic messages.timestamp collection index restored",
     "delivery acknowledgement batch limit aligned to 200",
     "presence service self-heals stale externally written offline state",
-    "About screen now reads runtime version/build; owner physically verified Version 1.0.11 (Build 12)"
+    "About screen reads runtime package version/build and passed owner physical check",
+    "PR #116 separates chat read/dispose behavior from lifecycle-owned presence and makes trusted chat preview online state freshness-aware"
   ],
   "persistentEvidenceGaps": [
     "Batch07 receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS",
@@ -79,5 +87,5 @@
     "unexpectedPostBase08FunctionsMustBeZero": true,
     "consoleOnlyPermanentRuleChangesAllowed": false
   },
-  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until production audit, final documentation, recovery promotion and owner acceptance are complete."
+  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until governance R2 is merged, production audit is clean, final documentation is synchronized and the owner explicitly accepts promotion."
 }
