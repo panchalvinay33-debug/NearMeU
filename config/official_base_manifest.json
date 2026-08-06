@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "project": "NearMeU",
   "status": "BASE08_RECERTIFICATION_FINAL_VERSION_CHECK_PENDING",
   "lastUpdated": "2026-08-06",
@@ -22,9 +22,19 @@
   "recovery": {
     "currentOfficialSourceSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
     "recoveryBranchExpectedSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
+    "immutableTagName": "nearmeu-base08-stable-recertified-20260806",
+    "immutableTagStatus": "PENDING_FINAL_PROMOTION",
+    "localBundleDirectory": "F:\\NearMeU\\local_recovery",
     "oneCommandScript": "tool/restore_official_base.ps1",
+    "promotionScript": "tool/promote_official_base.ps1",
+    "projectStateScript": "tool/show_project_state.ps1",
     "productionAuditScript": "tool/audit_production_state.ps1",
-    "deploymentGateScript": "tool/verify_deployment_gate.ps1"
+    "deploymentGateScript": "tool/verify_deployment_gate.ps1",
+    "resolutionOrder": [
+      "immutableTagName",
+      "currentOfficialSourceSha",
+      "stable/official-recoverable-base"
+    ]
   },
   "finalVersionDisplayCandidate": {
     "pullRequest": 114,
@@ -71,5 +81,5 @@
     "unexpectedPostBase08FunctionsMustBeZero": true,
     "consoleOnlyPermanentRuleChangesAllowed": false
   },
-  "acceptanceRule": "Do not replace currentOfficialSourceSha with the final candidate until automated gates, focused physical acceptance, merge, production audit, documentation and recovery promotion are all complete."
+  "acceptanceRule": "Do not promote the immutable tag/recovery branch or replace currentOfficialSourceSha with the final candidate until automated gates, focused physical acceptance, merge, production audit, documentation and owner acceptance are all complete."
 }
