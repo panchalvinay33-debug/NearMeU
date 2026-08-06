@@ -27,10 +27,4 @@ module.exports = {
   ...require("./announcement_media_functions.js"),
   ...require("./announcement_push_functions.js"),
   ...require("./app_version_functions.js"),
-  ...require("./admin_session_functions.js"),
-  ...require("./admin_business_functions.js"),
-  ...require("./admin_reports_functions.js"),
-  ...require("./admin_recovery_functions.js"),
-  ...require("./admin_messaging_functions.js"),
-  ...require("./admin_system_functions.js"),
 };
