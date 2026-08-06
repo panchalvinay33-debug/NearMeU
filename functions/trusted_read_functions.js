@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const {
   firstVisiblePreviewMessage,
+  isFreshOnlinePresence,
   mergeChatDocuments,
   shouldScanLegacyChats,
 } = require("./trusted_read_logic");
@@ -321,7 +322,10 @@ async function buildChatPreview({
         ? unreadCounts[uid]
         : safeInteger(currentReadState.unreadCount, 0)
       : 0,
-    isOtherUserOnline: otherData.isOnline === true,
+    isOtherUserOnline: isFreshOnlinePresence({
+      isOnline: otherData.isOnline === true,
+      lastSeenMillis: timestampMillis(otherData.lastSeen),
+    }),
   };
 }
 

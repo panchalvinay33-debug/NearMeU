@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const {
   chatDocumentKey,
   firstVisiblePreviewMessage,
+  isFreshOnlinePresence,
   isMessageVisibleForPreview,
   mergeChatDocuments,
   shouldHidePreviewThroughClear,
@@ -15,6 +16,42 @@ const {
 function document(path, source) {
   return { ref: { path }, source };
 }
+
+test("presence is online only when the online bit and heartbeat are both fresh", () => {
+  const now = 1_000_000;
+  assert.equal(
+    isFreshOnlinePresence({
+      isOnline: true,
+      lastSeenMillis: now - 30_000,
+      nowMillis: now,
+    }),
+    true,
+  );
+  assert.equal(
+    isFreshOnlinePresence({
+      isOnline: false,
+      lastSeenMillis: now - 30_000,
+      nowMillis: now,
+    }),
+    false,
+  );
+  assert.equal(
+    isFreshOnlinePresence({
+      isOnline: true,
+      lastSeenMillis: now - 6 * 60_000,
+      nowMillis: now,
+    }),
+    false,
+  );
+  assert.equal(
+    isFreshOnlinePresence({
+      isOnline: true,
+      lastSeenMillis: null,
+      nowMillis: now,
+    }),
+    false,
+  );
+});
 
 test("mixed current and legacy chat documents are combined without duplicates", () => {
   const current = document("chats/current", "current");

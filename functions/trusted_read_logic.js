@@ -1,5 +1,7 @@
 "use strict";
 
+const DEFAULT_PRESENCE_FRESHNESS_MS = 5 * 60 * 1000;
+
 function chatDocumentKey(document) {
   if (!document || typeof document !== "object") return null;
   if (
@@ -27,6 +29,21 @@ function shouldScanLegacyChats(normalCount, maximumPreviewCount) {
     throw new TypeError("maximumPreviewCount must be a positive integer");
   }
   return normalCount < maximumPreviewCount;
+}
+
+function isFreshOnlinePresence({
+  isOnline,
+  lastSeenMillis,
+  nowMillis = Date.now(),
+  freshnessMs = DEFAULT_PRESENCE_FRESHNESS_MS,
+}) {
+  if (isOnline !== true || !Number.isFinite(lastSeenMillis)) return false;
+  if (!Number.isFinite(nowMillis) || !Number.isFinite(freshnessMs) || freshnessMs <= 0) {
+    return false;
+  }
+
+  const ageMs = nowMillis - lastSeenMillis;
+  return ageMs >= -60 * 1000 && ageMs <= freshnessMs;
 }
 
 function shouldHidePreviewThroughClear(messageTimeMillis, clearedAtMillis) {
@@ -88,8 +105,10 @@ function mergeChatDocuments({
 }
 
 module.exports = {
+  DEFAULT_PRESENCE_FRESHNESS_MS,
   chatDocumentKey,
   firstVisiblePreviewMessage,
+  isFreshOnlinePresence,
   isMessageVisibleForPreview,
   mergeChatDocuments,
   shouldHidePreviewThroughClear,
