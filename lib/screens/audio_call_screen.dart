@@ -69,6 +69,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
         _busy = false;
       });
       await _device.enterCallMode();
+      await _tryAutoRouteBluetooth();
       await _refreshDeviceState();
       _deviceTimer = Timer.periodic(
         const Duration(seconds: 2),
@@ -88,10 +89,27 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     }
   }
 
+  Future<void> _tryAutoRouteBluetooth() async {
+    try {
+      if (!await _device.bluetoothAvailable()) return;
+      final permission = await Permission.bluetoothConnect.status;
+      if (!permission.isGranted && !permission.isLimited) return;
+      final routed = await _device.setBluetooth(true);
+      if (!routed) return;
+      _bluetoothSelected = true;
+      _speaker = false;
+      await _device.setProximityEnabled(false);
+    } catch (_) {}
+  }
+
   Future<void> _refreshDeviceState() async {
     try {
+      final wasSelected = _bluetoothSelected;
       final available = await _device.bluetoothAvailable();
       final selected = await _device.bluetoothSelected();
+      if (wasSelected && !selected && !_speaker) {
+        await _device.setProximityEnabled(true);
+      }
       if (!mounted) return;
       setState(() {
         _bluetoothAvailable = available;
@@ -122,9 +140,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
       credentials: credentials,
       channelName: session.call.channelName,
     );
-    await _device.setProximityEnabled(
-      !_speaker && !_bluetoothSelected,
-    );
+    await _device.setProximityEnabled(!_speaker && !_bluetoothSelected);
   }
 
   void _onRtcEvent(AgoraAudioEvent event) {
@@ -448,7 +464,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
                               ? AppColors.primary
                               : AppColors.surface,
                           _toggleBluetooth,
-                          _bluetoothSelected ? 'Bluetooth' : 'Bluetooth',
+                          'Bluetooth',
                         ),
                       _roundButton(
                         Icons.call_end_rounded,
