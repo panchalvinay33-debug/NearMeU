@@ -11,10 +11,11 @@ Read these in this order:
 1. [`PROJECT_OPERATING_BLUEPRINT.md`](PROJECT_OPERATING_BLUEPRINT.md) — complete operating model: project identity, PC path, branches, acceptance, deployment, backup and recovery.
 2. [`../config/official_base_manifest.json`](../config/official_base_manifest.json) — exact machine-readable recovery target, candidate evidence and gate status.
 3. [`MASTER_PROJECT_AUDIT.md`](MASTER_PROJECT_AUDIT.md) — detailed accepted history and evidence.
-4. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — accepted/recovery evidence record.
-5. [`TEST_BATCH_REGISTER.md`](TEST_BATCH_REGISTER.md) — batch acceptance status and persistent evidence gaps.
-6. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled work order; future runtime work is currently locked after Base08.
-7. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — product behavior decisions.
+4. [`CHANGE_LEDGER.md`](CHANGE_LEDGER.md) — date/reference/reason/status ledger for accepted merges and major corrections.
+5. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — accepted/recovery evidence record.
+6. [`TEST_BATCH_REGISTER.md`](TEST_BATCH_REGISTER.md) — batch acceptance status and persistent evidence gaps.
+7. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled work order; future runtime work is currently locked after Base08.
+8. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — product behavior decisions.
 
 ## Project identity
 
@@ -29,8 +30,9 @@ Read these in this order:
 
 Exact accepted SHA/artifact values belong in `config/official_base_manifest.json`; do not duplicate them into new docs unless they are acceptance evidence.
 
-## Recovery and deployment tooling
+## Project-state / recovery / deployment tooling
 
+- [`../tool/show_project_state.ps1`](../tool/show_project_state.ps1) — one-command current-state summary.
 - [`../tool/restore_official_base.ps1`](../tool/restore_official_base.ps1) — one-command source recovery to the manifest's official SHA.
 - [`../tool/verify_deployment_gate.ps1`](../tool/verify_deployment_gate.ps1) — blocks production deployment from the wrong branch, dirty tree or unsynced main.
 - [`../tool/audit_production_state.ps1`](../tool/audit_production_state.ps1) — compares deployed Firebase Functions with accepted `functions/bootstrap.js` exports.
@@ -38,7 +40,7 @@ Exact accepted SHA/artifact values belong in `config/official_base_manifest.json
 
 ## Physical testing and evidence
 
-- [`BATCH_08_PHYSICAL_TEST.md`](BATCH_08_PHYSICAL_TEST.md) — Base08 physical/profile-sharing evidence plus re-certification record as updated.
+- [`BATCH_08_PHYSICAL_TEST.md`](BATCH_08_PHYSICAL_TEST.md) — Base08 physical/profile-sharing evidence plus re-certification record.
 - [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical Android smoke checks.
 - [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — APK/App Check/two-device testing guidance.
 - [`RELEASE_ACCEPTANCE_CHECKLIST.md`](RELEASE_ACCEPTANCE_CHECKLIST.md) — pre-distribution acceptance checklist.
