@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 21,
+  "schemaVersion": 22,
   "project": "NearMeU",
   "lastUpdated": "2026-08-06",
   "canonicalLocalWorkspace": "F:\\NearMeU",
@@ -39,12 +39,31 @@
     "operatingBlueprint": "docs/PROJECT_OPERATING_BLUEPRINT.md",
     "projectStartDeploymentRules": "docs/PROJECT_START_DEPLOYMENT_RULES.md",
     "ecosystemBoundary": "docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md",
+    "rtcProviderDocument": "docs/RTC_PROVIDER_AGORA.md",
     "changeLedger": "docs/CHANGE_LEDGER.md",
     "oneCommandRecovery": "tool/restore_official_base.ps1",
     "projectStateCommand": "tool/show_project_state.ps1",
     "deploymentGate": "tool/verify_deployment_gate.ps1",
     "productionAudit": "tool/audit_production_state.ps1",
     "promotionTool": "tool/promote_official_base.ps1"
+  },
+  "externalServices": {
+    "rtc": {
+      "provider": "Agora",
+      "projectName": "NearMeU",
+      "projectCreated": true,
+      "rtcAvailable": true,
+      "observedPlan": "Free Plan",
+      "appIdConfigured": true,
+      "appIdValueStoredInGovernanceDocs": false,
+      "appCertificateConfigured": true,
+      "appCertificateIsSecret": true,
+      "appCertificateStoredInRepository": false,
+      "productionTokenModel": "server-issued-short-lived-token-required",
+      "plannedUse": ["Batch09 Audio Calling", "Batch10 Video Calling"],
+      "runtimeAcceptanceStatus": "LOCKED_NOT_IMPLEMENTED_NOT_PASS",
+      "document": "docs/RTC_PROVIDER_AGORA.md"
+    }
   },
   "acceptedCapabilities": {
     "authentication": true,
@@ -107,8 +126,8 @@
     "status": "locked",
     "adminCompanionTrack": "paused-until-after-consumer-public-launch-and-owner-resume",
     "plannedBatches": [
-      {"id":"09","name":"Audio Calling","status":"locked"},
-      {"id":"10","name":"Video Calling","status":"locked"},
+      {"id":"09","name":"Audio Calling","status":"locked","rtcProvider":"Agora"},
+      {"id":"10","name":"Video Calling","status":"locked","rtcProvider":"Agora"},
       {"id":"11","name":"Google Play Premium Verification","status":"locked"},
       {"id":"12","name":"Production Hardening","status":"locked"},
       {"id":"13","name":"Play Store Internal and Closed Testing","status":"locked"},
