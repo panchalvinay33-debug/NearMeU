@@ -1,63 +1,91 @@
 # NearMeU Controlled Execution Batch Plan
 
-Last updated: 2026-08-02
+Last updated: 2026-08-06
 
-Every runtime change is one focused batch. A later batch starts only after automated tests, permanently signed build, focused physical acceptance, owner approval, merge, documentation sync, recovery promotion and canonical local workspace sync.
+NearMeU is currently frozen at **Base 08**. No post-Base08 runtime batch is active.
 
 ## Governing rule
 
-1. Start from promoted `main` / recovery state.
+Every runtime batch follows exactly:
+
+`Freeze scope → branch from official base → code → CI → permanently signed APK → focused physical test → owner PASS → merge → production deploy from exact main SHA when required → production-state audit → docs → recovery promotion → local sync → temporary branch cleanup → next batch unlock`
+
+A batch is not accepted merely because a PR merged or CI passed.
+
+## Hard gates
+
+1. Start only from the current official base in `config/official_base_manifest.json`.
 2. Use canonical workspace `F:\NearMeU`.
-3. Use one short-lived runtime branch.
+3. Only one active runtime batch at a time.
 4. Freeze scope before coding.
-5. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
-6. Build with permanent Android signing.
-7. Install using `adb install -r`; never uninstall/wipe for normal upgrades.
-8. Preserve package `com.nearmeu.nearmeu` and increasing versionCode.
-9. Physically test focused new behavior plus necessary smoke checks.
-10. Owner accepts or rejects the exact tested state.
-11. Merge through a passing PR.
-12. Sync authoritative docs and evidence.
-13. Promote `stable/official-recoverable-base`.
-14. Sync `F:\NearMeU` before starting the next runtime batch.
+5. Use one short-lived runtime/stabilization branch.
+6. Run applicable Flutter, Firebase Rules and Cloud Functions checks.
+7. Build with the permanent NearMeU Android signing certificate.
+8. Install normal test upgrades using `adb install -r`; do not uninstall/wipe unless the test explicitly requires destructive behavior.
+9. Preserve package `com.nearmeu.nearmeu` and follow increasing versionCode rules for distributed builds.
+10. Physically test the exact signed candidate plus required regression smoke.
+11. Owner accepts or rejects the exact candidate.
+12. Merge only through a passing PR.
+13. If production resources changed, deploy only from clean `main` exactly matching `origin/main`.
+14. Run `tool/verify_deployment_gate.ps1` before production deployment.
+15. Run `tool/audit_production_state.ps1` after production deployment.
+16. Unexpected deployed Functions or unexplained production drift block acceptance.
+17. Update `config/official_base_manifest.json` and authoritative docs.
+18. Promote `stable/official-recoverable-base` only after all acceptance/production gates pass.
+19. Synchronize `F:\NearMeU` to the promoted accepted state.
+20. Delete temporary branches when possible; otherwise neutralize them to the accepted base and leave no unique active runtime code.
+21. Only then can the owner explicitly unlock the next batch.
 
-## Current accepted runtime
+## Current accepted product boundary
 
-Batch 08 — Profile sharing and deep-link recovery — is owner accepted.
+Batches 00 through 08 are the accepted product boundary.
 
-- Tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
-- Runtime merge: `f83a6e92457f728f177dc062dcc9171c141a9217`
-- PR: `#100`
-- Version: `1.0.11+12`
-- Build #90 / run `30750777554`: PASS
-- Quality #493 / run `30750777555`: PASS
-- Physically tested signed debug APK SHA-256: `4fefcdb35ef6574887d31edbf5a21e95951f057bbb4e565102dd4dcff890f412`
-- Signed release APK SHA-256: `ec302b040a83fea86bafb77056172d7492a66a924343fed8138c305544b7ffde`
-- Owner acceptance: 2026-08-02
-- Known evidence notes: Batch 07 receiver-media pre/post-download physical proof remains owner-deferred; Batch 08 custom-scheme fallback was not separately screenshot-verified although HTTPS warm/cold app links were physically verified.
+### Batch 00 — Governance / roadmap foundation
+Status: ACCEPTED.
 
-Batches 00 through 08 are accepted.
+### Batch 01 — Chat reliability and message-state truth
+Status: ACCEPTED.
 
-## Next batch
+### Batch 02 — Photo/video/voice-message reliability
+Status: ACCEPTED.
 
-### Batch 09 — Agora audio calling
+### Batch 03 — Local-first persistence and seven-day temporary delivery cloud
+Status: ACCEPTED.
 
-Frozen direction:
+### Batch 04 — Clear Chat and deletion semantics
+Status: ACCEPTED.
 
-- audio calling only; video remains Batch 10;
-- preserve existing chat, Premium, recovery, profile-sharing and deletion semantics;
-- use trusted backend authorization for any call-initiation entitlement decisions;
-- actual call audio is not recorded or backed up;
-- call-state, permission, connection, hangup/failure behavior must be tested on real devices;
-- no owner-admin Premium mutation work in Batch 09;
-- no Play purchase-verification or Play Store readiness scope creep.
+### Batch 05 — Identity, account close and reactivation
+Status: ACCEPTED.
 
-## Later batches
+### Batch 06 — Premium entitlement foundation
+Status: ACCEPTED.
 
-- Batch 10 — Agora video calling
-- Batch 11 — Owner-only Premium administration / purchase-verification work
-- Batch 12 — Full regression and Play Store readiness, including production App Check / Play Integrity readiness
+### Batch 07 — Six-month Premium backup and restore
+Status: ACCEPTED with a persistent evidence gap: receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS.
 
-## Recovery-base movement rule
+### Batch 08 — Profile sharing and deep-link recovery
+Status: ACCEPTED original scope; Base08 re-certification closeout in progress as recorded in `config/official_base_manifest.json`.
 
-`stable/official-recoverable-base` moves only after CI, signing, physical acceptance, required production actions and final documentation are complete. A known deferred evidence item must remain explicitly recorded rather than silently converted to PASS.
+Re-certification stabilization includes only Base08 reliability/operability work: Firestore chat-index correction, delivered-receipt batch alignment, online-presence correction and accurate runtime About-screen version display.
+
+## Future roadmap
+
+Future work is **LOCKED**, not active.
+
+Historical names such as Batch09 audio calling, Batch10 video calling, Admin experiments or other post-Base08 branches/PRs are planning/history only. They are not accepted source and must not be treated as current scope.
+
+When the owner later chooses to continue, the next scope will be freshly selected from the roadmap and started from the then-current official recoverable base. Old experimental branches are never used as a starting point.
+
+## Recovery-base rule
+
+The recovery branch is the last indisputably recoverable truth. It moves only after CI, permanent signing, physical acceptance, required production actions, production-state audit, documentation and owner acceptance are complete.
+
+Recovery itself is performed with:
+
+```powershell
+cd F:\NearMeU
+.\tool\restore_official_base.ps1
+```
+
+No manual search for old SHAs should be required during normal recovery.
