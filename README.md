@@ -2,94 +2,98 @@
 
 NearMeU is an Android-first Flutter application for privacy-aware nearby discovery and private one-to-one messaging.
 
-## Current accepted state
+## Read this first
+
+The accepted project boundary is currently **Base 08 only**. Future Batch09/Admin/calling experiments are not part of the accepted runtime.
+
+For the exact current truth, open these in order:
+
+1. [`docs/PROJECT_OPERATING_BLUEPRINT.md`](docs/PROJECT_OPERATING_BLUEPRINT.md) — how NearMeU is developed, tested, deployed, backed up and recovered.
+2. [`config/official_base_manifest.json`](config/official_base_manifest.json) — machine-readable accepted/candidate SHA, artifacts, gates and recovery target.
+3. [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) — detailed project/evidence audit.
+4. [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) — accepted recovery evidence.
+5. [`docs/INDEX.md`](docs/INDEX.md) — full documentation map.
+
+## Project identity
 
 | Item | Value |
 |---|---|
+| Repository | `panchalvinay33-debug/NearMeU` |
+| Canonical PC folder | `F:\NearMeU` |
 | Source of truth | `main` |
 | Recovery branch | `stable/official-recoverable-base` |
-| Accepted commit | `f9bc38572c715a017c8b261a5d805aa125ffe7a5` |
+| Accepted boundary | Batches `00–08` only |
 | Android package | `com.nearmeu.nearmeu` |
 | Firebase project | `nearmeu-e82c7` |
-| Tested APK SHA-256 | `587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C` |
-| Long-lived branches | `main`, `stable/official-recoverable-base` |
-| Production release | Not yet complete |
+| App version | `1.0.11+12` |
+| Permanent signing cert SHA-256 | `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B` |
 
-The accepted base was installed on the owner's Android phone with update mode and verified for the restored login, App Check registration, Nearby access and chat access. `main` and the recovery branch are identical at the accepted state.
+Do not copy accepted SHAs or artifact hashes from this README. Those values deliberately live in one machine-readable source: `config/official_base_manifest.json`.
 
-## Start here
+## One-command recovery
 
-| Need | Document |
-|---|---|
-| Complete audit, PC details, backup, roadmap and current truth | [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) |
-| Exact recovery process and acceptance rules | [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) |
-| Documentation map | [`docs/INDEX.md`](docs/INDEX.md) |
-| Machine-readable state | [`config/project_state_manifest.json`](config/project_state_manifest.json) |
-| Production release work | [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md) |
-| Physical Android testing | [`docs/ANDROID_PHONE_SMOKE_TEST.md`](docs/ANDROID_PHONE_SMOKE_TEST.md) |
-| Security and secret handling | [`SECURITY.md`](SECURITY.md) |
+From the canonical PC workspace:
 
-## Included in the current base
+```powershell
+cd F:\NearMeU
+.\tool\restore_official_base.ps1
+```
 
-- Firebase Authentication and adult-only onboarding
-- Nearby discovery and distance filtering
-- presence, last-seen, unread, block, report and account controls
-- private text, emoji, reply, photo, video and voice-message flows
-- encrypted local-first chat storage
-- Firestore and Storage security rules and emulator tests
-- Cloud Functions source and tests
-- permanent Android signing through protected GitHub Actions secrets
-- Google Sign-In-compatible signing identity
-- App Check debug testing and Play Integrity release configuration
-- quality-gate and recoverable-APK workflows
+This reads the official accepted SHA from the manifest and restores the source directly to that state. It refuses to destroy uncommitted work unless `-Force` is intentionally supplied.
 
-## Known remaining work
+Then audit Firebase production state:
 
-- analyzer warning and technical-debt cleanup
-- full two-device regression testing
-- reliability validation for weak network, restart, logout and account switching
-- premium voice/video calling and one-plan entitlement design
-- production Firebase verification
-- Play Integrity production acceptance
-- legal URLs and Play Console declarations
-- internal/closed testing and controlled production rollout
+```powershell
+.\tool\audit_production_state.ps1
+```
 
-The active release checklist is tracked in issue #41 and the master audit roadmap.
+## Deployment gate
+
+Before any production Firebase deployment:
+
+```powershell
+cd F:\NearMeU
+.\tool\verify_deployment_gate.ps1
+```
+
+Production deploys are permitted only from a clean, reviewed `main` that exactly matches `origin/main`.
+
+## Accepted Base08 capabilities
+
+- authentication and adult onboarding;
+- Nearby discovery and presence;
+- private one-to-one text/reply/emoji messaging;
+- photo, video and voice messages;
+- encrypted local-first chat persistence;
+- seven-day temporary delivery cloud;
+- clear/delete/unsend semantics;
+- identity continuity, close/reactivation;
+- Premium entitlement and six-month recovery architecture;
+- profile sharing with opaque revocable public IDs and HTTPS app links;
+- Base08 stabilization for chat indexes, delivery receipts and online presence.
+
+Known evidence remains explicit: Batch07 receiver-media pre/post-download Premium recovery is OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS; Batch08 custom `nearmeu://` fallback is implemented but was not separately screenshot-verified.
+
+## Current freeze
+
+No future runtime batch is active. Historical post-Base08 experiments are not accepted scope.
+
+A future batch starts only after the owner explicitly unlocks it and only from the official recoverable base using the process in `docs/PROJECT_OPERATING_BLUEPRINT.md`.
 
 ## Repository structure
 
 ```text
 android/                 Android configuration
-config/                  Machine-readable project state
+config/                  Machine-readable project/recovery truth
 functions/               Firebase Cloud Functions and tests
 lib/                     Flutter application code
 rules_tests/             Firebase emulator security tests
 test/                    Flutter tests
-docs/                    Audit, architecture, release and recovery docs
+docs/                    Blueprint, audit, acceptance and release docs
+tool/                    Recovery, deployment and audit scripts
 .github/workflows/       CI and signed-build workflows
 ```
 
-## Local validation
+## Security boundary
 
-```powershell
-flutter pub get
-flutter analyze
-flutter test
-```
-
-The accepted source currently has existing analyzer warnings/informational lints. These are tracked technical debt; tests and required CI gates pass.
-
-## Safe future workflow
-
-1. Start from current `main`.
-2. Create one focused short-lived branch.
-3. Make the smallest necessary change.
-4. Open a pull request and pass all required checks.
-5. Test runtime/config changes on a physical Android phone.
-6. Obtain owner approval.
-7. Merge, update recovery/audit records and delete the temporary branch.
-8. Move the recovery branch only after accepted device testing.
-
-## Important external-state limitation
-
-GitHub is the source of truth for code, architecture, roadmap and recovery instructions. It intentionally does not store secret values, the permanent keystore file, Firebase Console state, App Check debug tokens, Play Console configuration, test-account credentials or live production data. Those remain in protected secrets, encrypted owner backups and the relevant consoles.
+GitHub must never contain the permanent keystore bytes, passwords, App Check debug tokens, private test credentials or live user data. Keystore/password backups remain encrypted and owner-controlled outside the repository.
