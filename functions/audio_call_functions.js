@@ -12,6 +12,7 @@ const messaging = admin.messaging();
 const REGION = "asia-south1";
 const CALL_RING_SECONDS = 45;
 const RTC_TOKEN_SECONDS = 15 * 60;
+const MAX_CONNECTED_SECONDS = 4 * 60 * 60;
 const HISTORY_LIMIT = 50;
 const AGORA_APP_ID = defineSecret("AGORA_APP_ID");
 const AGORA_APP_CERTIFICATE = defineSecret("AGORA_APP_CERTIFICATE");
@@ -64,6 +65,10 @@ async function assertCallablePair(callerId, calleeId) {
   return { caller, callee };
 }
 
+async function assertParticipantsStillCallable(callData) {
+  await assertCallablePair(callData.callerId, callData.calleeId);
+}
+
 function buildRtcCredentials(uid, channelName) {
   const appId = AGORA_APP_ID.value().trim();
   const certificate = AGORA_APP_CERTIFICATE.value().trim();
@@ -111,13 +116,18 @@ function sanitizedCall(snapshot) {
   };
 }
 
-async function clearActiveUsers(transaction, callData, callId) {
-  for (const uid of [callData.callerId, callData.calleeId]) {
-    if (!uid) continue;
-    const ref = activeRef(uid);
-    const active = await transaction.get(ref);
-    if (active.exists && active.get("callId") === callId) {
-      transaction.delete(ref);
+async function activeSnapshots(transaction, callData) {
+  const refs = [callData.callerId, callData.calleeId]
+    .filter((uid) => typeof uid === "string" && uid)
+    .map((uid) => activeRef(uid));
+  const snapshots = await Promise.all(refs.map((ref) => transaction.get(ref)));
+  return refs.map((ref, index) => ({ ref, snapshot: snapshots[index] }));
+}
+
+function clearActiveUsers(transaction, activeEntries, callId) {
+  for (const entry of activeEntries) {
+    if (entry.snapshot.exists && entry.snapshot.get("callId") === callId) {
+      transaction.delete(entry.ref);
     }
   }
 }
@@ -130,18 +140,22 @@ async function sendIncomingCallPush({ calleeId, callId, callerName }) {
     .orderBy("updatedAt", "desc")
     .limit(20)
     .get();
-  const tokens = [...new Set(devices.docs.map((d) => d.get("token")).filter((x) => typeof x === "string" && x))];
-  if (!tokens.length) return;
-  await messaging.sendEachForMulticast({
-    tokens,
+  const tokenEntries = [];
+  const seen = new Set();
+  for (const device of devices.docs) {
+    const token = device.get("token");
+    if (typeof token !== "string" || !token || seen.has(token)) continue;
+    seen.add(token);
+    tokenEntries.push({ token, device });
+  }
+  if (!tokenEntries.length) return;
+  const response = await messaging.sendEachForMulticast({
+    tokens: tokenEntries.map((entry) => entry.token),
     notification: {
       title: "Incoming audio call",
       body: `${callerName || "NearMeU User"} is calling you`,
     },
-    data: {
-      type: "audio_call",
-      callId,
-    },
+    data: { type: "audio_call", callId },
     android: {
       priority: "high",
       notification: {
@@ -151,6 +165,22 @@ async function sendIncomingCallPush({ calleeId, callId, callerName }) {
       },
     },
   });
+
+  const invalidCodes = new Set([
+    "messaging/registration-token-not-registered",
+    "messaging/invalid-registration-token",
+  ]);
+  const batch = db.batch();
+  let invalidCount = 0;
+  response.responses.forEach((item, index) => {
+    const code = item.error && item.error.code;
+    if (!invalidCodes.has(code)) return;
+    const entry = tokenEntries[index];
+    if (!entry) return;
+    batch.delete(entry.device.ref);
+    invalidCount += 1;
+  });
+  if (invalidCount) await batch.commit();
 }
 
 exports.startAudioCall = onCall(
@@ -213,20 +243,29 @@ exports.respondAudioCall = onCall(
     const accept = request.data && request.data.accept === true;
     const ref = callRef(callId);
     let channelName = "";
+
+    const preflight = await ref.get();
+    if (!preflight.exists) throw new HttpsError("not-found", "Call not found.");
+    if (preflight.get("calleeId") !== uid) {
+      throw new HttpsError("permission-denied", "Only the receiver can answer this call.");
+    }
+    if (accept) await assertParticipantsStillCallable(preflight.data());
+
     await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists) throw new HttpsError("not-found", "Call not found.");
       const data = snapshot.data();
       if (data.calleeId !== uid) throw new HttpsError("permission-denied", "Only the receiver can answer this call.");
       if (data.status !== "ringing") throw new HttpsError("failed-precondition", "This call is no longer ringing.");
+      const activeEntries = await activeSnapshots(transaction, data);
       if (data.expiresAt && data.expiresAt.toMillis() <= Date.now()) {
-        await clearActiveUsers(transaction, data, callId);
+        clearActiveUsers(transaction, activeEntries, callId);
         transaction.update(ref, {
           status: "missed",
           endedAt: admin.firestore.FieldValue.serverTimestamp(),
           endReason: "ring-timeout",
         });
-        throw new HttpsError("deadline-exceeded", "This call has expired.");
+        return;
       }
       channelName = data.channelName;
       if (accept) {
@@ -235,7 +274,7 @@ exports.respondAudioCall = onCall(
           answeredAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } else {
-        await clearActiveUsers(transaction, data, callId);
+        clearActiveUsers(transaction, activeEntries, callId);
         transaction.update(ref, {
           status: "rejected",
           endedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -244,7 +283,11 @@ exports.respondAudioCall = onCall(
         });
       }
     });
+
     const latest = await ref.get();
+    if (latest.get("status") === "missed") {
+      throw new HttpsError("deadline-exceeded", "This call has expired.");
+    }
     return {
       success: true,
       call: sanitizedCall(latest),
@@ -265,6 +308,7 @@ exports.getAudioCall = onCall(
       throw new HttpsError("permission-denied", "You are not part of this call.");
     }
     const active = data.status === "ringing" || data.status === "connected";
+    if (active) await assertParticipantsStillCallable(data);
     return {
       success: true,
       call: sanitizedCall(snapshot),
@@ -290,6 +334,7 @@ exports.getPendingAudioCall = onCall(
       await active.ref.delete();
       return { success: true, call: sanitizedCall(snapshot), rtc: null };
     }
+    await assertParticipantsStillCallable(data);
     return {
       success: true,
       call: sanitizedCall(snapshot),
@@ -301,7 +346,9 @@ exports.getPendingAudioCall = onCall(
 exports.endAudioCall = onCall({ region: REGION }, async (request) => {
   const uid = requireUid(request);
   const callId = requireString(request.data && request.data.callId, "callId");
-  const reason = typeof request.data?.reason === "string" ? request.data.reason.trim().slice(0, 40) : "ended";
+  const reason = typeof request.data?.reason === "string"
+    ? request.data.reason.trim().slice(0, 40)
+    : "ended";
   const ref = callRef(callId);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -310,8 +357,9 @@ exports.endAudioCall = onCall({ region: REGION }, async (request) => {
     if (uid !== data.callerId && uid !== data.calleeId) {
       throw new HttpsError("permission-denied", "You are not part of this call.");
     }
-    if (["ended", "rejected", "missed", "failed"].includes(data.status)) return;
-    await clearActiveUsers(transaction, data, callId);
+    if (["ended", "rejected", "missed", "failed", "cancelled"].includes(data.status)) return;
+    const activeEntries = await activeSnapshots(transaction, data);
+    clearActiveUsers(transaction, activeEntries, callId);
     transaction.update(ref, {
       status: data.status === "ringing" && uid === data.callerId ? "cancelled" : "ended",
       endedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -336,28 +384,50 @@ exports.listAudioCallHistory = onCall({ region: REGION }, async (request) => {
   return { success: true, calls };
 });
 
+async function expireCallSnapshot(snapshot, expectedStatus, terminalStatus, reason) {
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(snapshot.ref);
+    if (!current.exists || current.get("status") !== expectedStatus) return;
+    const data = current.data();
+    const activeEntries = await activeSnapshots(transaction, data);
+    clearActiveUsers(transaction, activeEntries, current.id);
+    transaction.update(current.ref, {
+      status: terminalStatus,
+      endedAt: admin.firestore.FieldValue.serverTimestamp(),
+      endReason: reason,
+    });
+  });
+}
+
 exports.expireStaleAudioCalls = onSchedule(
   { schedule: "every 1 minutes", region: REGION, timeZone: "UTC" },
   async () => {
-    const expired = await db
-      .collection("audioCalls")
-      .where("status", "==", "ringing")
-      .where("expiresAt", "<=", admin.firestore.Timestamp.now())
-      .limit(100)
-      .get();
-    for (const snapshot of expired.docs) {
-      await db.runTransaction(async (transaction) => {
-        const current = await transaction.get(snapshot.ref);
-        if (!current.exists || current.get("status") !== "ringing") return;
-        const data = current.data();
-        await clearActiveUsers(transaction, data, current.id);
-        transaction.update(current.ref, {
-          status: "missed",
-          endedAt: admin.firestore.FieldValue.serverTimestamp(),
-          endReason: "ring-timeout",
-        });
-      });
+    const now = admin.firestore.Timestamp.now();
+    const connectedCutoff = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() - MAX_CONNECTED_SECONDS * 1000,
+    );
+    const [ringing, connected] = await Promise.all([
+      db.collection("audioCalls")
+        .where("status", "==", "ringing")
+        .where("expiresAt", "<=", now)
+        .limit(100)
+        .get(),
+      db.collection("audioCalls")
+        .where("status", "==", "connected")
+        .where("answeredAt", "<=", connectedCutoff)
+        .limit(100)
+        .get(),
+    ]);
+
+    for (const snapshot of ringing.docs) {
+      await expireCallSnapshot(snapshot, "ringing", "missed", "ring-timeout");
     }
-    logger.info("Stale audio call expiry completed", { expiredCount: expired.size });
+    for (const snapshot of connected.docs) {
+      await expireCallSnapshot(snapshot, "connected", "ended", "maximum-duration");
+    }
+    logger.info("Stale audio call expiry completed", {
+      ringingExpired: ringing.size,
+      connectedExpired: connected.size,
+    });
   },
 );
