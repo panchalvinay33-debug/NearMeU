@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 20,
+  "schemaVersion": 21,
   "project": "NearMeU",
   "lastUpdated": "2026-08-06",
   "canonicalLocalWorkspace": "F:\\NearMeU",
@@ -11,7 +11,7 @@
     "adminAndroidApplicationId": "com.nearmeu.admin",
     "sharedFirebaseProjectId": "nearmeu-e82c7",
     "sharedBackendOwnerRepository": "panchalvinay33-debug/NearMeU",
-    "adminDevelopmentStatus": "PAUSED_UNTIL_CONSUMER_LAUNCH_OWNER_RESUME",
+    "adminDevelopmentStatus": "PAUSED_UNTIL_CONSUMER_PUBLIC_LAUNCH_OWNER_RESUME",
     "adminHistoricalBranchesAreReferenceOnly": true,
     "adminHistoricalBranchesPreserveDuringPause": true,
     "boundaryDocument": "docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md"
@@ -24,7 +24,8 @@
     "futureRuntimeWorkLocked": true,
     "postBatch08ExperimentsAccepted": false,
     "nextBatch": null,
-    "nextBatchRequiresOwnerUnlock": true
+    "nextBatchRequiresOwnerUnlock": true,
+    "permanentStartAndDeploymentRulesEnabled": true
   },
   "identity": {
     "androidApplicationId": "com.nearmeu.nearmeu",
@@ -36,9 +37,11 @@
   "officialTruth": {
     "machineManifest": "config/official_base_manifest.json",
     "operatingBlueprint": "docs/PROJECT_OPERATING_BLUEPRINT.md",
+    "projectStartDeploymentRules": "docs/PROJECT_START_DEPLOYMENT_RULES.md",
     "ecosystemBoundary": "docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md",
     "changeLedger": "docs/CHANGE_LEDGER.md",
     "oneCommandRecovery": "tool/restore_official_base.ps1",
+    "projectStateCommand": "tool/show_project_state.ps1",
     "deploymentGate": "tool/verify_deployment_gate.ps1",
     "productionAudit": "tool/audit_production_state.ps1",
     "promotionTool": "tool/promote_official_base.ps1"
@@ -65,7 +68,7 @@
   "base08Recertification": {
     "status": "production-audit-pending",
     "physicallyTestedRuntimeSha": "87f5b05461f0e211c1f710dabba27255436ef7cd",
-    "currentMergedMainSha": "f01c8ea9bbd43728f839ee24b5f7280d9ba2d4c7",
+    "currentMergedMainSha": "7964ece750a4a987167ff96be20b15fef7b22529",
     "chatIndexRepair": "pass",
     "deliveryReceiptAlignment": "pass",
     "onlinePresence": "physical-pass",
@@ -102,7 +105,16 @@
   ],
   "futureRoadmap": {
     "status": "locked",
-    "adminCompanionTrack": "paused-until-consumer-launch-owner-resume",
+    "adminCompanionTrack": "paused-until-after-consumer-public-launch-and-owner-resume",
+    "plannedBatches": [
+      {"id":"09","name":"Audio Calling","status":"locked"},
+      {"id":"10","name":"Video Calling","status":"locked"},
+      {"id":"11","name":"Google Play Premium Verification","status":"locked"},
+      {"id":"12","name":"Production Hardening","status":"locked"},
+      {"id":"13","name":"Play Store Internal and Closed Testing","status":"locked"},
+      {"id":"14","name":"Controlled Public Launch","status":"locked"},
+      {"id":"15","name":"NearMeU Admin Full Development and Integration","status":"locked-after-public-launch"}
+    ],
     "rule": "Future scope must be explicitly unlocked by the owner and started fresh from the promoted official recoverable base. Historical post-Base08 branches are not starting points. Historical Admin backend branches are preserved references while Admin is paused and must not be directly merged or deployed."
   }
 }
