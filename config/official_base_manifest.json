@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "project": "NearMeU",
+  "status": "BASE08_RECERTIFICATION_FINAL_VERSION_CHECK_PENDING",
+  "lastUpdated": "2026-08-06",
+  "acceptedProductBoundary": {
+    "throughBatch": "08",
+    "futureRuntimeWorkLocked": true,
+    "postBatch08ExperimentsAccepted": false
+  },
+  "identity": {
+    "repository": "panchalvinay33-debug/NearMeU",
+    "canonicalPcWorkspace": "F:\\NearMeU",
+    "androidApplicationId": "com.nearmeu.nearmeu",
+    "firebaseProjectId": "nearmeu-e82c7",
+    "mainBranch": "main",
+    "recoveryBranch": "stable/official-recoverable-base",
+    "versionName": "1.0.11",
+    "versionCode": 12,
+    "permanentSigningCertificateSha256": "B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B"
+  },
+  "recovery": {
+    "currentOfficialSourceSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
+    "recoveryBranchExpectedSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
+    "oneCommandScript": "tool/restore_official_base.ps1",
+    "productionAuditScript": "tool/audit_production_state.ps1",
+    "deploymentGateScript": "tool/verify_deployment_gate.ps1"
+  },
+  "finalVersionDisplayCandidate": {
+    "pullRequest": 114,
+    "branchHeadSha": "f0906b3be18e633102db07a6d74e837717d8cc60",
+    "testedMergeRefSha": "04c0050ac13a9930996a59c351fea98c3971bbfb",
+    "qualityWorkflowRun": 31081417470,
+    "qualityWorkflowNumber": 614,
+    "recoverableWorkflowRun": 31081418948,
+    "recoverableWorkflowNumber": 167,
+    "recoverableArtifactId": 8959924645,
+    "recoverableArtifactDigest": "sha256:e9fa15ed8056fd44210b6f89917627236cfaa44d430209766351e63aab9bb27d",
+    "signedDebugApkSha256": "532e1b521f0fc92b63da8e4e68188e2788f2fda5996a8f753191b1594246c069",
+    "automatedGates": "PASS",
+    "physicalAboutVersionCheck": "PENDING",
+    "expectedAboutLabel": "Version 1.0.11 (Build 12)"
+  },
+  "freshBase08PhysicalRecertification": {
+    "loginSession": "PASS",
+    "nearby": "PASS",
+    "chats": "PASS",
+    "textMessaging": "PASS",
+    "photoVideoVoiceMessaging": "PASS",
+    "messageActions": "PASS",
+    "blockSafety": "PASS",
+    "premiumOwnerFlow": "PASS",
+    "profileSharing": "PASS",
+    "twoPhoneOnlinePresence": "PASS",
+    "twoPhoneDeliveredGreyDoubleTick": "PASS",
+    "twoPhoneReadBlueDoubleTick": "PASS",
+    "twoPhoneBidirectionalMessaging": "PASS"
+  },
+  "base08StabilizationFixes": [
+    "Firestore automatic messages.timestamp collection index restored",
+    "delivery acknowledgement batch limit aligned to 200",
+    "presence service self-heals stale externally written offline state",
+    "About screen runtime version display candidate in PR 114"
+  ],
+  "persistentEvidenceGaps": [
+    "Batch07 receiver-media pre-download/post-download Premium recovery remains OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS",
+    "Batch08 custom nearmeu:// fallback implemented but not separately screenshot-verified"
+  ],
+  "production": {
+    "firebaseProductionAudit": "PENDING_FINAL_BASE08_CLOSEOUT",
+    "unexpectedPostBase08FunctionsMustBeZero": true,
+    "consoleOnlyPermanentRuleChangesAllowed": false
+  },
+  "acceptanceRule": "Do not replace currentOfficialSourceSha with the final candidate until automated gates, focused physical acceptance, merge, production audit, documentation and recovery promotion are all complete."
+}
