@@ -41,11 +41,12 @@ When documents disagree, use this order:
 1. `docs/PROJECT_OPERATING_BLUEPRINT.md`
 2. `config/official_base_manifest.json`
 3. `docs/MASTER_PROJECT_AUDIT.md`
-4. `docs/OFFICIAL_RECOVERABLE_BASE.md`
-5. `config/project_state_manifest.json`
-6. `docs/TEST_BATCH_REGISTER.md`
-7. `docs/EXECUTION_BATCH_PLAN.md`
-8. current accepted `main` source and workflows
+4. `docs/CHANGE_LEDGER.md`
+5. `docs/OFFICIAL_RECOVERABLE_BASE.md`
+6. `config/project_state_manifest.json`
+7. `docs/TEST_BATCH_REGISTER.md`
+8. `docs/EXECUTION_BATCH_PLAN.md`
+9. current accepted `main` source and workflows
 
 Historical branches, PRs and screenshots cannot override the official-base manifest.
 
@@ -53,13 +54,13 @@ Historical branches, PRs and screenshots cannot override the official-base manif
 
 Every runtime batch follows exactly:
 
-`Freeze scope → branch from accepted base → code → CI → permanently signed APK → focused physical test → owner PASS → merge → deploy exact main SHA if production changes are required → production-state audit → documentation → recovery promotion → local sync → temporary branch cleanup → next batch unlock`
+`Freeze scope → branch from accepted base → code → CI → permanently signed APK → focused physical test → owner PASS → merge → deploy exact main SHA if production changes are required → production-state audit → documentation → immutable acceptance tag → recovery promotion → offline Git bundle → local sync → temporary branch cleanup → next batch unlock`
 
 A batch is NOT accepted merely because code was merged or CI passed.
 
 A batch becomes accepted only when all required gates are complete and its exact accepted state is written into `config/official_base_manifest.json`.
 
-## 5. Branch rules
+## 5. Branch and tag rules
 
 Long-lived branches:
 
@@ -68,9 +69,11 @@ Long-lived branches:
 
 All runtime, stabilization and documentation branches are temporary.
 
+Each fully accepted base also receives one immutable annotated Git tag named in `config/official_base_manifest.json`. The tag is never force-moved or reused.
+
 Rules:
 
-- A new batch starts from the current accepted `main`/recovery state.
+- A new batch starts from the current accepted tag/main/recovery state.
 - Only one active runtime batch at a time.
 - No future batch begins while the previous batch has pending physical acceptance, production cleanup, docs, recovery promotion or local sync.
 - Temporary branches are deleted after accepted closeout when permissions/tools allow it. If deletion is unavailable, they must point to the accepted base and contain no unique active runtime code.
@@ -161,13 +164,22 @@ cd F:\NearMeU
 .\tool\restore_official_base.ps1
 ```
 
-The script fetches origin, reads the accepted SHA from `config/official_base_manifest.json`, switches to `main`, resets the working source to the official accepted SHA and verifies project identity.
+The recovery resolver prefers the promoted immutable acceptance tag, then the manifest's official SHA, then the recovery branch. If the manifest says an immutable tag is promoted but the tag cannot be fetched, recovery fails closed instead of guessing.
 
-By default it refuses to destroy uncommitted local work. Use `-Force` only when the owner intentionally wants to discard local changes.
+By default the script refuses to destroy uncommitted local work. Use `-Force` only when the owner intentionally wants to discard local changes.
 
-This removes the need to remember old branches or reconstruct a base manually.
+## 11. One-command project status
 
-## 11. Production recovery
+When opening the project:
+
+```powershell
+cd F:\NearMeU
+.\tool\show_project_state.ps1
+```
+
+This prints project identity, accepted boundary, official recovery target, current local branch/SHA, fresh physical results, pending gates and evidence gaps.
+
+## 12. Production recovery
 
 Source recovery and production recovery are separate safety operations.
 
@@ -179,27 +191,48 @@ After source recovery, first audit production:
 
 If deployed resources do not match accepted source, remove only confirmed extras and redeploy accepted Firebase resources from the recovered source. Never delete user data as part of source recovery.
 
-## 12. Recovery promotion rule
+## 13. Recovery promotion and offline backup
 
-`stable/official-recoverable-base` moves only after:
+After all acceptance gates pass, prepare `config/official_base_manifest.json` with:
 
-- candidate CI PASS;
-- permanent signing PASS;
-- physical acceptance PASS;
-- required production actions PASS;
-- production-state audit PASS;
-- docs updated;
-- `config/official_base_manifest.json` updated;
-- owner acceptance recorded.
+- status `READY_FOR_PROMOTION`;
+- `currentOfficialSourceSha` equal to accepted `main` HEAD;
+- `immutableTagStatus` `READY_TO_CREATE`.
 
-After promotion, `main`, recovery branch and canonical local workspace must all resolve to the same accepted state before any new runtime batch begins.
+Then run:
 
-## 13. Backup rule
+```powershell
+.\tool\promote_official_base.ps1 -OwnerAccepted
+```
+
+Optionally include the exact accepted APK:
+
+```powershell
+.\tool\promote_official_base.ps1 -OwnerAccepted -AcceptedApkPath "F:\path\to\accepted.apk"
+```
+
+The promotion script:
+
+- refuses to run without explicit owner-acceptance switch;
+- requires clean `main == origin/main`;
+- refuses to move an existing immutable tag;
+- creates/pushes the acceptance tag;
+- fast-forwards the recovery branch without automatic force;
+- creates an offline Git bundle under `F:\NearMeU\local_recovery`;
+- writes a SHA-256 for the bundle;
+- copies the official manifest;
+- optionally copies/hashes the exact accepted APK.
+
+After successful promotion, the closeout record updates `immutableTagStatus` to `PROMOTED` and records the bundle/hash evidence.
+
+## 14. Backup rule
 
 A complete accepted-base backup contains:
 
 - exact Git SHA;
+- immutable accepted tag;
 - recovery branch;
+- offline Git bundle + SHA-256;
 - official base manifest;
 - signed debug APK and SHA-256;
 - signed release artifact when applicable;
@@ -214,7 +247,7 @@ A complete accepted-base backup contains:
 
 Never commit keystores, passwords, App Check debug tokens, private credentials or live user data.
 
-## 14. Version rule
+## 15. Version rule
 
 `pubspec.yaml` is the single application version source.
 
@@ -223,7 +256,13 @@ Never commit keystores, passwords, App Check debug tokens, private credentials o
 - Play uploads must always use a versionCode greater than any previously uploaded versionCode;
 - About screen must read runtime package info and must not hardcode a fake version.
 
-## 15. Current roadmap policy
+## 16. Change ledger rule
+
+Every important accepted merge/change is appended to `docs/CHANGE_LEDGER.md` with date, reason, PR/SHA, deployment effect, physical evidence and acceptance result.
+
+This gives a single place to answer: what changed, when, where it merged and why.
+
+## 17. Current roadmap policy
 
 The currently accepted project ends at Base 08.
 
@@ -231,21 +270,21 @@ Future work is intentionally locked. Historical Batch09/Admin experiments are no
 
 A future batch can start only after the owner explicitly unlocks it. Its scope must then be selected again from the roadmap and started from the current official base.
 
-## 16. Opening-the-project checklist
+## 18. Opening-the-project checklist
 
-When NearMeU is opened after days or months, read:
-
-1. `README.md` — quick orientation;
-2. `docs/PROJECT_OPERATING_BLUEPRINT.md` — how the project works;
-3. `config/official_base_manifest.json` — exact accepted machine truth;
-4. `docs/MASTER_PROJECT_AUDIT.md` — detailed history and evidence.
-
-Then run:
+When NearMeU is opened after days or months:
 
 ```powershell
 cd F:\NearMeU
-git status
-git rev-parse HEAD
+.\tool\show_project_state.ps1
 ```
+
+Then read:
+
+1. `README.md`;
+2. `docs/PROJECT_OPERATING_BLUEPRINT.md`;
+3. `config/official_base_manifest.json`;
+4. `docs/MASTER_PROJECT_AUDIT.md`;
+5. `docs/CHANGE_LEDGER.md`.
 
 If there is any doubt about the working copy, run `tool\restore_official_base.ps1` before starting work.
