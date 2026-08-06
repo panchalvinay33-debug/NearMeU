@@ -18,6 +18,13 @@ class CallDeviceService {
     });
   }
 
+  Future<bool> setBluetooth(bool enabled) async {
+    return await _channel.invokeMethod<bool>('setBluetooth', <String, dynamic>{
+          'enabled': enabled,
+        }) ??
+        false;
+  }
+
   Future<void> setProximityEnabled(bool enabled) async {
     await _channel.invokeMethod<void>('setProximityEnabled', <String, dynamic>{
       'enabled': enabled,
@@ -26,5 +33,9 @@ class CallDeviceService {
 
   Future<bool> bluetoothAvailable() async {
     return await _channel.invokeMethod<bool>('isBluetoothAvailable') ?? false;
+  }
+
+  Future<bool> bluetoothSelected() async {
+    return await _channel.invokeMethod<bool>('isBluetoothSelected') ?? false;
   }
 }
