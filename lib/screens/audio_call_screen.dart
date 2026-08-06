@@ -36,12 +36,15 @@ class _AudioCallScreenState extends State<AudioCallScreen>
   StreamSubscription<AgoraAudioEvent>? _rtcSub;
   Timer? _pollTimer;
   Timer? _durationTimer;
+  Timer? _deviceTimer;
   Duration _duration = Duration.zero;
   bool _busy = true;
   bool _muted = false;
   bool _speaker = false;
   bool _bluetoothAvailable = false;
+  bool _bluetoothSelected = false;
   bool _remoteJoined = false;
+  bool _closing = false;
   String? _error;
 
   String get _currentUid => FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -58,23 +61,44 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   Future<void> _initialize() async {
     try {
-      final session = widget.initialSession ?? await _calls.getCall(widget.callId!);
+      final session =
+          widget.initialSession ?? await _calls.getCall(widget.callId!);
       if (!mounted) return;
       setState(() {
         _session = session;
         _busy = false;
       });
       await _device.enterCallMode();
-      _bluetoothAvailable = await _device.bluetoothAvailable();
-      if (!mounted) return;
-      setState(() {});
+      await _refreshDeviceState();
+      _deviceTimer = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => unawaited(_refreshDeviceState()),
+      );
       if (!widget.incoming || session.call.isConnected) {
         await _joinRtc(session);
       }
       _startPolling();
     } catch (error) {
-      if (mounted) setState(() { _busy = false; _error = error.toString(); });
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = error.toString();
+        });
+      }
     }
+  }
+
+  Future<void> _refreshDeviceState() async {
+    try {
+      final available = await _device.bluetoothAvailable();
+      final selected = await _device.bluetoothSelected();
+      if (!mounted) return;
+      setState(() {
+        _bluetoothAvailable = available;
+        _bluetoothSelected = selected;
+        if (selected) _speaker = false;
+      });
+    } catch (_) {}
   }
 
   Future<bool> _ensureMicrophonePermission() async {
@@ -86,16 +110,25 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     final credentials = session.rtc;
     if (credentials == null || session.call.channelName.isEmpty) return;
     if (!await _ensureMicrophonePermission()) {
-      if (mounted) setState(() => _error = 'Microphone permission is required for calls.');
+      if (mounted) {
+        setState(
+          () => _error = 'Microphone permission is required for calls.',
+        );
+      }
       return;
     }
     _rtcSub ??= _rtc.events.listen(_onRtcEvent);
-    await _rtc.join(credentials: credentials, channelName: session.call.channelName);
-    await _device.setProximityEnabled(true);
+    await _rtc.join(
+      credentials: credentials,
+      channelName: session.call.channelName,
+    );
+    await _device.setProximityEnabled(
+      !_speaker && !_bluetoothSelected,
+    );
   }
 
   void _onRtcEvent(AgoraAudioEvent event) {
-    if (!mounted) return;
+    if (!mounted || _closing) return;
     if (event.type == 'remoteJoined') {
       setState(() => _remoteJoined = true);
       _startDurationTimer();
@@ -110,7 +143,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   Future<void> _refreshToken() async {
     final call = _call;
-    if (call == null) return;
+    if (call == null || _closing) return;
     try {
       final latest = await _calls.getCall(call.callId);
       _session = latest;
@@ -121,15 +154,18 @@ class _AudioCallScreenState extends State<AudioCallScreen>
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_poll()));
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(_poll()),
+    );
   }
 
   Future<void> _poll() async {
     final call = _call;
-    if (call == null) return;
+    if (call == null || _closing) return;
     try {
       final latest = await _calls.getCall(call.callId);
-      if (!mounted) return;
+      if (!mounted || _closing) return;
       setState(() => _session = latest);
       if (latest.call.isTerminal) {
         await _closeWithoutWrite();
@@ -144,47 +180,61 @@ class _AudioCallScreenState extends State<AudioCallScreen>
   void _startDurationTimer() {
     if (_durationTimer != null) return;
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _duration += const Duration(seconds: 1));
+      if (mounted && !_closing) {
+        setState(() => _duration += const Duration(seconds: 1));
+      }
     });
   }
 
   Future<void> _answer() async {
     final call = _call;
-    if (call == null || _busy) return;
+    if (call == null || _busy || _closing) return;
     setState(() => _busy = true);
     try {
       final session = await _calls.respond(callId: call.callId, accept: true);
-      if (!mounted) return;
+      if (!mounted || _closing) return;
       setState(() => _session = session);
       await _joinRtc(session);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && !_closing) setState(() => _busy = false);
     }
   }
 
   Future<void> _reject() async {
     final call = _call;
-    if (call == null) return;
-    try { await _calls.respond(callId: call.callId, accept: false); } catch (_) {}
+    if (call == null || _closing) return;
+    try {
+      await _calls.respond(callId: call.callId, accept: false);
+    } catch (_) {}
     await _closeWithoutWrite();
   }
 
   Future<void> _finish(String reason) async {
+    if (_closing) return;
     final call = _call;
     if (call != null) {
-      try { await _calls.endCall(call.callId, reason: reason); } catch (_) {}
+      try {
+        await _calls.endCall(call.callId, reason: reason);
+      } catch (_) {}
     }
     await _closeWithoutWrite();
   }
 
   Future<void> _closeWithoutWrite() async {
+    if (_closing) return;
+    _closing = true;
     _pollTimer?.cancel();
     _durationTimer?.cancel();
+    _deviceTimer?.cancel();
     await _rtc.leave();
-    try { await _device.setProximityEnabled(false); } catch (_) {}
-    try { await _device.leaveCallMode(); } catch (_) {}
+    try {
+      await _device.setProximityEnabled(false);
+    } catch (_) {}
+    try {
+      await _device.leaveCallMode();
+    } catch (_) {}
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -194,15 +244,64 @@ class _AudioCallScreenState extends State<AudioCallScreen>
   }
 
   Future<void> _toggleSpeaker() async {
+    if (_closing) return;
+    if (_bluetoothSelected) {
+      await _device.setBluetooth(false);
+      _bluetoothSelected = false;
+    }
     final value = await _rtc.toggleSpeaker();
     await _device.setSpeaker(value);
     await _device.setProximityEnabled(!value);
-    if (mounted) setState(() => _speaker = value);
+    if (mounted) {
+      setState(() {
+        _speaker = value;
+        if (value) _bluetoothSelected = false;
+      });
+    }
+  }
+
+  Future<void> _toggleBluetooth() async {
+    if (_closing) return;
+    if (!_bluetoothSelected) {
+      final permission = await Permission.bluetoothConnect.request();
+      if (!permission.isGranted && !permission.isLimited) {
+        if (mounted) {
+          setState(
+            () => _error = 'Bluetooth permission is required to use a headset.',
+          );
+        }
+        return;
+      }
+    }
+
+    final target = !_bluetoothSelected;
+    final routed = await _device.setBluetooth(target);
+    if (target && !routed) {
+      if (mounted) {
+        setState(() => _error = 'No Bluetooth call device is available.');
+      }
+      return;
+    }
+    if (target && _speaker) {
+      await _rtc.toggleSpeaker();
+      _speaker = false;
+    }
+    await _device.setProximityEnabled(!target && !_speaker);
+    if (mounted) {
+      setState(() {
+        _bluetoothSelected = target;
+        if (target) _speaker = false;
+        _error = null;
+      });
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_poll());
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_poll());
+      unawaited(_refreshDeviceState());
+    }
   }
 
   @override
@@ -210,6 +309,7 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _durationTimer?.cancel();
+    _deviceTimer?.cancel();
     _rtcSub?.cancel();
     unawaited(_rtc.dispose());
     unawaited(_device.leaveCallMode());
@@ -227,8 +327,12 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     if (call == null) return 'Preparing call...';
     if (_error != null) return _error!;
     if (_needsAnswer) return 'Incoming audio call';
-    if (call.status == 'ringing') return _isCaller ? 'Ringing...' : 'Incoming call';
-    if (call.status == 'connected') return _remoteJoined ? _durationLabel() : 'Connecting audio...';
+    if (call.status == 'ringing') {
+      return _isCaller ? 'Ringing...' : 'Incoming call';
+    }
+    if (call.status == 'connected') {
+      return _remoteJoined ? _durationLabel() : 'Connecting audio...';
+    }
     return call.status;
   }
 
@@ -254,35 +358,104 @@ class _AudioCallScreenState extends State<AudioCallScreen>
                   backgroundColor: AppColors.primary.withValues(alpha: .18),
                   child: Text(
                     otherName.isEmpty ? '?' : otherName[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),
-                Text(otherName, style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w800)),
+                Text(
+                  otherName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 10),
-                Text(_statusText(), textAlign: TextAlign.center, style: TextStyle(color: _error == null ? AppColors.textSecondary : Colors.redAccent, fontSize: 15)),
+                Text(
+                  _statusText(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _error == null
+                        ? AppColors.textSecondary
+                        : Colors.redAccent,
+                    fontSize: 15,
+                  ),
+                ),
                 if (_bluetoothAvailable) ...[
                   const SizedBox(height: 8),
-                  const Text('Bluetooth device available', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  Text(
+                    _bluetoothSelected
+                        ? 'Bluetooth audio connected'
+                        : 'Bluetooth device available',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
                 const Spacer(),
                 if (_busy)
-                  const Padding(padding: EdgeInsets.all(28), child: CircularProgressIndicator())
+                  const Padding(
+                    padding: EdgeInsets.all(28),
+                    child: CircularProgressIndicator(),
+                  )
                 else if (_needsAnswer)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _roundButton(Icons.call_end_rounded, Colors.redAccent, _reject, 'Reject'),
-                      _roundButton(Icons.call_rounded, Colors.green, _answer, 'Accept'),
+                      _roundButton(
+                        Icons.call_end_rounded,
+                        Colors.redAccent,
+                        _reject,
+                        'Reject',
+                      ),
+                      _roundButton(
+                        Icons.call_rounded,
+                        Colors.green,
+                        _answer,
+                        'Accept',
+                      ),
                     ],
                   )
                 else
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 22,
+                    runSpacing: 18,
                     children: [
-                      _roundButton(_muted ? Icons.mic_off_rounded : Icons.mic_rounded, AppColors.surface, _toggleMute, _muted ? 'Unmute' : 'Mute'),
-                      _roundButton(_speaker ? Icons.volume_up_rounded : Icons.hearing_rounded, AppColors.surface, _toggleSpeaker, _speaker ? 'Earpiece' : 'Speaker'),
-                      _roundButton(Icons.call_end_rounded, Colors.redAccent, () => _finish('user-ended'), 'End'),
+                      _roundButton(
+                        _muted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                        AppColors.surface,
+                        _toggleMute,
+                        _muted ? 'Unmute' : 'Mute',
+                      ),
+                      _roundButton(
+                        _speaker
+                            ? Icons.volume_up_rounded
+                            : Icons.hearing_rounded,
+                        AppColors.surface,
+                        _toggleSpeaker,
+                        _speaker ? 'Earpiece' : 'Speaker',
+                      ),
+                      if (_bluetoothAvailable)
+                        _roundButton(
+                          Icons.bluetooth_audio_rounded,
+                          _bluetoothSelected
+                              ? AppColors.primary
+                              : AppColors.surface,
+                          _toggleBluetooth,
+                          _bluetoothSelected ? 'Bluetooth' : 'Bluetooth',
+                        ),
+                      _roundButton(
+                        Icons.call_end_rounded,
+                        Colors.redAccent,
+                        () => _finish('user-ended'),
+                        'End',
+                      ),
                     ],
                   ),
                 const SizedBox(height: 34),
@@ -294,7 +467,12 @@ class _AudioCallScreenState extends State<AudioCallScreen>
     );
   }
 
-  Widget _roundButton(IconData icon, Color background, VoidCallback onTap, String label) {
+  Widget _roundButton(
+    IconData icon,
+    Color background,
+    VoidCallback onTap,
+    String label,
+  ) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -304,12 +482,21 @@ class _AudioCallScreenState extends State<AudioCallScreen>
           child: Container(
             width: 68,
             height: 68,
-            decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+            ),
             child: Icon(icon, color: Colors.white, size: 30),
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
       ],
     );
   }
