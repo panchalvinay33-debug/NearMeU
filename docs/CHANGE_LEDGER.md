@@ -26,8 +26,14 @@ This ledger does not replace `config/official_base_manifest.json`; the manifest 
 |---|---|---|---|
 | Freeze post-Base08 work and restore Base08 boundary | PR #112 | Owner chose to stop future work and re-certify Base08 after experimental work made state/recovery harder to reason about. | Merged cleanup/re-certification base. |
 | Accurate About version display | PR #114 | About hardcoded `Version 1.0.0` instead of real package version `1.0.11+12`. | Merged; automated gates and owner physical About check PASS. |
-| Presence consistency across Nearby, Chats and Chat | PR #116 | Chat read/dispose paths could disagree with lifecycle-owned presence and stale online state. | Merged as `92341b4a9641ea1174186724d970feb4ffa12fdb`; fresh presence consistency target incorporated. |
-| Recovery/deployment governance hardening R2 | `governance/base08-recovery-hardening-r2` | Rebuild governance from current post-PR116 `main` without inheriting stale runtime history. | Governance-only candidate; no runtime code or production deployment. |
+| Presence consistency across Nearby, Chats and Chat | PR #116 | Chat read/dispose paths could disagree with lifecycle-owned presence and stale online state. | Merged as `92341b4a9641ea1174186724d970feb4ffa12fdb`; Quality #621 PASS, Recoverable #173 PASS, artifact `8964462769`; owner physically verified Nearby/Chats/Chat presence agreement, background ageing and read-without-offline behavior PASS. |
+| Cache-first Nearby and Chats / low-connectivity hardening | PR #117 | Network-first startup produced a web-page-like wait and weak-network blank/loading behavior despite an existing local cache. | Physically tested runtime `87f5b05461f0e211c1f710dabba27255436ef7cd`; merged as `f01c8ea9bbd43728f839ee24b5f7280d9ba2d4c7`; Quality #623 PASS, Recoverable #174 PASS, artifact `8965916278`; owner reported Normal / Offline / Reconnect all PASS. |
+| Recovery/deployment governance hardening R2 | PR #118 | Make the final Base08 state self-documenting and one-command recoverable without changing the physically tested consumer runtime. | Governance-only closeout candidate. Promotion script blocks non-governance drift after tested runtime and atomically promotes immutable tag + recovery branch. Production audit remains pending until run from merged clean main. |
+
+## Persistent evidence gaps that must not be silently upgraded
+
+- Batch07 receiver-media pre-download/post-download Premium recovery: **OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS**.
+- Batch08 custom `nearmeu://` fallback: implemented, but **not independently screenshot-verified**. HTTPS warm/cold app links were physically verified.
 
 ## Post-Base08 experiments — historical only
 
