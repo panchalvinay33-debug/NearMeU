@@ -1,0 +1,124 @@
+name: NearMeU recovery governance validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: Recovery governance checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate required recovery files exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            README.md
+            docs/PROJECT_OPERATING_BLUEPRINT.md
+            docs/MASTER_PROJECT_AUDIT.md
+            docs/CHANGE_LEDGER.md
+            docs/OFFICIAL_RECOVERABLE_BASE.md
+            docs/EXECUTION_BATCH_PLAN.md
+            config/official_base_manifest.json
+            config/project_state_manifest.json
+            tool/show_project_state.ps1
+            tool/restore_official_base.ps1
+            tool/verify_deployment_gate.ps1
+            tool/audit_production_state.ps1
+            tool/promote_official_base.ps1
+          )
+          for path in "${required[@]}"; do
+            [[ -f "$path" ]] || { echo "Missing required recovery file: $path"; exit 1; }
+          done
+
+      - name: Validate machine-readable project manifests
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const official = JSON.parse(fs.readFileSync('config/official_base_manifest.json', 'utf8'));
+          const state = JSON.parse(fs.readFileSync('config/project_state_manifest.json', 'utf8'));
+
+          const fail = (m) => { console.error(m); process.exit(1); };
+          if (official.project !== 'NearMeU') fail('official manifest project mismatch');
+          if (official.identity.repository !== 'panchalvinay33-debug/NearMeU') fail('repository mismatch');
+          if (official.identity.canonicalPcWorkspace !== 'F:\\NearMeU') fail('canonical PC path mismatch');
+          if (official.identity.androidApplicationId !== 'com.nearmeu.nearmeu') fail('package mismatch');
+          if (official.identity.firebaseProjectId !== 'nearmeu-e82c7') fail('Firebase project mismatch');
+          if (official.acceptedProductBoundary.throughBatch !== '08') fail('accepted boundary must remain Base08 during freeze');
+          if (!official.acceptedProductBoundary.futureRuntimeWorkLocked) fail('future runtime work must remain locked');
+          if (state.developmentState.acceptedThroughBatch !== '08') fail('project state accepted boundary mismatch');
+          if (!state.developmentState.futureRuntimeWorkLocked) fail('project state future-work lock missing');
+          if (state.identity.androidApplicationId !== official.identity.androidApplicationId) fail('manifest package mismatch');
+          if (state.identity.firebaseProjectId !== official.identity.firebaseProjectId) fail('manifest Firebase mismatch');
+          if (state.identity.versionName !== official.identity.versionName || state.identity.versionCode !== official.identity.versionCode) fail('manifest version mismatch');
+          console.log('Machine-readable recovery/project manifests are internally consistent.');
+          NODE
+
+      - name: Validate pubspec version matches official manifest
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const official = JSON.parse(fs.readFileSync('config/official_base_manifest.json', 'utf8'));
+          const pubspec = fs.readFileSync('pubspec.yaml', 'utf8');
+          const expected = `version: ${official.identity.versionName}+${official.identity.versionCode}`;
+          if (!pubspec.includes(expected)) {
+            console.error(`pubspec.yaml does not contain expected ${expected}`);
+            process.exit(1);
+          }
+          console.log(`pubspec matches ${expected}`);
+          NODE
+
+      - name: Validate PowerShell recovery tooling parses
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            'tool/show_project_state.ps1',
+            'tool/restore_official_base.ps1',
+            'tool/verify_deployment_gate.ps1',
+            'tool/audit_production_state.ps1',
+            'tool/promote_official_base.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$file: $($_.Message)" }
+              exit 1
+            }
+            Write-Host "$file syntax OK"
+          }
+
+      - name: Validate accepted Cloud Functions source loads
+        shell: bash
+        run: |
+          npm ci --prefix functions --no-audit --no-fund
+          node - <<'NODE'
+          const exported = Object.keys(require('./functions/bootstrap.js')).sort();
+          if (!exported.length) {
+            console.error('No accepted function exports found.');
+            process.exit(1);
+          }
+          const forbidden = exported.filter((name) => /admin|agora|audioCall|videoCall|callSession/i.test(name));
+          if (forbidden.length) {
+            console.error('Post-Base08 function export detected during Base08 freeze:', forbidden);
+            process.exit(1);
+          }
+          console.log(`Accepted Base08 function exports load: ${exported.length}`);
+          NODE
