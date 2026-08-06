@@ -38,4 +38,8 @@ class CallDeviceService {
   Future<bool> bluetoothSelected() async {
     return await _channel.invokeMethod<bool>('isBluetoothSelected') ?? false;
   }
+
+  Future<void> openCallNotificationSettings() async {
+    await _channel.invokeMethod<void>('openCallNotificationSettings');
+  }
 }
