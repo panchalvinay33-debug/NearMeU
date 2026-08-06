@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../screens/audio_call_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/support_announcements_screen.dart';
 import '../security/notification_route.dart';
@@ -84,6 +85,20 @@ class NotificationNavigationService {
         await navigator.push<void>(
           MaterialPageRoute<void>(
             builder: (_) => const SupportAnnouncementsScreen(),
+          ),
+        );
+        return;
+      }
+
+      if (destination.isAudioCall) {
+        final callId = NotificationRoute.normalizedCallId(destination.value);
+        if (callId == null) return;
+        _lastOpenedKey = key;
+        _lastOpenedAt = now;
+        await navigator.push<void>(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => AudioCallScreen(callId: callId, incoming: true),
           ),
         );
         return;
