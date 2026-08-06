@@ -26,6 +26,10 @@ Write-Host "Accepted boundary : Batch $($manifest.acceptedProductBoundary.throug
 Write-Host "Manifest status   : $($manifest.status)"
 Write-Host "Official source   : $($manifest.recovery.currentOfficialSourceSha)"
 Write-Host "Recovery branch   : $($manifest.identity.recoveryBranch)"
+if ($manifest.currentRecertificationCandidate) {
+    Write-Host "Current candidate : $($manifest.currentRecertificationCandidate.mainSha)"
+    Write-Host "Candidate status  : $($manifest.currentRecertificationCandidate.candidateStatus)"
+}
 Write-Host ''
 Write-Host "Current branch    : $currentBranch"
 Write-Host "Current local SHA : $currentSha"
@@ -44,7 +48,7 @@ Write-Host 'Final version-display candidate:' -ForegroundColor Cyan
 Write-Host "  PR              : #$($manifest.finalVersionDisplayCandidate.pullRequest)"
 Write-Host "  Automated gates : $($manifest.finalVersionDisplayCandidate.automatedGates)"
 Write-Host "  Physical check  : $($manifest.finalVersionDisplayCandidate.physicalAboutVersionCheck)"
-Write-Host "  Expected label  : $($manifest.finalVersionDisplayCandidate.expectedAboutLabel)"
+Write-Host "  Observed label  : $($manifest.finalVersionDisplayCandidate.observedAboutLabel)"
 
 Write-Host ''
 Write-Host 'Production closeout:' -ForegroundColor Cyan
