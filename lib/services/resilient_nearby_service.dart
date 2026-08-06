@@ -44,8 +44,6 @@ class ResilientNearbyService {
       );
     }
 
-    // After a reinstall/login, establish a usable Firebase ID token before the
-    // first callable request instead of racing auth restoration.
     await user.getIdToken();
     try {
       return await _readCandidates();
@@ -54,6 +52,18 @@ class ResilientNearbyService {
       await user.getIdToken(true);
       return _readCandidates();
     }
+  }
+
+  Future<NearbyLoadResult> loadCachedCandidates() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) {
+      return const NearbyLoadResult(users: <AppUser>[], fromCache: false);
+    }
+    final cached = await _cache.loadNearbyCandidates(uid);
+    return NearbyLoadResult(
+      users: List<AppUser>.unmodifiable(cached),
+      fromCache: cached.isNotEmpty,
+    );
   }
 
   Future<NearbyLoadResult> loadCandidates() async {
