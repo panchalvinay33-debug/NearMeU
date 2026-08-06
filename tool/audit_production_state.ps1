@@ -14,9 +14,27 @@ Set-Location $repoRoot
 $project = [string]$manifest.identity.firebaseProjectId
 if ($project -ne 'nearmeu-e82c7') { Fail "Unexpected Firebase project '$project'." }
 
-$expected = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
-if ($LASTEXITCODE -ne 0 -or $expected.Count -eq 0) { Fail 'Unable to enumerate accepted deployable Cloud Function exports from functions/bootstrap.js.' }
-$expected = @($expected | ForEach-Object { $_.Trim() } | Sort-Object -Unique)
+# Local SDK loading needs Firebase project identity even though this script does not deploy.
+# Seed only this process so bootstrap.js can expose trigger metadata consistently on owner PCs and CI.
+$previousGcloudProject = $env:GCLOUD_PROJECT
+$previousGoogleCloudProject = $env:GOOGLE_CLOUD_PROJECT
+$previousGcpProject = $env:GCP_PROJECT
+$previousFirebaseConfig = $env:FIREBASE_CONFIG
+try {
+    $env:GCLOUD_PROJECT = $project
+    $env:GOOGLE_CLOUD_PROJECT = $project
+    $env:GCP_PROJECT = $project
+    $env:FIREBASE_CONFIG = '{"projectId":"' + $project + '"}'
+
+    $expected = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
+    if ($LASTEXITCODE -ne 0 -or $expected.Count -eq 0) { Fail 'Unable to enumerate accepted deployable Cloud Function exports from functions/bootstrap.js.' }
+    $expected = @($expected | ForEach-Object { $_.Trim() } | Sort-Object -Unique)
+} finally {
+    $env:GCLOUD_PROJECT = $previousGcloudProject
+    $env:GOOGLE_CLOUD_PROJECT = $previousGoogleCloudProject
+    $env:GCP_PROJECT = $previousGcpProject
+    $env:FIREBASE_CONFIG = $previousFirebaseConfig
+}
 
 Write-Host "Auditing Firebase project $project ..." -ForegroundColor Cyan
 $raw = firebase functions:list --project $project --json 2>$null

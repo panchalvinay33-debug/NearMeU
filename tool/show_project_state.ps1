@@ -3,11 +3,14 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifestPath = Join-Path $repoRoot 'config\official_base_manifest.json'
 $projectStatePath = Join-Path $repoRoot 'config\project_state_manifest.json'
+$startRulesPath = Join-Path $repoRoot 'docs\PROJECT_START_DEPLOYMENT_RULES.md'
 
 if (-not (Test-Path $manifestPath)) { throw 'Missing config/official_base_manifest.json' }
+if (-not (Test-Path $projectStatePath)) { throw 'Missing config/project_state_manifest.json' }
+if (-not (Test-Path $startRulesPath)) { throw 'Missing docs/PROJECT_START_DEPLOYMENT_RULES.md' }
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$state = $null
-if (Test-Path $projectStatePath) { $state = Get-Content $projectStatePath -Raw | ConvertFrom-Json }
+$state = Get-Content $projectStatePath -Raw | ConvertFrom-Json
+if (-not $state.developmentState.permanentStartAndDeploymentRulesEnabled) { throw 'Permanent project start/deployment governance rule is not enabled.' }
 
 Set-Location $repoRoot
 $currentSha = (git rev-parse HEAD 2>$null)
@@ -17,6 +20,8 @@ $dirty = git status --porcelain 2>$null
 Write-Host '========================================' -ForegroundColor Cyan
 Write-Host ' NearMeU PROJECT STATE' -ForegroundColor Cyan
 Write-Host '========================================' -ForegroundColor Cyan
+Write-Host 'Operating rule    : PERMANENT START + DEPLOYMENT GOVERNANCE ENABLED' -ForegroundColor Green
+Write-Host "Rules document    : $($state.officialTruth.projectStartDeploymentRules)"
 Write-Host "Repository        : $($manifest.identity.repository)"
 Write-Host "Canonical folder  : $($manifest.identity.canonicalPcWorkspace)"
 Write-Host "Firebase project  : $($manifest.identity.firebaseProjectId)"
@@ -26,7 +31,7 @@ Write-Host "Accepted boundary : Batch $($manifest.acceptedProductBoundary.throug
 Write-Host "Manifest status   : $($manifest.status)"
 Write-Host "Official source   : $($manifest.recovery.currentOfficialSourceSha)"
 Write-Host "Recovery branch   : $($manifest.identity.recoveryBranch)"
-if ($state -and $state.ecosystem) {
+if ($state.ecosystem) {
     Write-Host ''
     Write-Host 'NearMeU ecosystem:' -ForegroundColor Cyan
     Write-Host "  Consumer repo   : $($state.ecosystem.consumerRepository)"
@@ -54,13 +59,6 @@ $manifest.freshBase08PhysicalRecertification.PSObject.Properties | ForEach-Objec
 }
 
 Write-Host ''
-Write-Host 'Final version-display candidate:' -ForegroundColor Cyan
-Write-Host "  PR              : #$($manifest.finalVersionDisplayCandidate.pullRequest)"
-Write-Host "  Automated gates : $($manifest.finalVersionDisplayCandidate.automatedGates)"
-Write-Host "  Physical check  : $($manifest.finalVersionDisplayCandidate.physicalAboutVersionCheck)"
-Write-Host "  Observed label  : $($manifest.finalVersionDisplayCandidate.observedAboutLabel)"
-
-Write-Host ''
 Write-Host 'Production closeout:' -ForegroundColor Cyan
 Write-Host "  Firebase audit  : $($manifest.production.firebaseProductionAudit)"
 
@@ -72,11 +70,25 @@ Write-Host ''
 if ($manifest.acceptedProductBoundary.futureRuntimeWorkLocked) {
     Write-Host 'Future runtime work: LOCKED until owner explicitly unlocks a new batch.' -ForegroundColor Yellow
 }
+if ($state.futureRoadmap -and $state.futureRoadmap.plannedBatches) {
+    Write-Host ''
+    Write-Host 'Locked future roadmap:' -ForegroundColor Cyan
+    $state.futureRoadmap.plannedBatches | ForEach-Object {
+        Write-Host ("  Batch {0} - {1} [{2}]" -f $_.id, $_.name, $_.status)
+    }
+}
+
+Write-Host ''
+Write-Host 'Permanent project-start rule:' -ForegroundColor Cyan
+Write-Host '  Establish accepted base first -> work on a fresh branch -> never deploy from feature/Admin/history branches.'
+Write-Host '  Production Firebase deploys only from clean NearMeU main == origin/main after deployment gate PASS.'
+Write-Host '  Production cleanup/deploy is followed by production-state audit before acceptance.'
 
 Write-Host ''
 Write-Host 'Useful commands:' -ForegroundColor Cyan
 Write-Host '  .\tool\restore_official_base.ps1   # restore source to official base'
 Write-Host '  .\tool\verify_deployment_gate.ps1  # pre-production deploy safety gate'
 Write-Host '  .\tool\audit_production_state.ps1  # detect deployed function drift'
-Write-Host '  docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md # consumer/Admin ownership and branch rules'
+Write-Host '  docs\PROJECT_START_DEPLOYMENT_RULES.md # permanent project/deployment operating rule'
+Write-Host '  docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md    # consumer/Admin ownership and branch rules'
 Write-Host '========================================' -ForegroundColor Cyan

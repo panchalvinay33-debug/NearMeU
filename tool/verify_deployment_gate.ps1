@@ -9,11 +9,16 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifestPath = Join-Path $repoRoot 'config\official_base_manifest.json'
 $projectStatePath = Join-Path $repoRoot 'config\project_state_manifest.json'
 $ecosystemPath = Join-Path $repoRoot 'docs\NEARMEEU_ECOSYSTEM_BOUNDARY.md'
+$startRulesPath = Join-Path $repoRoot 'docs\PROJECT_START_DEPLOYMENT_RULES.md'
 if (-not (Test-Path $manifestPath)) { Fail 'Missing official base manifest.' }
 if (-not (Test-Path $projectStatePath)) { Fail 'Missing project state manifest.' }
 if (-not (Test-Path $ecosystemPath)) { Fail 'Missing NearMeU ecosystem boundary document.' }
+if (-not (Test-Path $startRulesPath)) { Fail 'Missing permanent project start/deployment rules document.' }
 $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 $state = Get-Content $projectStatePath -Raw | ConvertFrom-Json
+
+if (-not $state.developmentState.permanentStartAndDeploymentRulesEnabled) { Fail 'Permanent project start/deployment governance rule is not enabled.' }
+if ([string]$state.officialTruth.projectStartDeploymentRules -ne 'docs/PROJECT_START_DEPLOYMENT_RULES.md') { Fail 'Project start/deployment rule source-of-truth path mismatch.' }
 
 Set-Location $repoRoot
 
@@ -53,11 +58,29 @@ if (-not (Test-Path $firebaseRcPath)) { Fail '.firebaserc missing.' }
 $firebaseRc = Get-Content $firebaseRcPath -Raw
 if ($firebaseRc -notmatch [regex]::Escape($manifest.identity.firebaseProjectId)) { Fail 'Firebase project mismatch.' }
 
-$expectedExports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
-if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load accepted deployable Cloud Function exports.' }
+$project = [string]$manifest.identity.firebaseProjectId
+$previousGcloudProject = $env:GCLOUD_PROJECT
+$previousGoogleCloudProject = $env:GOOGLE_CLOUD_PROJECT
+$previousGcpProject = $env:GCP_PROJECT
+$previousFirebaseConfig = $env:FIREBASE_CONFIG
+try {
+    $env:GCLOUD_PROJECT = $project
+    $env:GOOGLE_CLOUD_PROJECT = $project
+    $env:GCP_PROJECT = $project
+    $env:FIREBASE_CONFIG = '{"projectId":"' + $project + '"}'
+
+    $expectedExports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
+    if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load accepted deployable Cloud Function exports.' }
+} finally {
+    $env:GCLOUD_PROJECT = $previousGcloudProject
+    $env:GOOGLE_CLOUD_PROJECT = $previousGoogleCloudProject
+    $env:GCP_PROJECT = $previousGcpProject
+    $env:FIREBASE_CONFIG = $previousFirebaseConfig
+}
 
 Write-Host ''
 Write-Host 'NearMeU DEPLOYMENT GATE PASS' -ForegroundColor Green
+Write-Host 'Operating rule  : PERMANENT START + DEPLOYMENT GOVERNANCE ENABLED' -ForegroundColor Green
 Write-Host "Branch          : $branch"
 Write-Host "Git SHA         : $localSha"
 Write-Host "Version         : $($manifest.identity.versionName)+$($manifest.identity.versionCode)"
