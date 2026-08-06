@@ -1,6 +1,9 @@
 name: Batch 09 R2 ARM64 signed APK
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/batch09-r2-arm64-apk.yml
   push:
     branches:
       - batch/09-r2-audio-calling
