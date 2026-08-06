@@ -21,13 +21,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate required recovery files exist
+      - name: Validate required recovery and ecosystem files exist
         shell: bash
         run: |
           set -euo pipefail
           required=(
             README.md
             docs/PROJECT_OPERATING_BLUEPRINT.md
+            docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md
             docs/MASTER_PROJECT_AUDIT.md
             docs/CHANGE_LEDGER.md
             docs/OFFICIAL_RECOVERABLE_BASE.md
@@ -41,16 +42,17 @@ jobs:
             tool/promote_official_base.ps1
           )
           for path in "${required[@]}"; do
-            [[ -f "$path" ]] || { echo "Missing required recovery file: $path"; exit 1; }
+            [[ -f "$path" ]] || { echo "Missing required recovery/ecosystem file: $path"; exit 1; }
           done
 
-      - name: Validate machine-readable project manifests
+      - name: Validate machine-readable project manifests and ecosystem boundary
         shell: bash
         run: |
           node - <<'NODE'
           const fs = require('fs');
           const official = JSON.parse(fs.readFileSync('config/official_base_manifest.json', 'utf8'));
           const state = JSON.parse(fs.readFileSync('config/project_state_manifest.json', 'utf8'));
+          const boundary = fs.readFileSync('docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md', 'utf8');
           const fail = (m) => { console.error(m); process.exit(1); };
           if (official.project !== 'NearMeU') fail('official manifest project mismatch');
           if (official.identity.repository !== 'panchalvinay33-debug/NearMeU') fail('repository mismatch');
@@ -64,7 +66,18 @@ jobs:
           if (state.identity.androidApplicationId !== official.identity.androidApplicationId) fail('manifest package mismatch');
           if (state.identity.firebaseProjectId !== official.identity.firebaseProjectId) fail('manifest Firebase mismatch');
           if (state.identity.versionName !== official.identity.versionName || state.identity.versionCode !== official.identity.versionCode) fail('manifest version mismatch');
-          console.log('Machine-readable recovery/project manifests are internally consistent.');
+          if (!state.ecosystem) fail('ecosystem metadata missing');
+          if (state.ecosystem.consumerRepository !== 'panchalvinay33-debug/NearMeU') fail('consumer repo ecosystem mismatch');
+          if (state.ecosystem.adminRepository !== 'panchalvinay33-debug/NearMeU-Admin') fail('Admin companion repo mismatch');
+          if (state.ecosystem.consumerAndroidApplicationId !== 'com.nearmeu.nearmeu') fail('consumer package ecosystem mismatch');
+          if (state.ecosystem.adminAndroidApplicationId !== 'com.nearmeu.admin') fail('Admin package ecosystem mismatch');
+          if (state.ecosystem.sharedFirebaseProjectId !== official.identity.firebaseProjectId) fail('shared Firebase ecosystem mismatch');
+          if (state.ecosystem.sharedBackendOwnerRepository !== 'panchalvinay33-debug/NearMeU') fail('shared backend owner mismatch');
+          if (state.ecosystem.adminDevelopmentStatus !== 'PAUSED_UNTIL_CONSUMER_LAUNCH_OWNER_RESUME') fail('Admin pause state changed without governance update');
+          for (const requiredText of ['NearMeU-Admin','reference','deploy','PAUSED']) {
+            if (!boundary.includes(requiredText)) fail(`ecosystem boundary missing required concept: ${requiredText}`);
+          }
+          console.log('Machine-readable recovery/project/ecosystem state is internally consistent.');
           NODE
 
       - name: Validate pubspec version matches official manifest
@@ -116,8 +129,8 @@ jobs:
           }
           const forbidden = exported.filter((name) => /admin|agora|audioCall|videoCall|callSession/i.test(name));
           if (forbidden.length) {
-            console.error('Post-Base08 function export detected during Base08 freeze:', forbidden);
+            console.error('Post-Base08/Admin function export detected during consumer Base08 freeze:', forbidden);
             process.exit(1);
           }
-          console.log(`Accepted Base08 function exports load: ${exported.length}`);
+          console.log(`Accepted Base08 consumer/shared-backend function exports load: ${exported.length}`);
           NODE
