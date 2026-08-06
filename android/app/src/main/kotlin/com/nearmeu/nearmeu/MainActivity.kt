@@ -55,24 +55,34 @@ class MainActivity : FlutterActivity() {
                     when (call.method) {
                         "enterCallMode" -> {
                             audioManager().mode = AudioManager.MODE_IN_COMMUNICATION
-                            audioManager().isSpeakerphoneOn = false
+                            setSpeakerInternal(false)
                             result.success(null)
                         }
                         "leaveCallMode" -> {
                             releaseProximityWakeLock()
-                            audioManager().isSpeakerphoneOn = false
+                            routeBluetooth(false)
+                            setSpeakerInternal(false)
                             audioManager().mode = AudioManager.MODE_NORMAL
                             result.success(null)
                         }
                         "setSpeaker" -> {
                             val enabled = call.argument<Boolean>("enabled") == true
-                            audioManager().isSpeakerphoneOn = enabled
+                            if (enabled) routeBluetooth(false)
+                            setSpeakerInternal(enabled)
                             if (enabled) releaseProximityWakeLock()
                             result.success(null)
                         }
+                        "setBluetooth" -> {
+                            val enabled = call.argument<Boolean>("enabled") == true
+                            if (enabled) {
+                                setSpeakerInternal(false)
+                                releaseProximityWakeLock()
+                            }
+                            result.success(routeBluetooth(enabled))
+                        }
                         "setProximityEnabled" -> {
                             val enabled = call.argument<Boolean>("enabled") == true
-                            if (enabled && !audioManager().isSpeakerphoneOn) {
+                            if (enabled && !isSpeakerEnabled() && !isBluetoothSelected()) {
                                 acquireProximityWakeLock()
                             } else {
                                 releaseProximityWakeLock()
@@ -80,6 +90,7 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         }
                         "isBluetoothAvailable" -> result.success(isBluetoothAvailable())
+                        "isBluetoothSelected" -> result.success(isBluetoothSelected())
                         else -> result.notImplemented()
                     }
                 } catch (error: Throwable) {
@@ -90,6 +101,79 @@ class MainActivity : FlutterActivity() {
 
     private fun audioManager(): AudioManager =
         getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    @Suppress("DEPRECATION")
+    private fun setSpeakerInternal(enabled: Boolean) {
+        val manager = audioManager()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (enabled) {
+                val speaker = manager.availableCommunicationDevices.firstOrNull {
+                    it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                }
+                if (speaker != null) manager.setCommunicationDevice(speaker)
+            } else if (manager.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                manager.clearCommunicationDevice()
+            }
+        } else {
+            manager.isSpeakerphoneOn = enabled
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isSpeakerEnabled(): Boolean {
+        val manager = audioManager()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            manager.communicationDevice?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        } else {
+            manager.isSpeakerphoneOn
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun routeBluetooth(enabled: Boolean): Boolean {
+        val manager = audioManager()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!enabled) {
+                val selected = manager.communicationDevice
+                if (selected != null && isBluetoothType(selected.type)) {
+                    manager.clearCommunicationDevice()
+                }
+                return true
+            }
+            val bluetooth = manager.availableCommunicationDevices.firstOrNull {
+                isBluetoothType(it.type)
+            } ?: return false
+            return manager.setCommunicationDevice(bluetooth)
+        }
+
+        if (!manager.isBluetoothScoAvailableOffCall) return !enabled
+        return if (enabled) {
+            manager.startBluetoothSco()
+            manager.isBluetoothScoOn = true
+            true
+        } else {
+            manager.isBluetoothScoOn = false
+            manager.stopBluetoothSco()
+            true
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isBluetoothSelected(): Boolean {
+        val manager = audioManager()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val selected = manager.communicationDevice
+            selected != null && isBluetoothType(selected.type)
+        } else {
+            manager.isBluetoothScoOn
+        }
+    }
+
+    private fun isBluetoothType(type: Int): Boolean {
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && type == AudioDeviceInfo.TYPE_BLE_SPEAKER)
+    }
 
     private fun acquireProximityWakeLock() {
         if (proximityWakeLock?.isHeld == true) return
@@ -111,10 +195,7 @@ class MainActivity : FlutterActivity() {
     private fun isBluetoothAvailable(): Boolean {
         val manager = audioManager()
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            manager.availableCommunicationDevices.any {
-                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                    it.type == AudioDeviceInfo.TYPE_BLE_HEADSET
-            }
+            manager.availableCommunicationDevices.any { isBluetoothType(it.type) }
         } else {
             manager.isBluetoothScoAvailableOffCall
         }
