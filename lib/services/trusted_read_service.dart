@@ -30,15 +30,41 @@ class TrustedReadService {
   final FirebaseAuth _auth;
   final LocalPreviewCache _previewCache;
 
+  Future<HttpsCallableResult<Map<String, dynamic>>> _readChatPreviews() {
+    return _functions
+        .httpsCallable('getPrivateChatPreviews')
+        .call<Map<String, dynamic>>();
+  }
+
+  Future<HttpsCallableResult<Map<String, dynamic>>>
+  _readChatPreviewsWithAuthRetry() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-user',
+        message: 'Please sign in again.',
+      );
+    }
+
+    // Match the proven Nearby startup path: after reinstall/login, make sure
+    // Firebase Auth has produced a usable ID token before the first callable.
+    await user.getIdToken();
+    try {
+      return await _readChatPreviews();
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'unauthenticated') rethrow;
+      await user.getIdToken(true);
+      return _readChatPreviews();
+    }
+  }
+
   Future<List<ChatPreviewModel>> getChatPreviews() async {
     final uid = _auth.currentUser?.uid;
     Object? callableError;
     StackTrace? callableStackTrace;
 
     try {
-      final result = await _functions
-          .httpsCallable('getPrivateChatPreviews')
-          .call<Map<String, dynamic>>();
+      final result = await _readChatPreviewsWithAuthRetry();
       final chats = _dedupeChatPreviews(_parseChatPreviews(result.data));
       if (uid != null) await _rememberChatPreviews(uid, chats);
       return chats;
