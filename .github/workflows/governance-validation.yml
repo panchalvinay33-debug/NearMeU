@@ -28,6 +28,7 @@ jobs:
           required=(
             README.md
             docs/PROJECT_OPERATING_BLUEPRINT.md
+            docs/PROJECT_START_DEPLOYMENT_RULES.md
             docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md
             docs/MASTER_PROJECT_AUDIT.md
             docs/CHANGE_LEDGER.md
@@ -45,7 +46,7 @@ jobs:
             [[ -f "$path" ]] || { echo "Missing required recovery/ecosystem file: $path"; exit 1; }
           done
 
-      - name: Validate machine-readable project manifests and ecosystem boundary
+      - name: Validate machine-readable project manifests and permanent operating rules
         shell: bash
         run: |
           node - <<'NODE'
@@ -53,6 +54,7 @@ jobs:
           const official = JSON.parse(fs.readFileSync('config/official_base_manifest.json', 'utf8'));
           const state = JSON.parse(fs.readFileSync('config/project_state_manifest.json', 'utf8'));
           const boundary = fs.readFileSync('docs/NEARMEEU_ECOSYSTEM_BOUNDARY.md', 'utf8');
+          const startRules = fs.readFileSync('docs/PROJECT_START_DEPLOYMENT_RULES.md', 'utf8');
           const fail = (m) => { console.error(m); process.exit(1); };
           if (official.project !== 'NearMeU') fail('official manifest project mismatch');
           if (official.identity.repository !== 'panchalvinay33-debug/NearMeU') fail('repository mismatch');
@@ -63,6 +65,8 @@ jobs:
           if (!official.acceptedProductBoundary.futureRuntimeWorkLocked) fail('future runtime work must remain locked');
           if (state.developmentState.acceptedThroughBatch !== '08') fail('project state accepted boundary mismatch');
           if (!state.developmentState.futureRuntimeWorkLocked) fail('project state future-work lock missing');
+          if (!state.developmentState.permanentStartAndDeploymentRulesEnabled) fail('permanent start/deployment governance flag missing');
+          if (state.officialTruth.projectStartDeploymentRules !== 'docs/PROJECT_START_DEPLOYMENT_RULES.md') fail('project start/deployment source-of-truth mismatch');
           if (state.identity.androidApplicationId !== official.identity.androidApplicationId) fail('manifest package mismatch');
           if (state.identity.firebaseProjectId !== official.identity.firebaseProjectId) fail('manifest Firebase mismatch');
           if (state.identity.versionName !== official.identity.versionName || state.identity.versionCode !== official.identity.versionCode) fail('manifest version mismatch');
@@ -73,11 +77,29 @@ jobs:
           if (state.ecosystem.adminAndroidApplicationId !== 'com.nearmeu.admin') fail('Admin package ecosystem mismatch');
           if (state.ecosystem.sharedFirebaseProjectId !== official.identity.firebaseProjectId) fail('shared Firebase ecosystem mismatch');
           if (state.ecosystem.sharedBackendOwnerRepository !== 'panchalvinay33-debug/NearMeU') fail('shared backend owner mismatch');
-          if (state.ecosystem.adminDevelopmentStatus !== 'PAUSED_UNTIL_CONSUMER_LAUNCH_OWNER_RESUME') fail('Admin pause state changed without governance update');
+          if (state.ecosystem.adminDevelopmentStatus !== 'PAUSED_UNTIL_CONSUMER_PUBLIC_LAUNCH_OWNER_RESUME') fail('Admin pause state changed without governance update');
+          const roadmap = state.futureRoadmap?.plannedBatches || [];
+          const expectedRoadmap = [
+            ['09','Audio Calling'],
+            ['10','Video Calling'],
+            ['11','Google Play Premium Verification'],
+            ['12','Production Hardening'],
+            ['13','Play Store Internal and Closed Testing'],
+            ['14','Controlled Public Launch'],
+            ['15','NearMeU Admin Full Development and Integration'],
+          ];
+          if (roadmap.length !== expectedRoadmap.length) fail('future roadmap batch count mismatch');
+          for (let i = 0; i < expectedRoadmap.length; i++) {
+            if (roadmap[i].id !== expectedRoadmap[i][0] || roadmap[i].name !== expectedRoadmap[i][1]) fail(`future roadmap mismatch at Batch ${expectedRoadmap[i][0]}`);
+          }
+          if (roadmap[6].status !== 'locked-after-public-launch') fail('Admin Batch15 must remain locked until after public launch');
           for (const requiredText of ['NearMeU-Admin','reference','deploy','PAUSED']) {
             if (!boundary.includes(requiredText)) fail(`ecosystem boundary missing required concept: ${requiredText}`);
           }
-          console.log('Machine-readable recovery/project/ecosystem state is internally consistent.');
+          for (const requiredText of ['Production deployment ownership','accepted base','NearMeU-Admin','Batch15','Permanent operating-system rule']) {
+            if (!startRules.includes(requiredText)) fail(`project start/deployment rules missing required concept: ${requiredText}`);
+          }
+          console.log('Machine-readable recovery/project/ecosystem/start-deployment state is internally consistent.');
           NODE
 
       - name: Validate pubspec version matches official manifest
