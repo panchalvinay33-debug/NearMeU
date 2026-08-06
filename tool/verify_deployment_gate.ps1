@@ -53,8 +53,8 @@ if (-not (Test-Path $firebaseRcPath)) { Fail '.firebaserc missing.' }
 $firebaseRc = Get-Content $firebaseRcPath -Raw
 if ($firebaseRc -notmatch [regex]::Escape($manifest.identity.firebaseProjectId)) { Fail 'Firebase project mismatch.' }
 
-$expectedExports = node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).sort().join('\n'))"
-if ($LASTEXITCODE -ne 0 -or -not $expectedExports) { Fail 'Unable to load accepted Cloud Functions exports.' }
+$expectedExports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
+if ($LASTEXITCODE -ne 0 -or $expectedExports.Count -eq 0) { Fail 'Unable to load accepted deployable Cloud Function exports.' }
 
 Write-Host ''
 Write-Host 'NearMeU DEPLOYMENT GATE PASS' -ForegroundColor Green
@@ -66,6 +66,6 @@ Write-Host "Consumer repo   : $($state.ecosystem.consumerRepository)"
 Write-Host "Admin companion : $($state.ecosystem.adminRepository)"
 Write-Host "Admin status    : $($state.ecosystem.adminDevelopmentStatus)"
 Write-Host "Shared backend  : $($state.ecosystem.sharedBackendOwnerRepository)"
-Write-Host "Functions       : $(@($expectedExports).Count) accepted exports load successfully"
+Write-Host "Functions       : $(@($expectedExports).Count) deployable accepted exports load successfully"
 Write-Host ''
 Write-Host 'Production deployment is permitted from this exact shared-backend source state only. Historical Admin branches are reference-only and must never be deployed directly. Any Admin-related backend change must be rebuilt from current accepted NearMeU main and separately tested against both app contracts.' -ForegroundColor Cyan
