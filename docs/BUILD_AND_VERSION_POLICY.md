@@ -33,13 +33,13 @@ Flutter source of truth remains `pubspec.yaml`:
 
 `version: MAJOR.MINOR.PATCH+BUILD`
 
-Example currently in this branch:
+Current branch example:
 
-`1.0.11+12`
+`1.0.12+13`
 
 Meaning:
-- user-facing version name: `1.0.11`;
-- Android build/version code: `12`.
+- user-facing version name: `1.0.12`;
+- Android build/version code: `13`.
 
 The build number must increase for every APK intended to supersede an earlier installable build. Do not distribute two materially different binaries with the same version/build identity.
 
@@ -52,12 +52,10 @@ Required filename pattern:
 `NearMeU-v<version>-b<build>-<architecture>-<type>.apk`
 
 Examples:
-- `NearMeU-v1.0.11-b12-universal-release.apk`
-- `NearMeU-v1.0.11-b12-arm64-release.apk`
+- `NearMeU-v1.0.12-b13-universal-debug.apk`
+- `NearMeU-v1.0.12-b13-arm64-release.apk`
 
-ZIP artifacts should follow the same convention:
-
-`NearMeU-v1.0.11-b12-arm64-release.zip`
+ZIP artifacts should follow the same convention.
 
 GitHub Actions artifact names should also include the same version/build/architecture identity instead of relying only on a commit SHA.
 
@@ -68,19 +66,15 @@ The APK itself must retain matching Android `versionName` and `versionCode` meta
 NearMeU must show its installed version inside the app, using runtime package metadata rather than a manually duplicated hard-coded string.
 
 Required display location:
-- Settings / About (or an equivalent stable owner-visible screen).
+- Settings > About NearMeU.
 
 Required minimum display:
-- `NearMeU version 1.0.11`
-- `Build 12`
+- `Version 1.0.12`
+- `Build 13`
 
-Recommended diagnostic display:
-- build architecture/channel when useful;
-- short source checkpoint/commit identifier for internal test builds.
+`package_info_plus` must be used to read the installed package version/build at runtime so the displayed value always matches the APK metadata.
 
-`package_info_plus` should be used to read the installed package version/build at runtime so the displayed value always matches the APK metadata.
-
-The version should also remain available through the operating system's application/package information where the Android device exposes it, but NearMeU must not rely only on OEM Settings UI because different Android vendors display package version information differently.
+The version should also remain available through the operating system's application/package information where Android exposes it, but NearMeU must not rely only on OEM Settings UI.
 
 ## 5. Release/test workflow
 
@@ -104,6 +98,26 @@ Do not hand the owner files with ambiguous names such as only:
 
 Those names may exist as temporary compiler outputs, but the user-facing/downloadable artifact must be renamed to the versioned NearMeU convention before handoff.
 
-## 7. Batch 09 R2 application
+## 7. Firebase App Check and sideload physical testing
 
-For Batch 09 R2, all future test APK handoffs must follow this policy. The currently accepted CI checkpoint remains traceable by commit and artifact digest, but the next owner-distributed APK should use the new human-readable versioned filename convention and the in-app version display requirement must be completed before final Batch 09 R2 acceptance.
+NearMeU callable backend functions enforce Firebase App Check globally. The Android app intentionally uses:
+- `AndroidProvider.debug` for debug builds;
+- `AndroidProvider.playIntegrity` for release builds.
+
+Therefore physical-test APK selection is part of the acceptance process, not a cosmetic choice.
+
+Rules:
+
+1. Direct/sideload development testing outside Google Play should use the permanently signed **debug** APK with Firebase App Check debug-provider registration configured for the test device/build.
+2. Do not interpret a sideloaded release APK that fails App Check / Play Integrity as a Nearby or Chats regression until App Check attestation has been verified.
+3. Production/release acceptance must use the release APK with the intended Play Integrity/App Check production configuration.
+4. Never disable backend App Check enforcement merely to make a test APK appear to work.
+5. Nearby and Chats physical regression testing must distinguish actual connectivity failures from `unauthenticated`, `permission-denied`, App Check/attestation, backend-function, and Firestore-rule failures.
+6. If a release APK is intentionally distributed outside Google Play, the Firebase App Check Play Integrity configuration must explicitly support that distribution model before it is considered a valid release-test channel.
+7. Record which App Check provider/channel was used for every physical test checkpoint.
+
+Observed Batch 09 R2 lesson: a sideloaded release build showed generic connection errors in both Nearby and Chats while both features shared protected Firebase callable/backend access. That result is classified as an infrastructure/App Check test-channel failure until attestation is verified, not as proof that the untouched Nearby/Chats UI code regressed.
+
+## 8. Batch 09 R2 application
+
+For Batch 09 R2, all future test APK handoffs must follow this policy. The current app version is `1.0.12+13`, with Settings > About reading the real installed version/build at runtime. Sideload physical regression testing should use the signed debug test channel first; final production acceptance still requires the signed release/Play Integrity path.
