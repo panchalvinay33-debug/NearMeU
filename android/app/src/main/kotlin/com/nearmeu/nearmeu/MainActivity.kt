@@ -6,6 +6,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.os.PowerManager
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -13,6 +14,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val profileChannelName = "com.nearmeu.nearmeu/profile_sharing"
     private val callDeviceChannelName = "com.nearmeu.nearmeu/call_device"
+    private val callNotificationChannelId = "nearmeu_calls"
     private var profileChannel: MethodChannel? = null
     private var initialLink: String? = null
     private var proximityWakeLock: PowerManager.WakeLock? = null
@@ -91,6 +93,10 @@ class MainActivity : FlutterActivity() {
                         }
                         "isBluetoothAvailable" -> result.success(isBluetoothAvailable())
                         "isBluetoothSelected" -> result.success(isBluetoothSelected())
+                        "openCallNotificationSettings" -> {
+                            openCallNotificationSettings()
+                            result.success(null)
+                        }
                         else -> result.notImplemented()
                     }
                 } catch (error: Throwable) {
@@ -101,6 +107,21 @@ class MainActivity : FlutterActivity() {
 
     private fun audioManager(): AudioManager =
         getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    private fun openCallNotificationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                putExtra(Settings.EXTRA_CHANNEL_ID, callNotificationChannelId)
+            }
+        } else {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra("app_package", packageName)
+                putExtra("app_uid", applicationInfo.uid)
+            }
+        }
+        startActivity(intent)
+    }
 
     @Suppress("DEPRECATION")
     private fun setSpeakerInternal(enabled: Boolean) {
