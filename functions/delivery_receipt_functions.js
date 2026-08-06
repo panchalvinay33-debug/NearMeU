@@ -5,7 +5,10 @@ const { HttpsError, onCall } = require("firebase-functions/v2/https");
 
 const db = admin.firestore();
 const REGION = "asia-south1";
-const MAX_MESSAGE_IDS = 100;
+// Client delivery lifecycle deliberately scans at most 200 recent undelivered
+// messages. Keep the trusted callable aligned so an older backlog cannot reject
+// the entire receipt batch and hide the delivered state for new messages.
+const MAX_MESSAGE_IDS = 200;
 
 function requireAuthenticatedUid(request) {
   const uid = request.auth && request.auth.uid;
