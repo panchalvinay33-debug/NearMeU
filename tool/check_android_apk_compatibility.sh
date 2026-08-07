@@ -48,6 +48,13 @@ if ! [[ "$MIN_SDK" =~ ^[0-9]+$ && "$TARGET_SDK" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+# Broad-device policy: do not silently raise the install floor above Android 7.0
+# class devices without a deliberate compatibility decision and fresh evidence.
+if (( MIN_SDK > 24 )); then
+  echo "Compatibility check failed: minSdk $MIN_SDK is above Batch08.1 compatibility ceiling 24." >&2
+  exit 1
+fi
+
 if (( TARGET_SDK < 35 )); then
   echo "Compatibility check failed: targetSdk $TARGET_SDK is below the Batch08.1 policy floor 35." >&2
   exit 1
@@ -61,12 +68,16 @@ fi
 
 sensitive_features=(
   android.hardware.camera
+  android.hardware.camera.any
+  android.hardware.camera.autofocus
+  android.hardware.camera.front
   android.hardware.microphone
   android.hardware.location
   android.hardware.location.gps
   android.hardware.location.network
   android.hardware.telephony
   android.hardware.bluetooth
+  android.hardware.bluetooth_le
 )
 
 for feature in "${sensitive_features[@]}"; do
@@ -84,4 +95,5 @@ Minimum SDK    : $MIN_SDK
 Target SDK     : $TARGET_SDK
 Native ABIs    : ${NATIVE_LINE:-none declared in badging output}
 APK            : $APK_PATH
+Policy         : minSdk<=24, targetSdk>=35, ARM64 when native payload exists, no sensitive required-hardware filters
 SUMMARY
