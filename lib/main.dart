@@ -12,6 +12,7 @@ import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
 import 'services/observability_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/active_audio_call_lifecycle.dart';
 import 'widgets/app_version_gate.dart';
 import 'widgets/deep_link_lifecycle.dart';
 import 'widgets/message_delivery_lifecycle.dart';
@@ -104,9 +105,11 @@ class NearMeUApp extends StatelessWidget {
       home: DeepLinkLifecycle(
         navigatorKey: rootNavigatorKey,
         child: const AppVersionGate(
-          child: PresenceLifecycle(
-            child: MessageDeliveryLifecycle(
-              child: SuspensionGuard(child: AuthGateScreen()),
+          child: ActiveAudioCallLifecycle(
+            child: PresenceLifecycle(
+              child: MessageDeliveryLifecycle(
+                child: SuspensionGuard(child: AuthGateScreen()),
+              ),
             ),
           ),
         ),
