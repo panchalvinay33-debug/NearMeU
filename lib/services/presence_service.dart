@@ -31,6 +31,10 @@ class PresenceService {
 
   static const Duration _publishTimeout = Duration(seconds: 5);
 
+  bool get _shouldBeOnline =>
+      _lifecycleState == AppLifecycleState.resumed ||
+      _lifecycleState == AppLifecycleState.inactive;
+
   void start() {
     if (_started) return;
     _started = true;
@@ -39,8 +43,24 @@ class PresenceService {
   }
 
   void updateLifecycle(AppLifecycleState state) {
+    final previous = _lifecycleState;
     _lifecycleState = state;
-    unawaited(_publishDesiredState(force: state == AppLifecycleState.resumed));
+
+    // Android OEMs can emit short-lived `inactive` transitions for permission
+    // dialogs, notification shade, system overlays, split-screen changes and
+    // other UI interruptions while the app is still visibly in use. Do not
+    // flap presence offline for those transient transitions.
+    if (state == AppLifecycleState.inactive) return;
+
+    final force = state == AppLifecycleState.resumed || previous != state;
+    unawaited(_publishDesiredState(force: force));
+  }
+
+  /// Re-assert active presence after meaningful foreground user activity.
+  /// This is intentionally idempotent and independent from Nearby/location.
+  void touchForeground() {
+    if (!_shouldBeOnline) return;
+    unawaited(_publishDesiredState(force: true));
   }
 
   Future<void> goOfflineBeforeSignOut() async {
@@ -73,8 +93,7 @@ class PresenceService {
           (profile) {
             if (!profile.exists) return;
 
-            final desiredOnline =
-                _lifecycleState == AppLifecycleState.resumed;
+            final desiredOnline = _shouldBeOnline;
             final actualOnline = profile.data()?['isOnline'] == true;
 
             if (actualOnline != desiredOnline) {
@@ -111,7 +130,7 @@ class PresenceService {
       return;
     }
 
-    final online = _lifecycleState == AppLifecycleState.resumed;
+    final online = _shouldBeOnline;
     await _publish(online: online, uid: uid, force: force);
     _configureHeartbeat(uid: uid, online: online);
   }
@@ -164,10 +183,9 @@ class PresenceService {
     if (!force && _lastPublishedOnline == online) return;
 
     try {
-      // Do not hydrate the full profile here. Presence is a tiny lifecycle
-      // write and must not depend on private-profile, block-list, migration,
-      // geocoding, or other network reads. Firestore security rules remain the
-      // server-side authority for whether this user may update presence.
+      // Presence is a tiny lifecycle write and must not depend on private
+      // profile hydration, Nearby, geocoding, block-list reads or other slow
+      // work. Firestore security rules remain the server-side authority.
       await _userService
           .setOnlineStatus(uid, online)
           .timeout(_publishTimeout);
