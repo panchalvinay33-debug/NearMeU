@@ -20,6 +20,18 @@ import 'widgets/presence_lifecycle.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
+const bool _physicalTestAppCheck = bool.fromEnvironment(
+  'NEARMEU_APP_CHECK_DEBUG',
+  defaultValue: false,
+);
+
+AndroidProvider get _androidAppCheckProvider {
+  if (!kReleaseMode || _physicalTestAppCheck) {
+    return AndroidProvider.debug;
+  }
+  return AndroidProvider.playIntegrity;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -32,11 +44,7 @@ Future<void> main() async {
   var appCheckReady = false;
   try {
     await FirebaseAppCheck.instance
-        .activate(
-          androidProvider: kReleaseMode
-              ? AndroidProvider.playIntegrity
-              : AndroidProvider.debug,
-        )
+        .activate(androidProvider: _androidAppCheckProvider)
         .timeout(const Duration(seconds: 8));
     appCheckReady = true;
   } catch (error, stackTrace) {
@@ -70,6 +78,7 @@ Future<void> main() async {
     'app_services_ready',
     parameters: <String, Object>{
       'app_check_ready': appCheckReady ? 1 : 0,
+      'app_check_debug_mode': _physicalTestAppCheck ? 1 : 0,
       'notifications_ready': notificationsReady ? 1 : 0,
     },
   );
