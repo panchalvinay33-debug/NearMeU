@@ -64,7 +64,8 @@ if ($LASTEXITCODE -ne 0) { Fail 'functions npm ci failed.' }
 
 $audioSource = Get-Content (Join-Path $repoRoot 'functions\audio_call_functions.js') -Raw
 foreach ($secretName in @('AGORA_APP_ID','AGORA_APP_CERTIFICATE')) {
-    if ($audioSource -notmatch "defineSecret\(\"$secretName\"\)") { Fail "Missing Firebase secret binding: $secretName" }
+    $pattern = 'defineSecret\("' + [regex]::Escape($secretName) + '"\)'
+    if ($audioSource -notmatch $pattern) { Fail "Missing Firebase secret binding: $secretName" }
 }
 
 $project = [string]$manifest.identity.firebaseProjectId
@@ -77,6 +78,7 @@ try {
     $env:GOOGLE_CLOUD_PROJECT = $project
     $env:GCP_PROJECT = $project
     $env:FIREBASE_CONFIG = '{"projectId":"' + $project + '"}'
+    $env:FIREBASE_CONFIG = $env:FIREBASE_CONFIG.Replace('\"','"')
 
     $exports = @(node -e "const x=require('./functions/bootstrap.js'); console.log(Object.keys(x).filter((k)=>x[k]&&x[k].__endpoint).sort().join('\n'))") | Where-Object { $_ -and $_.Trim() }
     if ($LASTEXITCODE -ne 0 -or $exports.Count -eq 0) { Fail 'Unable to load Cloud Function exports.' }
