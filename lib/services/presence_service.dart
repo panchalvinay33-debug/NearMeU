@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
 import '../constants/app_constants.dart';
+import 'profile_schema_repair_service.dart';
 import 'user_service.dart';
 
 class PresenceService {
@@ -16,6 +17,7 @@ class PresenceService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService();
+  final ProfileSchemaRepairService _profileRepair = ProfileSchemaRepairService();
 
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
@@ -46,18 +48,12 @@ class PresenceService {
     final previous = _lifecycleState;
     _lifecycleState = state;
 
-    // Android OEMs can emit short-lived `inactive` transitions for permission
-    // dialogs, notification shade, system overlays, split-screen changes and
-    // other UI interruptions while the app is still visibly in use. Do not
-    // flap presence offline for those transient transitions.
     if (state == AppLifecycleState.inactive) return;
 
     final force = state == AppLifecycleState.resumed || previous != state;
     unawaited(_publishDesiredState(force: force));
   }
 
-  /// Re-assert active presence after meaningful foreground user activity.
-  /// This is intentionally idempotent and independent from Nearby/location.
   void touchForeground() {
     if (!_shouldBeOnline) return;
     unawaited(_publishDesiredState(force: true));
@@ -102,8 +98,6 @@ class PresenceService {
               return;
             }
 
-            // A server-backed snapshot confirms queued local presence writes
-            // eventually reached Firestore after a weak/offline connection.
             if (!profile.metadata.hasPendingWrites) {
               _consecutiveFailures = 0;
               _cancelRetry();
@@ -175,6 +169,10 @@ class PresenceService {
     });
   }
 
+  Future<void> _writePresence(String uid, bool online) {
+    return _userService.setOnlineStatus(uid, online).timeout(_publishTimeout);
+  }
+
   Future<void> _publish({
     required bool online,
     required String uid,
@@ -183,16 +181,35 @@ class PresenceService {
     if (!force && _lastPublishedOnline == online) return;
 
     try {
-      // Presence is a tiny lifecycle write and must not depend on private
-      // profile hydration, Nearby, geocoding, block-list reads or other slow
-      // work. Firestore security rules remain the server-side authority.
-      await _userService
-          .setOnlineStatus(uid, online)
-          .timeout(_publishTimeout);
+      await _writePresence(uid, online);
       _lastPublishedOnline = online;
       _consecutiveFailures = 0;
       _cancelRetry();
     } catch (error, stackTrace) {
+      var repairedAndPublished = false;
+      if (error is FirebaseException && error.code == 'permission-denied') {
+        final repaired = await _profileRepair.repairCurrentProfile();
+        if (repaired) {
+          try {
+            await _writePresence(uid, online);
+            repairedAndPublished = true;
+          } catch (retryError, retryStackTrace) {
+            developer.log(
+              'Presence retry after profile repair failed',
+              error: retryError,
+              stackTrace: retryStackTrace,
+            );
+          }
+        }
+      }
+
+      if (repairedAndPublished) {
+        _lastPublishedOnline = online;
+        _consecutiveFailures = 0;
+        _cancelRetry();
+        return;
+      }
+
       _lastPublishedOnline = null;
       _consecutiveFailures += 1;
       developer.log(
