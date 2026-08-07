@@ -1,84 +1,99 @@
 # NearMeU Official Recoverable Base
 
-Last promoted: 2026-08-02
+Last updated: 2026-08-08
 
-## Current accepted base
+Authoritative stability/recovery rules: `docs/ANDROID_STABILITY_AND_RECOVERY_RULEBOOK.md`.
 
-Batch 07 is the accepted runtime/recovery starting point for future NearMeU work.
+## Current recovery position
+
+The project is in controlled recovery/revalidation. Do not treat later Batch 08.1 or Batch 09 runtime work as the active base.
+
+Recovery validation anchor:
 
 - Repository: `panchalvinay33-debug/NearMeU`
-- Source branch: `main`
-- Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `db48338e6528b61e1e486d6d158c9d62e641c977`
-- Tested runtime commit: `5ae058122d927c7e35257fb80ca5fa879f14b784`
-- Accepted pull request: `#98`
+- Recovery branch: `recovery/original-batch08-android-stable`
+- Original Batch 08 merged runtime: `f83a6e92457f728f177dc062dcc9171c141a9217`
+- Original Batch 08 tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+- Pull request: `#100`
 - Android application ID: `com.nearmeu.nearmeu`
 - Firebase project: `nearmeu-e82c7`
-- App version: `1.0.10+11`
-- Physically tested signed debug APK SHA-256: `2af784329a1594a761877110c671508b19f8cd1cc2542d9079cc46a7b80025d1`
-- Recoverable artifact ID: `8833110504`
-- Recoverable artifact digest: `sha256:75892030fb34647b64b89fd6f1ac3a94b48acac6bf24217eb63b69a5feb5c6fc`
-- Signed release artifact ID: `8833182373`
-- Signed release artifact digest: `sha256:4bc19b26851ab9349a578fb9fe64b6d609af16e0ff9da2432194a25106e4b403`
-- Signed release APK SHA-256: `19a100dcfa64dc00bb71e918452d8c70d902d2b42ced8e72e6ef04eef5568442`
-- Build workflow: `30746260270` / #79 — PASS
-- Quality workflow: `30746260318` / #480 — PASS
-- Permanent signing certificate SHA-256: `B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B`
+- App version at original Batch 08: `1.0.11+12`
+- Calling code in this anchor: none
+- Batch 08.1 changes in this anchor: none
 
-## Owner acceptance
+This is an exact source recovery anchor. It is not automatically promoted as the new stable base until current backend compatibility and the full Android regression matrix pass again.
 
-Status: **ACCEPTED** on 2026-08-02.
+## Historical trusted baseline
 
-Accepted physical/backend evidence includes direct-update continuity, Premium text restore, Premium sent-photo restore, Clear Chat no-resurrection, Delete-for-Me no-resurrection, Unsend/Delete-for-Everyone no-resurrection, cross-account Clear Chat isolation, seven-day delivery-cloud regression and backend-enforced Free-user Premium recovery rejection.
+Batch 07 remains the strongest historical functional baseline recorded before later compatibility/calling work:
 
-Known evidence gap: receiver-media pre-download/post-download recovery eligibility remains **OWNER-DEFERRED / NOT PHYSICALLY VERIFIED / NOT PASS**.
+- Tested runtime: `5ae058122d927c7e35257fb80ca5fa879f14b784`
+- Merged runtime: `db48338e6528b61e1e486d6d158c9d62e641c977`
+- Version: `1.0.10+11`
+- Owner accepted: 2026-08-02
 
-## Canonical local workspace
+Its receiver-media pre-download/post-download Premium recovery physical evidence remains deferred and is not claimed as PASS.
 
-Owner workspace: `F:\NearMeU`.
+## Recovery doctrine
 
-After recovery-branch promotion, synchronize this workspace to promoted `main` before Batch 08 starts.
+1. Preserve current Batch 09 work as reference only.
+2. Do not bulk-reapply Batch 08.1.
+3. Audit current Firebase/Auth/App Check/Functions/Rules compatibility against original Batch 08 before changing client behavior.
+4. Make only minimum proven generic Android fixes.
+5. Do not add Samsung-, Motorola- or model-specific production code to obtain a PASS.
+6. Run automated checks and the complete physical regression matrix.
+7. Require explicit owner acceptance of the exact tested state.
+8. Create a GitHub recovery point.
+9. Create and verify a complete PC stable-base backup.
+10. Only then promote the recovered base and restart feature development.
 
-## Recovery procedure
+## Mandatory PC recovery copy
+
+Every promoted stable base must also exist independently on the owner PC under:
+
+`F:\NearMeU_Stable_Backups\Base-<batch>-<yyyyMMdd>-<shortSHA>`
+
+Required contents include:
+
+- complete source tree including `.git`;
+- accepted signed APK/AAB;
+- source/archive and artifact SHA-256 records;
+- exact branch/commit/version/package/Firebase metadata;
+- Firebase deployment-state notes without secret values;
+- physical-test evidence;
+- exact restore commands;
+- compressed source archive.
+
+The archive must be test-extracted and its expected Git commit verified before the next feature batch starts. A stable base without this PC backup is not considered fully closed.
+
+Private keystores and secret values must not be placed in ordinary backup archives. Record only signing certificate fingerprints and secret names/configuration state.
+
+## Current recovery checkout
+
+To inspect the isolated recovery branch in the canonical workspace after preserving any local uncommitted work:
 
 ```powershell
 cd "F:\NearMeU"
 git fetch origin
-git checkout stable/official-recoverable-base
-git reset --hard origin/stable/official-recoverable-base
+git switch recovery/original-batch08-android-stable
+git pull --ff-only
 git rev-parse HEAD
 ```
 
-For immutable accepted runtime source only:
+The branch began from exact original Batch 08 merge:
 
-```powershell
-git checkout 5ae058122d927c7e35257fb80ca5fa879f14b784
-```
+`f83a6e92457f728f177dc062dcc9171c141a9217`
 
-For merged-main Batch 07 runtime:
+Do not reset `main`, delete Batch 09, or deploy Firebase resources merely to inspect this branch.
 
-```powershell
-git checkout db48338e6528b61e1e486d6d158c9d62e641c977
-```
+## Promotion gate
 
-Install only an APK signed by the permanent matching certificate and use update mode (`adb install -r`). Do not uninstall or wipe normal test installations.
+The new recovered stable base is promoted only after:
 
-## Batch 07 accepted behavior
+`backend audit PASS -> automated checks PASS -> signed artifact -> full Android physical regression PASS -> owner acceptance -> documentation sync -> GitHub recovery point -> PC full backup -> backup restore verification -> promotion`
 
-- separate per-user six-month Premium recovery store;
-- Premium entitlement is trusted server-side truth;
-- sent Premium media can be recovered;
-- received media recovery is implemented to require download acknowledgement;
-- restore is idempotent into encrypted local chat storage;
-- Clear Chat blocks/purges that user's recovery history;
-- Delete for Me purges that user's recovery copy;
-- Unsend/Delete for Everyone purges both participants' recovery copies;
-- seven-day delivery cloud remains separate;
-- permanent Auth deletion has recovery cleanup/retry handling;
-- call audio/video is never backed up.
+Until then, this branch is a recovery candidate.
 
-## Next approved batch
+## Next feature work
 
-Batch 08 — profile sharing and deep-link recovery.
-
-Batch 07 is closed after recovery-branch fast-forward and `F:\NearMeU` sync complete.
+No calling work resumes until the recovered base passes the promotion gate. Audio calling must then return in small independently testable sub-batches rather than one large integration.
