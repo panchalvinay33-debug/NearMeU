@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -26,6 +27,9 @@ class SuspensionService {
   final FirebaseAuth _auth;
   final AuthService _authService;
 
+  static const Duration _serverCheckTimeout = Duration(seconds: 3);
+  static const Duration _cacheCheckTimeout = Duration(seconds: 1);
+
   Stream<AppUser?> streamCurrentUser() {
     return _auth.authStateChanges().asyncExpand((user) {
       if (user == null) {
@@ -48,12 +52,35 @@ class SuspensionService {
         error.code == 'unknown';
   }
 
+  Future<bool> _cachedSuspensionState(
+    DocumentReference<Map<String, dynamic>> reference,
+  ) async {
+    try {
+      final cachedDocument = await reference
+          .get(const GetOptions(source: Source.cache))
+          .timeout(_cacheCheckTimeout);
+      return cachedDocument.exists &&
+          cachedDocument.data()?['isSuspended'] == true;
+    } catch (_) {
+      // Firestore rules and callable functions remain the final authority.
+      // A missing cache must never freeze ordinary app operations.
+      return false;
+    }
+  }
+
   Future<bool> isSuspended(String uid) async {
     final reference = _firestore.collection('users').doc(uid);
 
     try {
-      final document = await reference.get();
+      final document = await reference.get().timeout(_serverCheckTimeout);
       return document.exists && document.data()?['isSuspended'] == true;
+    } on TimeoutException catch (error, stackTrace) {
+      developer.log(
+        'Suspension server check timed out; using cached state',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return _cachedSuspensionState(reference);
     } on FirebaseException catch (error, stackTrace) {
       if (!_isTransientFirestoreError(error)) rethrow;
 
@@ -62,18 +89,7 @@ class SuspensionService {
         error: error,
         stackTrace: stackTrace,
       );
-
-      try {
-        final cachedDocument = await reference.get(
-          const GetOptions(source: Source.cache),
-        );
-        return cachedDocument.exists &&
-            cachedDocument.data()?['isSuspended'] == true;
-      } on FirebaseException {
-        // Backend rules and callable functions still reject suspended users.
-        // Avoid breaking read-only screens during a temporary DNS outage.
-        return false;
-      }
+      return _cachedSuspensionState(reference);
     }
   }
 

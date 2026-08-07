@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 
 import '../constants/app_constants.dart';
+import 'profile_schema_repair_service.dart';
 import 'user_service.dart';
 
 class PresenceService {
@@ -16,16 +17,25 @@ class PresenceService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService();
+  final ProfileSchemaRepairService _profileRepair = ProfileSchemaRepairService();
 
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _profileSubscription;
   Timer? _heartbeatTimer;
+  Timer? _retryTimer;
 
   String? _activeUid;
   bool? _lastPublishedOnline;
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   bool _started = false;
+  int _consecutiveFailures = 0;
+
+  static const Duration _publishTimeout = Duration(seconds: 5);
+
+  bool get _shouldBeOnline =>
+      _lifecycleState == AppLifecycleState.resumed ||
+      _lifecycleState == AppLifecycleState.inactive;
 
   void start() {
     if (_started) return;
@@ -35,49 +45,63 @@ class PresenceService {
   }
 
   void updateLifecycle(AppLifecycleState state) {
+    final previous = _lifecycleState;
     _lifecycleState = state;
-    unawaited(_publishDesiredState());
+
+    if (state == AppLifecycleState.inactive) return;
+
+    final force = state == AppLifecycleState.resumed || previous != state;
+    unawaited(_publishDesiredState(force: force));
+  }
+
+  void touchForeground() {
+    if (!_shouldBeOnline) return;
+    unawaited(_publishDesiredState(force: true));
   }
 
   Future<void> goOfflineBeforeSignOut() async {
     _stopHeartbeat();
+    _cancelRetry();
     final uid = _auth.currentUser?.uid ?? _activeUid;
     if (uid == null) return;
     await _publish(online: false, uid: uid, force: true);
     _lastPublishedOnline = null;
   }
 
-  Future<void> restoreCurrentState() => _publishDesiredState();
+  Future<void> restoreCurrentState() => _publishDesiredState(force: true);
 
   Future<void> _handleAuthChange(User? user) async {
     _stopHeartbeat();
+    _cancelRetry();
     await _profileSubscription?.cancel();
     _profileSubscription = null;
     _activeUid = user?.uid;
     _lastPublishedOnline = null;
+    _consecutiveFailures = 0;
 
     if (user == null) return;
 
     _profileSubscription = _firestore
         .collection('users')
         .doc(user.uid)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .listen(
           (profile) {
             if (!profile.exists) return;
 
-            final desiredOnline =
-                _lifecycleState == AppLifecycleState.resumed;
+            final desiredOnline = _shouldBeOnline;
             final actualOnline = profile.data()?['isOnline'] == true;
 
-            // Presence is authoritative for foreground/background state. Some
-            // older screens still touch lastSeen and may also flip isOnline.
-            // If Firestore drifts from the desired lifecycle state, invalidate
-            // the local cache so the next publish repairs it immediately.
             if (actualOnline != desiredOnline) {
               _lastPublishedOnline = null;
+              unawaited(_publishDesiredState(force: true));
+              return;
             }
-            unawaited(_publishDesiredState());
+
+            if (!profile.metadata.hasPendingWrites) {
+              _consecutiveFailures = 0;
+              _cancelRetry();
+            }
           },
           onError: (Object error, StackTrace stackTrace) {
             developer.log(
@@ -85,21 +109,23 @@ class PresenceService {
               error: error,
               stackTrace: stackTrace,
             );
+            _scheduleRetry();
           },
         );
 
-    await _publishDesiredState();
+    await _publishDesiredState(force: true);
   }
 
-  Future<void> _publishDesiredState() async {
+  Future<void> _publishDesiredState({bool force = false}) async {
     final uid = _activeUid ?? _auth.currentUser?.uid;
     if (uid == null) {
       _stopHeartbeat();
+      _cancelRetry();
       return;
     }
 
-    final online = _lifecycleState == AppLifecycleState.resumed;
-    await _publish(online: online, uid: uid);
+    final online = _shouldBeOnline;
+    await _publish(online: online, uid: uid, force: force);
     _configureHeartbeat(uid: uid, online: online);
   }
 
@@ -124,6 +150,29 @@ class PresenceService {
     _heartbeatTimer = null;
   }
 
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+  }
+
+  void _scheduleRetry() {
+    if (_retryTimer != null) return;
+    final seconds = switch (_consecutiveFailures) {
+      <= 0 => 3,
+      1 => 8,
+      2 => 15,
+      _ => 30,
+    };
+    _retryTimer = Timer(Duration(seconds: seconds), () {
+      _retryTimer = null;
+      unawaited(_publishDesiredState(force: true));
+    });
+  }
+
+  Future<void> _writePresence(String uid, bool online) {
+    return _userService.setOnlineStatus(uid, online).timeout(_publishTimeout);
+  }
+
   Future<void> _publish({
     required bool online,
     required String uid,
@@ -132,21 +181,49 @@ class PresenceService {
     if (!force && _lastPublishedOnline == online) return;
 
     try {
-      final user = await _userService.getUser(uid);
-      if (user == null || user.isSuspended) return;
-      await _userService.setOnlineStatus(uid, online);
+      await _writePresence(uid, online);
       _lastPublishedOnline = online;
+      _consecutiveFailures = 0;
+      _cancelRetry();
     } catch (error, stackTrace) {
+      var repairedAndPublished = false;
+      if (error is FirebaseException && error.code == 'permission-denied') {
+        final repaired = await _profileRepair.repairCurrentProfile();
+        if (repaired) {
+          try {
+            await _writePresence(uid, online);
+            repairedAndPublished = true;
+          } catch (retryError, retryStackTrace) {
+            developer.log(
+              'Presence retry after profile repair failed',
+              error: retryError,
+              stackTrace: retryStackTrace,
+            );
+          }
+        }
+      }
+
+      if (repairedAndPublished) {
+        _lastPublishedOnline = online;
+        _consecutiveFailures = 0;
+        _cancelRetry();
+        return;
+      }
+
+      _lastPublishedOnline = null;
+      _consecutiveFailures += 1;
       developer.log(
-        'Presence update failed',
+        'Presence update failed; retry scheduled',
         error: error,
         stackTrace: stackTrace,
       );
+      _scheduleRetry();
     }
   }
 
   Future<void> dispose() async {
     _stopHeartbeat();
+    _cancelRetry();
     await _profileSubscription?.cancel();
     await _authSubscription?.cancel();
     _profileSubscription = null;

@@ -37,5 +37,11 @@ class _PresenceLifecycleState extends State<PresenceLifecycle>
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _presence.touchForeground(),
+      child: widget.child,
+    );
+  }
 }

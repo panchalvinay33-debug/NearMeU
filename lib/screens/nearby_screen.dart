@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
+import '../services/resilient_location_service.dart';
 import '../services/resilient_nearby_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
@@ -24,6 +25,7 @@ class NearbyScreen extends StatefulWidget {
 
 class _NearbyScreenState extends State<NearbyScreen> {
   final UserService _userService = UserService();
+  final ResilientLocationService _locationService = ResilientLocationService();
   final ResilientNearbyService _nearbyService = ResilientNearbyService();
   final TextEditingController _searchController = TextEditingController();
   final User? currentUser = FirebaseAuth.instance.currentUser;
@@ -35,9 +37,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
   bool _isLoading = true;
   bool _isRefreshing = false;
+  bool _isLocationRefreshing = false;
   bool _showingSavedSnapshot = false;
   String? _errorMessage;
   double? _maximumDistanceKm;
+
+  bool get _refreshBusy => _isRefreshing || _isLocationRefreshing;
 
   @override
   void initState() {
@@ -116,21 +121,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
       });
     }
 
-    var locationRefreshFailed = false;
-    try {
-      if (refreshLocation) {
-        try {
-          await _userService.updateUserLocation(uid);
-        } catch (error, stackTrace) {
-          locationRefreshFailed = true;
-          developer.log(
-            'Location refresh unavailable; retaining last saved location',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }
+    if (refreshLocation && !_isLocationRefreshing) {
+      if (mounted) setState(() => _isLocationRefreshing = true);
+      unawaited(_refreshLocationAndReload(uid));
+    }
 
+    try {
       final results = await Future.wait<Object?>([
         _userService.getUser(uid),
         _nearbyService.loadCandidates(),
@@ -150,16 +146,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
         _errorMessage = null;
       });
       _applyFilters();
-
-      if (locationRefreshFailed && mounted && !nearbyResult.fromCache) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Location refresh was unavailable. Showing people using your last saved location.',
-            ),
-          ),
-        );
-      }
     } catch (error, stackTrace) {
       developer.log(
         'Nearby candidates could not be loaded',
@@ -177,6 +163,54 @@ class _NearbyScreenState extends State<NearbyScreen> {
           _showingSavedSnapshot = true;
         }
       });
+    }
+  }
+
+  Future<void> _refreshLocationAndReload(String uid) async {
+    var refreshed = false;
+    try {
+      refreshed = await _locationService
+          .refreshUserLocation(uid)
+          .timeout(const Duration(seconds: 16), onTimeout: () => false);
+
+      if (refreshed) {
+        final results = await Future.wait<Object?>([
+          _userService.getUser(uid),
+          _nearbyService.loadCandidates(),
+        ]).timeout(const Duration(seconds: 12));
+        final profile = results[0] as AppUser?;
+        final nearbyResult = results[1] as NearbyLoadResult;
+
+        if (mounted) {
+          setState(() {
+            _currentProfile = profile ?? _currentProfile;
+            if (nearbyResult.users.isNotEmpty || _allCandidates.isEmpty) {
+              _allCandidates = nearbyResult.users;
+            }
+            _showingSavedSnapshot = nearbyResult.fromCache;
+          });
+          _applyFilters();
+        }
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Background location refresh could not complete',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      refreshed = false;
+    } finally {
+      if (mounted) setState(() => _isLocationRefreshing = false);
+    }
+
+    if (!refreshed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not refresh your location right now. Nearby is using your last saved location.',
+          ),
+        ),
+      );
     }
   }
 
@@ -296,7 +330,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
           ),
           IconButton(
             tooltip: 'Refresh',
-            onPressed: _isRefreshing
+            onPressed: _refreshBusy
                 ? null
                 : () => _loadNearby(refreshLocation: true),
             icon: const Icon(Icons.refresh_rounded),
@@ -396,7 +430,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
             nearbyCount: _visibleUsers.length,
             onlineCount: _onlineCount,
             distanceLabel: _distanceLabel,
-            isRefreshing: _isRefreshing,
+            isRefreshing: _refreshBusy,
             onRefresh: () => _loadNearby(refreshLocation: true),
           ),
           const SizedBox(height: 18),
