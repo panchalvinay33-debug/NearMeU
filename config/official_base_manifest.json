@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "project": "NearMeU",
-  "status": "BASE08_RECERTIFICATION_PRODUCTION_AUDIT_PENDING",
-  "lastUpdated": "2026-08-06",
+  "status": "READY_FOR_PROMOTION",
+  "lastUpdated": "2026-08-07",
   "acceptedProductBoundary": {
     "throughBatch": "08",
     "futureRuntimeWorkLocked": true,
@@ -20,10 +20,10 @@
     "permanentSigningCertificateSha256": "B6:22:4C:99:2D:67:AC:6A:99:E9:43:56:4E:B8:23:C6:9F:B7:65:C7:12:72:53:41:C1:07:5F:AB:D1:47:29:1B"
   },
   "recovery": {
-    "currentOfficialSourceSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
-    "recoveryBranchExpectedSha": "b6837ce2dd90bdc4db87a153089fcaf1cf74a441",
+    "currentOfficialSourceSha": "2c5a9a86c8f7f27a777b445fffdeb5130c27c72e",
+    "recoveryBranchExpectedSha": "2c5a9a86c8f7f27a777b445fffdeb5130c27c72e",
     "immutableTagName": "nearmeu-base08-stable-recertified-20260806",
-    "immutableTagStatus": "PENDING_FINAL_PROMOTION",
+    "immutableTagStatus": "READY_TO_CREATE",
     "localBundleDirectory": "F:\\NearMeU\\local_recovery",
     "oneCommandScript": "tool/restore_official_base.ps1",
     "promotionScript": "tool/promote_official_base.ps1",
@@ -38,8 +38,8 @@
   },
   "currentRecertificationCandidate": {
     "runtimeTestedSha": "87f5b05461f0e211c1f710dabba27255436ef7cd",
-    "mergedMainSha": "f01c8ea9bbd43728f839ee24b5f7280d9ba2d4c7",
-    "candidateStatus": "MERGED_AND_PHYSICALLY_TESTED_AWAITING_PRODUCTION_AUDIT_AND_FINAL_PROMOTION",
+    "mergedMainSha": "2c5a9a86c8f7f27a777b445fffdeb5130c27c72e",
+    "candidateStatus": "PRODUCTION_AUDIT_PASS_READY_FOR_FINAL_PROMOTION",
     "presenceConsistency": {
       "pullRequest": 116,
       "headSha": "2e7d1c37229cb75fa89b3a4ba9dd884095fdc47f",
@@ -116,9 +116,12 @@
     "Batch08 custom nearmeu:// fallback implemented but not separately screenshot-verified"
   ],
   "production": {
-    "firebaseProductionAudit": "PENDING_FINAL_BASE08_CLOSEOUT",
+    "firebaseProductionAudit": "PASS",
+    "productionAuditExpectedDeployableFunctions": 44,
+    "productionAuditDeployedFunctionsFound": 44,
+    "productionAuditEvidenceDocument": "docs/BASE08_FINAL_AUDIT_EVIDENCE.md",
     "unexpectedPostBase08FunctionsMustBeZero": true,
     "consoleOnlyPermanentRuleChangesAllowed": false
   },
-  "acceptanceRule": "Do not promote the immutable tag/recovery branch until governance is merged, production audit is PASS with zero unexpected post-Base08 drift, final documentation is synchronized and the owner explicitly accepts promotion. The promotion script must also prove that only governance/evidence paths changed after runtimeTestedSha."
+  "acceptanceRule": "Production audit is PASS. Final promotion still requires clean main == origin/main, explicit owner acceptance, governance checks, and promotion-script proof that only governance/evidence paths changed after runtimeTestedSha. The immutable tag and recovery branch must never be force-moved."
 }
