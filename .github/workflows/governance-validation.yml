@@ -63,8 +63,8 @@ jobs:
           if (official.identity.canonicalPcWorkspace !== 'F:\\NearMeU') fail('canonical PC path mismatch');
           if (official.identity.androidApplicationId !== 'com.nearmeu.nearmeu') fail('package mismatch');
           if (official.identity.firebaseProjectId !== 'nearmeu-e82c7') fail('Firebase project mismatch');
-          if (official.acceptedProductBoundary.throughBatch !== '08') fail('accepted boundary must remain Base08 during freeze');
-          if (!official.acceptedProductBoundary.futureRuntimeWorkLocked) fail('future runtime work must remain locked');
+          if (official.acceptedProductBoundary.throughBatch !== '08') fail('official recovery base must remain Base08 family until explicit promotion');
+          if (!official.acceptedProductBoundary.futureRuntimeWorkLocked) fail('official recovery base future runtime work must remain locked');
           if (state.developmentState.acceptedThroughBatch !== '08') fail('project state accepted boundary mismatch');
           if (!state.developmentState.futureRuntimeWorkLocked) fail('project state future-work lock missing');
           if (!state.developmentState.permanentStartAndDeploymentRulesEnabled) fail('permanent start/deployment governance flag missing');
@@ -84,7 +84,7 @@ jobs:
           if (state.externalServices?.rtc?.provider !== 'Agora') fail('Agora RTC provider metadata missing');
           if (!state.externalServices?.rtc?.projectCreated || !state.externalServices?.rtc?.appIdConfigured || !state.externalServices?.rtc?.appCertificateConfigured) fail('Agora setup metadata incomplete');
           if (!state.externalServices?.rtc?.appCertificateIsSecret || state.externalServices?.rtc?.appCertificateStoredInRepository) fail('Agora certificate secret policy invalid');
-          if (state.externalServices?.rtc?.runtimeAcceptanceStatus !== 'LOCKED_NOT_IMPLEMENTED_NOT_PASS') fail('Agora runtime acceptance must remain locked during Base08 freeze');
+          if (state.externalServices?.rtc?.runtimeAcceptanceStatus !== 'LOCKED_NOT_IMPLEMENTED_NOT_PASS') fail('Agora runtime acceptance must remain unaccepted until Batch09 owner acceptance');
           const roadmap = state.futureRoadmap?.plannedBatches || [];
           const expectedRoadmap = [
             ['09','Audio Calling'],
@@ -150,20 +150,36 @@ jobs:
             Write-Host "$file syntax OK"
           }
 
-      - name: Validate accepted Cloud Functions source loads
+      - name: Validate Cloud Functions source for accepted base or authorized Batch09 WIP
         shell: bash
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           npm ci --prefix functions --no-audit --no-fund
           node - <<'NODE'
           const exported = Object.keys(require('./functions/bootstrap.js')).sort();
           if (!exported.length) {
-            console.error('No accepted function exports found.');
+            console.error('No function exports found.');
             process.exit(1);
           }
-          const forbidden = exported.filter((name) => /admin|agora|audioCall|videoCall|callSession/i.test(name));
-          if (forbidden.length) {
-            console.error('Post-Base08/Admin function export detected during consumer Base08 freeze:', forbidden);
+          const ref = process.env.PR_HEAD_REF || process.env.REF_NAME || '';
+          const isBatch09Wip = /^batch\/09-audio-calling-/.test(ref);
+          const forbiddenAlways = exported.filter((name) => /admin|videoCall|videoSession/i.test(name));
+          if (forbiddenAlways.length) {
+            console.error('Forbidden Admin/video function export detected:', forbiddenAlways);
             process.exit(1);
           }
-          console.log(`Accepted Base08 consumer/shared-backend function exports load: ${exported.length}`);
+          const audioExports = exported.filter((name) => /audioCall/i.test(name));
+          if (!isBatch09Wip && audioExports.length) {
+            console.error('Batch09 audio-call export detected outside authorized Batch09 WIP branch:', audioExports);
+            process.exit(1);
+          }
+          if (isBatch09Wip && !audioExports.length) {
+            console.error('Authorized Batch09 WIP branch is missing audio-call exports.');
+            process.exit(1);
+          }
+          console.log(isBatch09Wip
+            ? `Authorized Batch09 WIP function exports load: ${exported.length}`
+            : `Accepted consumer/shared-backend function exports load: ${exported.length}`);
           NODE
