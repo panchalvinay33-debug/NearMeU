@@ -1,63 +1,111 @@
 # NearMeU Controlled Execution Batch Plan
 
-Last updated: 2026-08-02
+Last updated: 2026-08-08
 
-Every runtime change is one focused batch. A later batch starts only after automated tests, permanently signed build, focused physical acceptance, owner approval, merge, documentation sync, recovery promotion and canonical local workspace sync.
+Authoritative stability/recovery rules: `docs/ANDROID_STABILITY_AND_RECOVERY_RULEBOOK.md`.
+
+## Current operating decision
+
+- Original pre-calling Batch 08 merge `f83a6e92457f728f177dc062dcc9171c141a9217` is the recovery validation anchor.
+- Recovery work is isolated on `recovery/original-batch08-android-stable`.
+- Batch 08.1 is removed from the active development path and retained only as historical/reference evidence.
+- Batch 09 audio calling is frozen. No Batch 09 code may be merged/reapplied until the recovered Android-stable base is owner accepted.
+- Samsung and Motorola are representative physical test devices only. Product behavior must be generic Android behavior, not OEM-specific behavior.
 
 ## Governing rule
 
-1. Start from promoted `main` / recovery state.
+Every runtime change is one focused batch. A later batch starts only after all of the following:
+
+1. Start from the latest owner-accepted stable/recovery base.
 2. Use canonical workspace `F:\NearMeU`.
-3. Use one short-lived runtime branch.
+3. Use one isolated short-lived runtime branch.
 4. Freeze scope before coding.
-5. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
-6. Build with permanent Android signing.
-7. Install using `adb install -r`; never uninstall/wipe for normal upgrades.
-8. Preserve package `com.nearmeu.nearmeu` and increasing versionCode.
-9. Physically test focused new behavior plus necessary smoke checks.
-10. Owner accepts or rejects the exact tested state.
-11. Merge through a passing PR.
-12. Sync authoritative docs and evidence.
-13. Promote `stable/official-recoverable-base`.
-14. Sync `F:\NearMeU` before starting the next runtime batch.
+5. Do not mix feature work with unrelated compatibility/security changes.
+6. Run Flutter, Firebase Rules and Cloud Functions checks as applicable.
+7. Build with permanent Android signing.
+8. Preserve package `com.nearmeu.nearmeu` and monotonic production versioning.
+9. Physically test the new behavior and mandatory core regressions.
+10. Test representative Android devices/networks without OEM-specific hacks.
+11. Owner accepts or rejects the exact tested state.
+12. Merge only through a passing PR.
+13. Sync authoritative docs and evidence.
+14. Create/record GitHub recovery point.
+15. Create a complete PC stable-base backup under `F:\NearMeU_Stable_Backups`.
+16. Verify the PC backup can identify/restore the exact commit and accepted artifact.
+17. Promote the stable base.
+18. Sync `F:\NearMeU` before starting the next runtime batch.
 
-## Current accepted runtime
+Skipping the PC backup or restore verification blocks the next batch.
 
-Batch 07 — Six-month Premium backup and restore — is owner accepted.
+## Recovery target
 
-- Tested runtime: `5ae058122d927c7e35257fb80ca5fa879f14b784`
-- Runtime merge: `db48338e6528b61e1e486d6d158c9d62e641c977`
-- PR: `#98`
-- Version: `1.0.10+11`
-- Build #79 / run `30746260270`: PASS
-- Quality #480 / run `30746260318`: PASS
-- Physically tested signed debug APK SHA-256: `2af784329a1594a761877110c671508b19f8cd1cc2542d9079cc46a7b80025d1`
-- Owner acceptance: 2026-08-02
-- Known evidence gap: receiver-media pre-download/post-download recovery physical verification was owner-deferred and is not claimed as PASS.
+The immediate target is a new Android-stable recovered base derived from original Batch 08, with only minimum proven generic fixes required for current Firebase/backend/Android compatibility.
 
-Batches 00 through 07 are accepted.
+Original Batch 08:
 
-## Next batch
+- PR: `#100`
+- Tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+- Merged runtime: `f83a6e92457f728f177dc062dcc9171c141a9217`
+- Version: `1.0.11+12`
+- Scope: profile sharing and deep-link recovery; no calling.
 
-### Batch 08 — Profile sharing and deep-link recovery
+This source state is a recovery anchor, not automatically a newly accepted stable base. It must pass the current backend audit and full physical regression matrix before promotion.
 
-Frozen direction:
+## Required recovery sequence
 
-- privacy-safe profile sharing for Free and Premium users;
-- revocable public identifier rather than exposing Firebase UID;
-- deep-link/open-app recovery behavior;
-- block/privacy rules must continue to apply;
-- no calling work in this batch;
-- no owner-admin Premium mutation or Play purchase verification in this batch;
-- preserve accepted chat, local-first, delivery-cloud, deletion and Premium-recovery semantics.
+### Phase 1 — Freeze
 
-## Later batches
+- no calling/video/Admin feature work;
+- no broad Firebase deployment;
+- preserve current Batch 09 as reference only;
+- do not use Batch 08.1 as a base.
 
-- Batch 09 — Agora audio calling
-- Batch 10 — Agora video calling
-- Batch 11 — Owner-only Premium administration / purchase-verification work
-- Batch 12 — Full regression and Play Store readiness, including production App Check / Play Integrity readiness
+### Phase 2 — Backend compatibility audit
 
-## Recovery-base movement rule
+Validate original Batch 08 against current:
 
-`stable/official-recoverable-base` moves only after CI, signing, physical acceptance, required production actions and final documentation are complete. A known deferred evidence item must remain explicitly recorded rather than silently converted to PASS.
+- Google/Firebase Auth;
+- Firebase App Check;
+- callable Functions/regions;
+- Firestore Rules;
+- Storage Rules;
+- FCM/notification requirements;
+- deployed post-Batch08 functions;
+- backward compatibility of existing callable contracts.
+
+### Phase 3 — Core physical regression
+
+Must include Google sign-in-first startup, existing profile recognition, Nearby, presence, text/media/voice messaging, Clear Chat, deletion semantics, Premium/recovery smoke, notifications, foreground/background, killed/reopen, Wi-Fi/mobile/weak-network behavior, logout/login and reboot/reopen.
+
+Any unexplained failure stops promotion.
+
+### Phase 4 — Stable-base promotion
+
+Only after CI + signed artifact + physical regression + owner acceptance:
+
+- documentation sync;
+- GitHub recovery point;
+- complete PC backup;
+- SHA-256/checksum record;
+- restore verification;
+- stable-base promotion.
+
+## Future feature sequence
+
+Audio calling returns only after recovered stable-base acceptance and only as small sub-batches:
+
+- 09A — call-session backend state;
+- 09B — basic two-way Agora audio;
+- 09C — incoming-call notification lifecycle;
+- 09D — speaker/earpiece/proximity;
+- 09E — Bluetooth;
+- 09F — weak-network/reconnect;
+- 09G — missed/cancelled/history/block/suspension edge cases.
+
+Every sub-batch must pass its new behavior plus the mandatory core regression smoke before the next one begins.
+
+## Later scope
+
+- Batch 10 — video calling only after audio calling is stable and promoted.
+- Owner/Admin Premium work remains paused until the consumer app is stable/release-ready.
+- Final Play Store readiness includes production App Check/Play Integrity, full regression and release evidence.
