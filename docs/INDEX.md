@@ -1,66 +1,59 @@
 # NearMeU Documentation Index
 
-This is the canonical map for understanding, operating, testing, recovering and releasing NearMeU.
+Last updated: 2026-08-08
 
-## Start here
+This is the canonical map for understanding, operating, testing, recovering and releasing NearMeU during the current stability recovery.
 
-1. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — exact accepted runtime/recovery state.
-2. [`../config/project_state_manifest.json`](../config/project_state_manifest.json) — machine-readable current project state.
-3. [`TEST_BATCH_REGISTER.md`](TEST_BATCH_REGISTER.md) — accepted batch evidence and next-batch status.
-4. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — owner-approved product behavior.
-5. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled development order and gates.
-6. [`MASTER_PROJECT_AUDIT.md`](MASTER_PROJECT_AUDIT.md) — broader historical/project audit; where older identifiers conflict with the current-state files above, the current accepted Batch 03 records take precedence.
+## Start here — current precedence
 
-## Canonical local workspace
+1. [`ANDROID_STABILITY_AND_RECOVERY_RULEBOOK.md`](ANDROID_STABILITY_AND_RECOVERY_RULEBOOK.md) — authoritative recovery, Android compatibility, stable-base and PC-backup rules.
+2. [`OFFICIAL_RECOVERABLE_BASE.md`](OFFICIAL_RECOVERABLE_BASE.md) — current original-Batch08 recovery anchor and promotion gate.
+3. [`TEST_BATCH_REGISTER.md`](TEST_BATCH_REGISTER.md) — historical batch status plus current recovery-validation status.
+4. [`EXECUTION_BATCH_PLAN.md`](EXECUTION_BATCH_PLAN.md) — controlled development order and gates.
+5. [`PRODUCT_DECISIONS.md`](PRODUCT_DECISIONS.md) — owner-approved product behavior where it does not conflict with the recovery rulebook.
+6. Historical audit/planning files — context only.
 
-- Primary owner Windows project folder: `F:\NearMeU`.
-- Development, Git, Firebase deployment and recovery synchronization use `F:\NearMeU` unless the owner explicitly changes this path.
-- Downloads clones are temporary only.
-- After every accepted/promoted batch, `F:\NearMeU` must be synchronized to the promoted `main` / `stable/official-recoverable-base` state.
-- `F:\NearMeU-OLD` and dated backup folders are backups, not the active project.
+## Current recovery identifiers
 
-## Current accepted identifiers
-
-- Development source branch: `main`
-- Recovery branch: `stable/official-recoverable-base`
-- Accepted merged runtime commit: `e98bd0ebe86dad1f689723a9e96f35095a015a7b`
-- Tested runtime commit: `72e25450a2df38cf44183d994a13f6acd61369e5`
-- Final evidence head: `075c7e6d4abb05f40e4ed8b116aa20eddecf2c09`
-- Accepted PR: `#90`
-- Version: `1.0.6+7`
+- Recovery validation branch: `recovery/original-batch08-android-stable`
+- Original pre-calling Batch 08 merge anchor: `f83a6e92457f728f177dc062dcc9171c141a9217`
+- Original Batch 08 tested runtime: `fdc9b22322a96b793fff3058b1ca990f656e80a1`
+- Original Batch 08 PR: `#100`
 - Android package: `com.nearmeu.nearmeu`
 - Firebase project: `nearmeu-e82c7`
-- Accepted APK SHA-256: `a5e1c9b9a89e83b39023b95a8b1c8c2fd8c33e8cd120ad63c55a68cfe8c7d024`
-- Build workflow: `30693343758` / #25 — passed
-- Quality workflow: `30693343752` / #418 — passed
-- Production retention functions: deployed successfully
-- Next batch: `04` Clear Chat and deletion semantics
+- Batch 08.1: historical/reference only; not an active development base
+- Batch 09: frozen / not accepted / do not merge during recovery
 
-## Testing and recovery
+The recovery branch contains documentation commits after the original Batch 08 anchor. The runtime anchor remains the exact commit above; documentation changes do not mean Batch 08 has already been reaccepted against the current backend.
 
-- [`BATCH_03_PHYSICAL_TEST.md`](BATCH_03_PHYSICAL_TEST.md) — Batch 03 focused physical/backend test matrix.
-- [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical phone smoke test.
-- [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — APK/App Check/two-device testing.
-- [`RELEASE_ACCEPTANCE_CHECKLIST.md`](RELEASE_ACCEPTANCE_CHECKLIST.md) — pre-distribution acceptance.
+## Android product doctrine
+
+NearMeU targets generic Android behavior. Samsung and Motorola are representative physical test devices, not special product targets. Fix generic Android lifecycle, permission, network and capability causes; do not introduce OEM-specific hacks simply to produce a device PASS.
+
+## Canonical local workspace and stable backups
+
+- Active owner workspace: `F:\NearMeU`.
+- Mandatory stable backup root: `F:\NearMeU_Stable_Backups`.
+- Temporary clones/downloads/artifacts are not stable backups.
+- Every owner-accepted stable base requires an independent PC full-source recovery package in addition to GitHub/CI artifacts.
+- Previous stable backups must remain preserved when a newer stable base is promoted.
+
+A stable backup must include complete source with `.git`, accepted signed artifact(s), SHA-256 records, base/Firebase-state metadata, physical-test evidence and exact restore commands. It must be test-extracted/verified before the next feature batch starts.
+
+## Current recovery flow
+
+`freeze -> original Batch08 anchor -> backend compatibility audit -> automated checks -> signed test artifact -> full Android physical regression -> owner acceptance -> docs sync -> GitHub recovery point -> PC full backup -> backup verification -> stable-base promotion -> next feature`
+
+Calling does not resume before this flow completes.
+
+## Testing and release references
+
+- [`RELEASE_ACCEPTANCE_CHECKLIST.md`](RELEASE_ACCEPTANCE_CHECKLIST.md) — pre-distribution acceptance checks.
+- [`ANDROID_PHONE_SMOKE_TEST.md`](ANDROID_PHONE_SMOKE_TEST.md) — practical phone smoke testing where still applicable.
+- [`PHYSICAL_ANDROID_TESTING.md`](PHYSICAL_ANDROID_TESTING.md) — physical Android testing guidance where still applicable.
+- [`PRODUCTION_RELEASE_RUNBOOK.md`](PRODUCTION_RELEASE_RUNBOOK.md) — production signing/deployment guidance where still applicable.
 - [`../.github/workflows/quality.yml`](../.github/workflows/quality.yml) — automated quality gate.
-- [`../.github/workflows/recovery-base-apk.yml`](../.github/workflows/recovery-base-apk.yml) — permanently signed recovery APK workflow.
 
-## Production release
+When any older document conflicts with the four current recovery documents at the top of this index, the current recovery documents take precedence.
 
-- [`PRODUCTION_RELEASE_RUNBOOK.md`](PRODUCTION_RELEASE_RUNBOOK.md) — signing, Firebase deployment, AAB and internal testing.
-- [`PLAYSTORE_READY.md`](PLAYSTORE_READY.md) — Play readiness notes.
-
-## Current-state precedence
-
-When current-state documents disagree, use this order:
-
-1. `config/project_state_manifest.json`
-2. `docs/OFFICIAL_RECOVERABLE_BASE.md`
-3. `docs/TEST_BATCH_REGISTER.md`
-4. `docs/PRODUCT_DECISIONS.md`
-5. `docs/EXECUTION_BATCH_PLAN.md`
-6. Current `main` source/rules/workflows
-7. `docs/MASTER_PROJECT_AUDIT.md` for broader historical context
-8. Historical plans and old PR/issue descriptions
-
-GitHub intentionally does not store keystores, passwords, App Check tokens, test-account credentials, live Firebase data or Play Console secrets.
+GitHub must not store private keystores, passwords, raw App Check debug tokens, test-account credentials, live Firebase data or secret values.
