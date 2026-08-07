@@ -1,16 +1,22 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'profile_schema_repair_service.dart';
 import 'user_service.dart';
 
 class ResilientLocationService {
-  ResilientLocationService({UserService? userService})
-    : _userService = userService ?? UserService();
+  ResilientLocationService({
+    UserService? userService,
+    ProfileSchemaRepairService? profileRepair,
+  }) : _userService = userService ?? UserService(),
+       _profileRepair = profileRepair ?? ProfileSchemaRepairService();
 
   final UserService _userService;
+  final ProfileSchemaRepairService _profileRepair;
 
   static const Duration _serviceCheckTimeout = Duration(seconds: 3);
   static const Duration _permissionTimeout = Duration(seconds: 8);
@@ -97,16 +103,32 @@ class ResilientLocationService {
         );
       }
 
-      await _userService
-          .updateLocation(
-            uid: uid,
-            latitude: position.latitude,
-            longitude: position.longitude,
-            city: city,
-            state: state,
-            country: country,
-          )
-          .timeout(_writeTimeout);
+      Future<void> writeLocation() {
+        return _userService
+            .updateLocation(
+              uid: uid,
+              latitude: position!.latitude,
+              longitude: position.longitude,
+              city: city,
+              state: state,
+              country: country,
+            )
+            .timeout(_writeTimeout);
+      }
+
+      try {
+        await writeLocation();
+      } on FirebaseException catch (error, stackTrace) {
+        if (error.code != 'permission-denied') rethrow;
+        developer.log(
+          'Location write rejected; attempting safe profile self-repair',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        final repaired = await _profileRepair.repairCurrentProfile();
+        if (!repaired) return false;
+        await writeLocation();
+      }
       return true;
     } on TimeoutException catch (error, stackTrace) {
       developer.log(
