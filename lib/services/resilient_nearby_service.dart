@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -24,6 +25,9 @@ class ResilientNearbyService {
        _auth = auth ?? FirebaseAuth.instance,
        _cache = cache ?? LocalPreviewCache();
 
+  static const Duration _tokenTimeout = Duration(seconds: 8);
+  static const Duration _callableTimeout = Duration(seconds: 12);
+
   final FirebaseFunctions _functions;
   final FirebaseAuth _auth;
   final LocalPreviewCache _cache;
@@ -31,7 +35,8 @@ class ResilientNearbyService {
   Future<HttpsCallableResult<Map<String, dynamic>>> _readCandidates() {
     return _functions
         .httpsCallable('getNearbyCandidates')
-        .call<Map<String, dynamic>>();
+        .call<Map<String, dynamic>>()
+        .timeout(_callableTimeout);
   }
 
   Future<HttpsCallableResult<Map<String, dynamic>>>
@@ -44,12 +49,12 @@ class ResilientNearbyService {
       );
     }
 
-    await user.getIdToken();
+    await user.getIdToken().timeout(_tokenTimeout);
     try {
       return await _readCandidates();
     } on FirebaseFunctionsException catch (error) {
       if (error.code != 'unauthenticated') rethrow;
-      await user.getIdToken(true);
+      await user.getIdToken(true).timeout(_tokenTimeout);
       return _readCandidates();
     }
   }
@@ -82,7 +87,7 @@ class ResilientNearbyService {
       );
     } catch (error, stackTrace) {
       developer.log(
-        'Nearby refresh failed; loading the last successful device snapshot',
+        'Nearby refresh failed or timed out; loading the last successful device snapshot',
         error: error,
         stackTrace: stackTrace,
       );
