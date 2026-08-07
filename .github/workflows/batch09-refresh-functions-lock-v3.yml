@@ -1,6 +1,13 @@
 name: Batch09 v3 refresh functions lock
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - functions/package.json
+      - functions/package-lock.json
+      - .github/workflows/batch09-refresh-functions-lock-v3.yml
   push:
     branches:
       - batch/09-audio-calling-v3
