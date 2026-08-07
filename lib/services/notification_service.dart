@@ -53,17 +53,26 @@ class NotificationService {
       onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
     );
 
-    const channel = AndroidNotificationChannel(
+    const generalChannel = AndroidNotificationChannel(
       'nearmeu_notifications',
       'NearMeU Notifications',
       description: 'Private messages and official NearMeU updates',
       importance: Importance.high,
     );
-    await _localNotifications
+    const callChannel = AndroidNotificationChannel(
+      'nearmeu_calls',
+      'NearMeU Calls',
+      description: 'Incoming NearMeU audio and video calls',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+    final androidNotifications = _localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(channel);
+        >();
+    await androidNotifications?.createNotificationChannel(generalChannel);
+    await androidNotifications?.createNotificationChannel(callChannel);
 
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
       _showForegroundNotification,
@@ -240,10 +249,36 @@ class NotificationService {
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {
-    final notification = message.notification;
     final destination = NotificationRoute.fromData(message.data);
-    if (notification == null || destination == null) return;
+    if (destination == null) return;
 
+    if (destination.isAudioCall) {
+      NotificationNavigationService.instance.queueDestination(destination);
+      final notification = message.notification;
+      await _localNotifications.show(
+        message.messageId?.hashCode ?? destination.payload.hashCode,
+        notification?.title ?? 'Incoming audio call',
+        notification?.body ?? 'NearMeU audio call',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'nearmeu_calls',
+            'NearMeU Calls',
+            channelDescription: 'Incoming NearMeU audio and video calls',
+            importance: Importance.max,
+            priority: Priority.max,
+            category: AndroidNotificationCategory.call,
+            ongoing: false,
+            autoCancel: true,
+            fullScreenIntent: true,
+          ),
+        ),
+        payload: destination.payload,
+      );
+      return;
+    }
+
+    final notification = message.notification;
+    if (notification == null) return;
     await _localNotifications.show(
       notification.hashCode,
       notification.title,

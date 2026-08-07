@@ -4,6 +4,9 @@ class NotificationDestination {
   const NotificationDestination.privateChat(String chatId)
       : this._(type: NotificationRoute.privateChatType, value: chatId);
 
+  const NotificationDestination.audioCall(String callId)
+      : this._(type: NotificationRoute.audioCallType, value: callId);
+
   const NotificationDestination.supportAnnouncements()
       : this._(type: NotificationRoute.supportAnnouncementType);
 
@@ -11,23 +14,34 @@ class NotificationDestination {
   final String? value;
 
   bool get isPrivateChat => type == NotificationRoute.privateChatType;
+  bool get isAudioCall => type == NotificationRoute.audioCallType;
   bool get isSupportAnnouncement =>
       type == NotificationRoute.supportAnnouncementType;
 
-  String get payload => isPrivateChat ? 'chat:$value' : 'support:announcements';
+  String get payload {
+    if (isPrivateChat) return 'chat:$value';
+    if (isAudioCall) return 'audio-call:$value';
+    return 'support:announcements';
+  }
 }
 
 class NotificationRoute {
   const NotificationRoute._();
 
   static const String privateChatType = 'private_chat';
+  static const String audioCallType = 'audio_call';
   static const String supportAnnouncementType = 'support_announcement';
   static const int maximumChatIdLength = 256;
+  static const int maximumCallIdLength = 128;
 
   static NotificationDestination? fromData(Map<String, dynamic> data) {
     final type = data['type'];
     if (type == supportAnnouncementType) {
       return const NotificationDestination.supportAnnouncements();
+    }
+    if (type == audioCallType) {
+      final callId = normalizedCallId(data['callId'] is String ? data['callId'] as String : null);
+      return callId == null ? null : NotificationDestination.audioCall(callId);
     }
     final chatId = chatIdFromData(data);
     return chatId == null ? null : NotificationDestination.privateChat(chatId);
@@ -38,6 +52,10 @@ class NotificationRoute {
     final payload = value.trim();
     if (payload == 'support:announcements') {
       return const NotificationDestination.supportAnnouncements();
+    }
+    if (payload.startsWith('audio-call:')) {
+      final callId = normalizedCallId(payload.substring('audio-call:'.length));
+      return callId == null ? null : NotificationDestination.audioCall(callId);
     }
     if (!payload.startsWith('chat:')) return null;
     final chatId = normalizedChatId(payload.substring(5));
@@ -56,6 +74,13 @@ class NotificationRoute {
     final chatId = value.trim();
     if (chatId.isEmpty || chatId.length > maximumChatIdLength) return null;
     return chatId;
+  }
+
+  static String? normalizedCallId(String? value) {
+    if (value == null) return null;
+    final callId = value.trim();
+    if (callId.isEmpty || callId.length > maximumCallIdLength) return null;
+    return callId;
   }
 
   static String? otherParticipant({

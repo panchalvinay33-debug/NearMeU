@@ -34,7 +34,7 @@ void main() {
       );
     });
 
-    test('parses chat and support announcement destinations', () {
+    test('parses chat, audio call, and support destinations', () {
       final chat = NotificationRoute.fromData(const {
         'type': NotificationRoute.privateChatType,
         'chatId': 'alice_bob',
@@ -42,6 +42,24 @@ void main() {
       expect(chat?.isPrivateChat, isTrue);
       expect(chat?.value, 'alice_bob');
       expect(chat?.payload, 'chat:alice_bob');
+
+      final audioCall = NotificationRoute.fromData(const {
+        'type': NotificationRoute.audioCallType,
+        'callId': 'call_123',
+      });
+      expect(audioCall?.isAudioCall, isTrue);
+      expect(audioCall?.value, 'call_123');
+      expect(audioCall?.payload, 'audio-call:call_123');
+      expect(
+        NotificationRoute.fromPayload('audio-call: call_123 ')?.isAudioCall,
+        isTrue,
+      );
+      expect(
+        NotificationRoute.fromPayload(
+          'audio-call:${'x' * (NotificationRoute.maximumCallIdLength + 1)}',
+        ),
+        isNull,
+      );
 
       final announcement = NotificationRoute.fromData(const {
         'type': NotificationRoute.supportAnnouncementType,
@@ -55,7 +73,10 @@ void main() {
             ?.isSupportAnnouncement,
         isTrue,
       );
-      expect(NotificationRoute.fromPayload('chat: alice_bob ')?.value, 'alice_bob');
+      expect(
+        NotificationRoute.fromPayload('chat: alice_bob ')?.value,
+        'alice_bob',
+      );
       expect(NotificationRoute.fromPayload('unknown:value'), isNull);
     });
 
@@ -63,6 +84,9 @@ void main() {
       expect(NotificationRoute.normalizedChatId(' alice_bob '), 'alice_bob');
       expect(NotificationRoute.normalizedChatId(null), isNull);
       expect(NotificationRoute.normalizedChatId('   '), isNull);
+      expect(NotificationRoute.normalizedCallId(' call_123 '), 'call_123');
+      expect(NotificationRoute.normalizedCallId(null), isNull);
+      expect(NotificationRoute.normalizedCallId('   '), isNull);
     });
 
     test('resolves only the other member of a two-person chat', () {

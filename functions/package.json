@@ -16,6 +16,7 @@
     "project-state:store": "node scripts/store_project_state.js --write"
   },
   "dependencies": {
+    "agora-token": "^2.0.5",
     "firebase-admin": "^12.5.0",
     "firebase-functions": "^5.1.1"
   },

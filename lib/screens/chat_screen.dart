@@ -13,6 +13,7 @@ import 'package:record/record.dart';
 
 import '../models/app_user.dart';
 import '../models/message_model.dart';
+import '../services/audio_call_service.dart';
 import '../services/chat_service.dart';
 import '../services/local_chat_store.dart';
 import '../services/private_media_service.dart';
@@ -25,6 +26,8 @@ import '../widgets/chat/composer.dart';
 import '../widgets/chat/date_chip.dart';
 import '../widgets/chat/message_bubble.dart';
 import '../widgets/chat/reply_preview.dart';
+import 'audio_call_history_screen.dart';
+import 'audio_call_screen.dart';
 import 'user_profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -57,6 +60,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'asia-south1',
   );
+  final AudioCallService _audioCalls = AudioCallService();
   final UserService _userService = UserService();
   final AudioRecorder _recorder = AudioRecorder();
   final TextEditingController _messageController = TextEditingController();
@@ -72,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isRecordingVoice = false;
   bool _isAcknowledgingRead = false;
   bool _isClearingChat = false;
+  bool _isStartingCall = false;
   Duration _recordingDuration = Duration.zero;
   Timer? _readAcknowledgementTimer;
   Timer? _recordingTimer;
@@ -165,6 +170,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // The periodic acknowledgement retries temporary failures.
     } finally {
       _isAcknowledgingRead = false;
+    }
+  }
+
+  Future<void> _startAudioCall() async {
+    if (_checkingBlock ||
+        _isBlocked ||
+        _isStartingCall ||
+        _isSending ||
+        _isSendingMedia ||
+        _isClearingChat) {
+      return;
+    }
+    if (_isRecordingVoice) await _cancelVoiceRecording();
+    if (!mounted) return;
+    _messageFocusNode.unfocus();
+    if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+    setState(() => _isStartingCall = true);
+    try {
+      await _checkBlockStatus();
+      if (!mounted || _isBlocked) return;
+      final session = await _audioCalls.startCall(widget.otherUserId);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => AudioCallScreen(
+            initialSession: session,
+            incoming: false,
+          ),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      final message = error.message?.trim();
+      _showError(
+        message == null || message.isEmpty
+            ? 'Could not start the audio call.'
+            : message,
+      );
+      await _checkBlockStatus();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _isStartingCall = false);
     }
   }
 
@@ -920,6 +968,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: Wrap(
           children: [
             ListTile(
+              leading: const Icon(Icons.history_rounded, color: Colors.white),
+              title: const Text(
+                'Call history',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AudioCallHistoryScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(
                 Icons.delete_sweep_rounded,
                 color: Colors.redAccent,
@@ -1014,6 +1077,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   !_isBlocked &&
                   otherUser != null &&
                   NearbyUserPresenter.isEffectivelyOnline(otherUser);
+              final callingDisabled =
+                  _checkingBlock ||
+                  _isBlocked ||
+                  _isStartingCall ||
+                  _isClearingChat;
               return ChatAppBar(
                 userName: widget.otherUserName,
                 lastSeen: isOnline
@@ -1027,6 +1095,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   if (_isRecordingVoice) await _cancelVoiceRecording();
                   if (context.mounted) Navigator.pop(context);
                 },
+                onAudioCall: callingDisabled ? null : _startAudioCall,
                 onMenu: _isClearingChat ? null : _showChatMenu,
               );
             },
