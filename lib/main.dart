@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -28,11 +30,13 @@ Future<void> main() async {
 
   var appCheckReady = false;
   try {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: kReleaseMode
-          ? AndroidProvider.playIntegrity
-          : AndroidProvider.debug,
-    );
+    await FirebaseAppCheck.instance
+        .activate(
+          androidProvider: kReleaseMode
+              ? AndroidProvider.playIntegrity
+              : AndroidProvider.debug,
+        )
+        .timeout(const Duration(seconds: 8));
     appCheckReady = true;
   } catch (error, stackTrace) {
     await observability.recordNonFatal(
@@ -47,9 +51,11 @@ Future<void> main() async {
 
   var notificationsReady = false;
   try {
-    await observability.trace('startup_notifications', () async {
-      await NotificationService.instance.initialize();
-    });
+    await observability
+        .trace('startup_notifications', () async {
+          await NotificationService.instance.initialize();
+        })
+        .timeout(const Duration(seconds: 8));
     notificationsReady = true;
   } catch (error, stackTrace) {
     await observability.recordNonFatal(
