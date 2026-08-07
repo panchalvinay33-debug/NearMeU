@@ -150,6 +150,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Build signed physical-test APK with App Check debug provider
+        if: steps.signing.outputs.available == 'true' && github.event_name == 'pull_request'
+        run: flutter build apk --release --dart-define=NEARMEU_APP_CHECK_DEBUG=true
+
+      - name: Upload signed physical-test APK
+        if: steps.signing.outputs.available == 'true' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearmeu-signed-physical-test-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload Android build diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
