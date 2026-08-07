@@ -1,32 +1,48 @@
 # NearMeU Batch08.1 — Android Device Compatibility Hardening
 
-Status: implementation branch only; **DO NOT MERGE until Base08 final lock/promotion is complete**.
+Status: **coding implementation complete on the Batch08.1 branch; automated and physical verification pending**.
+
+Base08 is now promoted and locked. Before Batch08.1 acceptance/merge, this implementation must be reconciled onto the final accepted Base08 main and all required CI/physical gates must pass.
 
 ## Goal
 
-Keep NearMeU installable and usable across a broad range of supported Android phones without claiming universal compatibility. Batch08.1 must identify and remove accidental Play Store/device filters, verify representative Android API levels and CPU ABIs, and physically test common manufacturer behaviors before Batch09 calling work is accepted.
+Keep NearMeU installable and usable across a broad range of supported Android phones without claiming universal compatibility. Batch08.1 identifies and removes accidental Play Store/device filters, verifies representative Android API levels and CPU ABIs, adds emulator/low-RAM smoke coverage, and defines repeatable physical OEM testing before Batch09 calling work is accepted.
 
 ## Compatibility contract
 
 - Android application id remains `com.nearmeu.nearmeu`.
 - `compileSdk` / `targetSdk` remain current enough for Play policy.
-- Effective `minSdk` must be measured from the built APK; it must not be raised without an explicit compatibility decision and evidence.
+- Effective `minSdk` is measured from the built APK and must not silently rise above API 24 without an explicit compatibility decision and fresh evidence.
 - Hardware used by optional features must not unnecessarily become a Play Store install requirement.
-- Microphone/location-related hardware is treated as optional at install time; the app must handle permission/capability absence gracefully at runtime.
-- Universal Android support is **not** claimed. Unsupported/untested devices must be recorded explicitly.
+- Camera, microphone and location-related hardware are optional at install time; capability/permission absence must be handled gracefully at runtime.
+- ARM64 support is required when the APK contains native payloads.
+- Universal Android support is **not** claimed. Unsupported/untested devices remain explicitly unverified.
 
-## Automated gates
+## Implemented automated gates
 
-1. Flutter analyze/tests and Android build must pass.
-2. Build a universal debug APK and inspect its manifest with Android build tools.
-3. Record package id, min SDK, target SDK, declared hardware features and native ABIs.
-4. Fail if camera, telephony, Bluetooth, GPS or microphone hardware is accidentally marked required for installation.
-5. Require ARM64 support for modern physical Android phones. Record any additional ABI coverage produced by the build.
-6. Keep cleartext traffic disabled and preserve existing signing/application identity.
+1. Flutter analyze/tests and Android build.
+2. Universal debug APK build and Android `aapt` compatibility inspection.
+3. Package id, effective min SDK, target SDK, declared hardware features and native ABI recording.
+4. Fail if sensitive camera, telephony, Bluetooth, GPS, location or microphone hardware is accidentally marked required for installation.
+5. Fail if effective `minSdk` rises above API 24 without deliberate review.
+6. Require target SDK policy floor and ARM64 when native payload exists.
+7. Emulator install/start/process/crash smoke tests on representative APIs 23, 29, 33 and 35.
+8. Constrained Android API 29 emulator smoke with 1536 MB RAM.
+9. Diagnostic artifact capture for launch output, activity state, process list and logcat.
+10. Reusable connected-real-device PowerShell runner that records manufacturer/model/API/ABI/RAM, installs, launches and captures evidence.
+
+## Repository implementation
+
+- `.github/workflows/device-compatibility.yml`
+- `tool/check_android_apk_compatibility.sh`
+- `tool/android_emulator_smoke.sh`
+- `tool/run_connected_android_compatibility.ps1`
+- `docs/BATCH_08_1_PHYSICAL_DEVICE_MATRIX.md`
+- Android manifest optional-hardware declarations for camera/microphone/location families
 
 ## Representative Android/API coverage
 
-CI/build smoke coverage should include the oldest supported API resolved from the APK plus representative modern APIs. Physical acceptance should include, where reasonably available:
+Automated smoke coverage targets API 23, 29, 33 and 35 plus a constrained-memory API 29 emulator. Physical acceptance should include, where reasonably available:
 
 - Samsung
 - Xiaomi / Redmi / Poco
@@ -36,23 +52,23 @@ CI/build smoke coverage should include the oldest supported API resolved from th
 - Pixel / near-stock Android
 - at least one lower-RAM / lower-end device
 
-## Physical smoke matrix
+## Physical acceptance
 
-For each representative device used, record:
+Use `docs/BATCH_08_1_PHYSICAL_DEVICE_MATRIX.md` as the canonical matrix. It covers clean/update install, cold/warm start, authentication/session recovery, Nearby/location permission states, Chats/text/media, notifications, profile links, offline cache/reconnect, background/resume, process restart and OEM battery/background restrictions.
 
-- clean install or update install
-- cold start / warm start
-- sign in / session recovery
-- Nearby with location denied, allowed and later revoked
-- Chats list and chat open
-- text send/receive
-- photo/video/voice media path where hardware/permission is available
-- notifications allowed/denied
-- profile sharing / HTTPS app link
-- offline cached Nearby/Chats and reconnect refresh
-- background/resume behavior
-- manufacturer battery/background restriction observations
+The connected-device helper validates install/start stability only; feature-level behavior still requires physical checks.
 
 ## Batch boundary
 
-Batch09 Audio Calling must not be accepted/merged before Batch08.1 is complete and owner-accepted. The existing Batch09 work branch must later be reconciled onto the accepted post-08.1 main.
+Batch08.1 is not PASS merely because coding is complete. Acceptance requires:
+
+- reconciliation onto final promoted Base08 main;
+- required CI green;
+- clean APK compatibility report;
+- emulator/low-RAM smoke PASS;
+- representative physical device evidence;
+- signed build availability;
+- no unresolved major OEM-specific blocker;
+- explicit owner acceptance.
+
+Batch09 Audio Calling remains blocked from acceptance/merge until Batch08.1 is accepted. The existing Batch09 branch must later be reconciled onto accepted post-08.1 main.
