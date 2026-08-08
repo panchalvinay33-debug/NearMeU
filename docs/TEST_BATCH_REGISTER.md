@@ -1,113 +1,101 @@
-# NearMeU Test Batch Register
+# NearMeU V1 Launch Verification Register
 
-Last updated: 2026-07-31
+Last updated: 2026-08-08
 
-This register is updated after every accepted or rejected batch. It must never claim physical acceptance without the APK/AAB hash, device evidence and owner decision.
+This register tracks only the current V1 launch stabilization. Numbered future batches are not active project instructions.
 
-## Status legend
+## Verified current state
 
-- `PLANNED` — scope approved; work not started.
-- `IN_PROGRESS` — active short-lived branch exists.
-- `CODE_COMPLETE` — implementation finished; required testing incomplete.
-- `TEST_FAILED` — one or more acceptance gates failed; remains on same branch.
-- `OWNER_REVIEW` — all required evidence is ready for owner acceptance.
-- `ACCEPTED` — merged and accepted; recovery-base status separately recorded.
-- `DEFERRED` — intentionally postponed.
+| Area | Status | Evidence/requirement |
+|---|---|---|
+| Firebase cleanup | PASS | later-feature Firestore/Storage residue removed after backup |
+| Firestore rules | PASS | V1 rules deployed |
+| Firestore indexes | PASS | V1 indexes deployed |
+| Storage rules | PASS | V1 rules deployed |
+| Cloud Functions | PASS | V1 set deployed; later-feature Functions removed |
+| Cloud Functions tests | PASS | 43 passed, 0 failed |
+| Duplicate chat audit | PASS | no duplicate canonical chat pairs |
+| Physical duplicate chat check | PASS | duplicate chat rows no longer reproduced |
+| Owner admin | PASS | owner admin flag restored/verified |
 
-## Batch table
+## Open launch verification
 
-| Batch | Title | Status | Branch | Runtime change | Physical APK test required | Recovery-base movement |
-|---|---|---|---|---:|---:|---:|
-| 00 | Governance, roadmap and decision freeze | IN_PROGRESS | `batch/00-governance-roadmap-freeze` | No | No | No |
-| 01 | Chat reliability and message-state truth | PLANNED | — | Yes | Yes, two-account/two-device | After merged-main acceptance |
-| 02 | Photo/video/voice-message reliability | PLANNED | — | Yes | Yes, two-device | After merged-main acceptance |
-| 03 | Local-first persistence and seven-day delivery cloud | PLANNED | — | Yes | Yes | After merged-main acceptance |
-| 04 | Clear Chat and deletion semantics | PLANNED | — | Yes | Yes, reinstall/multi-device | After merged-main acceptance |
-| 05 | Identity, account close and reactivation | PLANNED | — | Yes | Yes, two-account | After merged-main acceptance |
-| 06 | Premium entitlement foundation | PLANNED | — | Yes | Yes | After merged-main acceptance |
-| 07 | Six-month automatic Premium backup and restore | PLANNED | — | Yes | Yes, reinstall/phone-change | After merged-main acceptance |
-| 08 | Profile sharing and deep-link recovery | PLANNED | — | Yes | Yes, install/no-install | After merged-main acceptance |
-| 09 | Agora audio calling | PLANNED | — | Yes | Yes, two-device | After merged-main acceptance |
-| 10 | Agora video calling | PLANNED | — | Yes | Yes, two-device | After merged-main acceptance |
-| 11 | Owner-only Premium administration | PLANNED | — | Yes | Yes | After merged-main acceptance |
-| 12 | Full regression and Play Store readiness | PLANNED | — | Yes/release | Yes, release matrix | New release base after approval |
+| Gate | Status | Acceptance requirement |
+|---|---|---|
+| Delivery/read/unread truth | OPEN | fresh two-account/device tests prove pending, accepted, delivered, read and unread behavior |
+| Identity deactivation/reactivation | OPEN | same account returns to same identity/profile/chats without duplicate behavior or onboarding |
+| Public/private profile consistency | OPEN | legacy users classified and safely migrated; malformed records handled explicitly |
+| Presence consistency | OPEN | Nearby, Chats and Chat screen agree; online only while app is foreground/resumed |
 
-## Batch 00 record
+## Fresh message acceptance scenarios
 
-```text
-Batch ID: 00
-Title: Governance, roadmap and decision freeze
-Branch: batch/00-governance-roadmap-freeze
-Base commit: c414810c8a483f44debb8ba67fce3156c8718d7f
-Runtime change: none
-Firebase deployment: none
-Accepted runtime commit remains: f9bc38572c715a017c8b261a5d805aa125ffe7a5
-Accepted APK SHA-256 remains: 587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C
-Required checks:
-- canonical documents created/updated
-- JSON manifest validation
-- links/path review
-- branch diff confirms documentation/config only
-Physical APK test: not required because runtime is unchanged
-Owner decision: pending
-Merged to main: no
-Recovery branch moved: no
-Next batch after acceptance: 01 Chat reliability and message-state truth
-```
+Run with newly sent messages after backend alignment:
 
-## Current observed app state from the latest owner demo
+- both users online;
+- receiver in foreground;
+- receiver backgrounded;
+- receiver offline then reconnects;
+- receiver opens the chat;
+- sender/receiver app restart;
+- rapid messages;
+- network interruption/recovery.
 
-The latest supplied demo is evidence of visible flows, not a complete acceptance test. It showed working or reachable UI for:
+Do not rewrite historical delivery/read values solely to make old records match the new acceptance semantics.
 
-- Google sign-in and onboarding.
-- Nearby/search/filter.
-- One-to-one chat.
-- Text, photo/video preparation and voice-message playback paths.
-- Profile, block, settings and blocked-users screens.
-- Owner admin dashboard, user management and reports.
+## Identity acceptance scenarios
 
-Observed gaps requiring later batches:
+- deactivate a current account without deleting its Firebase identity;
+- verify removal from Nearby/current availability;
+- verify counterpart existing chat shows a deactivated-account state;
+- sign in again with the same account;
+- verify same identity, same profile and same uncleared chats;
+- verify onboarding is skipped for the preserved complete profile;
+- verify profile fields remain unchanged unless edited explicitly.
 
-- Current tick presentation appears to distinguish sent and seen, not a separately acknowledged delivered state.
-- Unread/read behavior still requires controlled two-device testing.
-- Media preparation needs clearer progress, retry and cancellation behavior.
-- Nearby loading requires timeout/offline/retry polish.
-- Premium, automatic six-month recovery, seven-day delivery-cloud cleanup, Clear Chat purge, account-close reactivation, profile sharing and Agora calling are approved/planned rather than accepted runtime features.
+## Profile consistency acceptance scenarios
 
-## Required completion block for future batches
+- audit every `users/{uid}` against `privateProfiles/{uid}`;
+- separate current-schema users from legacy users and malformed/empty records;
+- move safely recoverable private fields out of legacy public profiles;
+- do not invent missing personal data;
+- verify current-schema public documents no longer contain private email/exact-location fields;
+- verify login/onboarding routing for migrated accounts.
 
-Copy this section when a batch reaches owner review:
+## Presence acceptance scenarios
+
+Verify the same other user simultaneously from Nearby, Chats and Chat screen:
+
+- app foreground/resumed -> online/green dot everywhere;
+- app background/minimized -> offline/last-seen everywhere;
+- app reopened -> online everywhere;
+- network loss/process termination -> stale online state expires safely;
+- sign-out -> offline;
+- last activity text uses the same source and does not contradict another screen.
+
+## Final V1 release record
+
+Complete only when all open gates pass:
 
 ```text
-Batch ID:
-Title:
-Branch:
-Base commit:
-Final branch commit:
-Changed files:
-Pull request:
-Merged main commit:
-Recovery branch commit:
+Launch branch:
+Final commit:
 APK/AAB filename:
 APK/AAB SHA-256:
 Signing certificate identity:
 Workflow run(s):
 Test device(s):
 Android version(s):
-Test account(s):
-Automated tests:
-Flutter analyze:
+Test accounts:
+Flutter tests:
 Firebase rules tests:
 Cloud Functions tests:
-Physical scenarios tested:
-Failures found and fixed:
-Known limitations:
+Physical messaging tests:
+Presence tests:
+Identity/reactivation tests:
+Profile migration audit:
+Known launch limitations:
 Owner decision:
-Documentation updated:
-Temporary branch deleted:
-Next batch:
+Launch accepted: YES/NO
 ```
 
-## Non-negotiable rule
-
-A later runtime batch cannot be marked `IN_PROGRESS` while the current runtime batch is still awaiting required testing or owner acceptance. Documentation preparation may occur only when it does not alter or distract from the active runtime acceptance gate.
+Anything outside the current V1 launch requirements is deferred to V2 after V1 launch.
