@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
+import '../services/account_deactivation_service.dart';
 import '../services/auth_service.dart';
 import '../services/notification_navigation_service.dart';
 import '../services/presence_service.dart';
@@ -20,6 +21,8 @@ class AuthGateScreen extends StatefulWidget {
 class _AuthGateScreenState extends State<AuthGateScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
+  final AccountDeactivationService _accountDeactivationService =
+      AccountDeactivationService();
 
   @override
   void initState() {
@@ -42,6 +45,11 @@ class _AuthGateScreenState extends State<AuthGateScreen> {
     }
 
     try {
+      // Deactivation preserves the Firebase Auth UID and both profile documents.
+      // Signing back in with the same provider therefore restores the same
+      // NearMeU identity before normal profile routing continues.
+      await _accountDeactivationService.reactivateCurrentAccountIfNeeded();
+
       final AppUser? savedUser = await _userService.getUser(firebaseUser.uid);
 
       if (!mounted) return;
