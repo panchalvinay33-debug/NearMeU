@@ -12,6 +12,7 @@ const REGION = "asia-south1";
 const MAX_CHAT_PREVIEWS = 100;
 const MAX_LEGACY_MESSAGES = 100;
 const MAX_DISCOVERY_USERS = 100;
+const PRESENCE_FRESHNESS_MS = 5 * 60 * 1000;
 const MAX_CHAT_DOCUMENTS_TO_INSPECT =
   MAX_CHAT_PREVIEWS + MAX_LEGACY_MESSAGES;
 
@@ -60,6 +61,16 @@ function safeMap(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+}
+
+function isEffectivelyOnline(data, nowMillis = Date.now()) {
+  if (!data || data.isOnline !== true) return false;
+  const lastSeenMillis = timestampMillis(data.lastSeen);
+  if (lastSeenMillis === null) return false;
+
+  const ageMillis = nowMillis - lastSeenMillis;
+  if (ageMillis < 0) return Math.abs(ageMillis) <= 60 * 1000;
+  return ageMillis <= PRESENCE_FRESHNESS_MS;
 }
 
 function canonicalParticipants(firstId, secondId) {
@@ -294,7 +305,7 @@ async function buildChatPreview({
     unreadCount: Number.isInteger(unreadCounts[uid])
       ? unreadCounts[uid]
       : safeInteger(currentReadState.unreadCount, 0),
-    isOtherUserOnline: otherData.isOnline === true,
+    isOtherUserOnline: isEffectivelyOnline(otherData),
   };
 }
 
