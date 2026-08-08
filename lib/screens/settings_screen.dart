@@ -355,8 +355,8 @@ class _ProfileCard extends StatelessWidget {
           CircleAvatar(
             radius: 34,
             backgroundColor: AppColors.primary,
-            foregroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
-            onForegroundImageError: hasPhoto ? (_, __) {} : null,
+            foregroundImage: hasPhoto ? NetworkImage(photoUrl) : null,
+            onForegroundImageError: hasPhoto ? (_, _) {} : null,
             child: Text(
               nickname.substring(0, 1).toUpperCase(),
               style: const TextStyle(
