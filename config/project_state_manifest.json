@@ -1,156 +1,87 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "project": "NearMeU",
   "repository": "panchalvinay33-debug/NearMeU",
-  "organizedAt": "2026-07-31",
-  "developmentState": {
-    "sourceBranch": "main",
-    "documentationHeadBeforeBatch00": "c414810c8a483f44debb8ba67fce3156c8718d7f",
-    "activeBatch": "00",
-    "activeBatchBranch": "batch/00-governance-roadmap-freeze",
-    "activeBatchRuntimeChange": false
-  },
-  "acceptedRuntimeBase": {
-    "name": "official-recoverable-base",
-    "recoveryBranch": "stable/official-recoverable-base",
-    "commitSha": "f9bc38572c715a017c8b261a5d805aa125ffe7a5",
+  "updatedAt": "2026-08-08",
+  "currentState": {
+    "phase": "V1_LAUNCH_STABILIZATION",
+    "launchBranch": "v1/testing-baseline",
+    "launchReady": false,
+    "finalLaunchCommitSha": null,
+    "finalLaunchArtifactSha256": null,
     "androidApplicationId": "com.nearmeu.nearmeu",
-    "firebaseProjectId": "nearmeu-e82c7",
-    "testedApkSha256": "587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C",
-    "productionDeployedByThisBase": false,
-    "documentationOnlyCommitsDoNotReplaceRuntimeAcceptance": true
+    "firebaseProjectId": "nearmeu-e82c7"
   },
-  "ownerPc": {
-    "repositoryPath": "F:\\NearMeU",
-    "localRecoveryDirectory": "F:\\NearMeU\\local_recovery",
-    "testedApkPath": "F:\\NearMeU\\local_recovery\\NearMeU-Final-Tested-Base.apk",
-    "platformToolsPath": "C:\\Users\\dell\\Downloads\\platform-tools",
-    "downloadedApkPath": "C:\\Users\\dell\\Downloads\\NearMeU-Official-Recoverable-Base.apk",
-    "workingTreeCleanAtRuntimeAcceptance": true,
-    "localRecoveryExcludedFromGit": true
+  "backendAlignment": {
+    "laterFeatureFirestoreResidueRemoved": true,
+    "laterFeatureStorageResidueRemoved": true,
+    "v1FirestoreRulesDeployed": true,
+    "v1FirestoreIndexesDeployed": true,
+    "v1StorageRulesDeployed": true,
+    "v1CloudFunctionsDeployed": true,
+    "laterFeatureCloudFunctionsRemoved": true,
+    "cloudFunctionsTests": {
+      "passed": 43,
+      "failed": 0
+    },
+    "duplicateChatPairsFoundAfterCleanup": 0,
+    "ownerAdminRestored": true
   },
-  "runtimeAcceptance": {
-    "flutterTests": "passed",
-    "qualityWorkflow": "passed",
-    "firebaseRulesTests": "passed",
-    "cloudFunctionsTests": "passed",
-    "signedRecoveryApkBuild": "passed",
-    "apkHashVerifiedOnOwnerPc": true,
-    "adbUpdateInstall": "success",
-    "googleSignIn": "accepted",
-    "appCheckDebugRegistration": "accepted",
-    "nearby": "accepted",
-    "chatAccess": "accepted",
-    "flutterAnalyze": "existing-warnings-and-infos-no-required-ci-failure"
-  },
-  "implementationScope": {
-    "authentication": "implemented-and-runtime-accepted",
-    "profileOnboarding": "implemented-demo-observed",
-    "nearbyDiscovery": "implemented-and-runtime-accepted-basic-flow",
-    "distanceFilter": "implemented-demo-observed",
-    "privateChat": "implemented-and-runtime-accepted-basic-access",
-    "textMessages": "implemented-requires-two-device-reliability-batch",
-    "photoMessages": "implemented-requires-media-reliability-batch",
-    "videoMessages": "implemented-requires-media-reliability-batch",
-    "voiceNotes": "implemented-requires-media-reliability-batch",
-    "blockingAndReporting": "implemented-requires-full-regression",
-    "existingAccountDeletion": "implemented-current-behavior-requires-identity-close-delete-redesign",
-    "clearChatPermanentUserSidePurge": "approved-not-yet-accepted",
-    "deliveryAcknowledgementSeparateFromRead": "approved-not-yet-implemented",
-    "sevenDayTemporaryDeliveryCloud": "approved-not-yet-accepted",
-    "sixMonthPremiumAutomaticRecovery": "approved-not-yet-implemented",
-    "singlePremiumPlan": "approved-not-yet-implemented",
-    "voiceVideoCalling": "agora-selected-planned",
-    "profileSharing": "approved-not-yet-implemented",
-    "ownerPremiumAdministration": "approved-not-yet-implemented",
-    "firebaseRules": "implemented-and-tested-for-accepted-base",
-    "cloudFunctions": "implemented-and-tested-for-accepted-base",
-    "permanentAndroidSigning": "configured-in-protected-github-secrets",
-    "appCheckDebug": "accepted-installation-specific-token-required",
-    "playIntegrity": "production-verification-required",
-    "iosRelease": "deferred"
-  },
-  "approvedProductRules": {
-    "premiumPublicBadge": false,
-    "multiplePremiumPlans": false,
-    "coinsOrCredits": false,
-    "freeCanReceiveMediaAndCalls": true,
-    "premiumRequiredToSendPhotoVideoVoice": true,
-    "premiumRequiredToInitiateVoiceVideoCall": true,
-    "localMediaPersistsUntilUserOrAppRemovalEvent": true,
-    "temporaryDeliveryCloudDays": 7,
-    "premiumRecoveryMaximumMonths": 6,
-    "callsRecorded": false,
-    "oneVerifiedEmailOneContinuingIdentity": true,
-    "accountCloseIsReactivatable": true,
-    "permanentDeleteSeparate": true,
-    "blocksSurviveCloseAndReactivation": true,
-    "profileSharingAvailableToFreeAndPremium": true,
-    "multiAdminRoles": "deferred",
-    "currentAdminModel": "single-owner-admin"
-  },
-  "executionBatches": [
-    {"id": "00", "title": "governance-roadmap-and-decision-freeze", "status": "in-progress", "runtimeChange": false},
-    {"id": "01", "title": "chat-reliability-and-message-state-truth", "status": "planned", "runtimeChange": true},
-    {"id": "02", "title": "photo-video-voice-message-reliability", "status": "planned", "runtimeChange": true},
-    {"id": "03", "title": "local-first-persistence-and-seven-day-delivery-cloud", "status": "planned", "runtimeChange": true},
-    {"id": "04", "title": "clear-chat-and-deletion-semantics", "status": "planned", "runtimeChange": true},
-    {"id": "05", "title": "identity-account-close-and-reactivation", "status": "planned", "runtimeChange": true},
-    {"id": "06", "title": "premium-entitlement-foundation", "status": "planned", "runtimeChange": true},
-    {"id": "07", "title": "six-month-premium-backup-and-restore", "status": "planned", "runtimeChange": true},
-    {"id": "08", "title": "profile-sharing-and-deep-link-recovery", "status": "planned", "runtimeChange": true},
-    {"id": "09", "title": "agora-audio-calling", "status": "planned", "runtimeChange": true},
-    {"id": "10", "title": "agora-video-calling", "status": "planned", "runtimeChange": true},
-    {"id": "11", "title": "owner-only-premium-administration", "status": "planned", "runtimeChange": true},
-    {"id": "12", "title": "full-regression-and-play-store-readiness", "status": "planned", "runtimeChange": true}
+  "launchGates": [
+    {
+      "id": "message_receipts",
+      "title": "delivery-read-unread-truth",
+      "status": "open"
+    },
+    {
+      "id": "identity_continuity",
+      "title": "deactivation-reactivation-same-identity",
+      "status": "open"
+    },
+    {
+      "id": "profile_consistency",
+      "title": "users-privateProfiles-safe-legacy-migration",
+      "status": "open"
+    },
+    {
+      "id": "presence_consistency",
+      "title": "nearby-chats-chat-screen-single-presence-truth",
+      "status": "open"
+    }
   ],
-  "backupRequirements": [
-    "github-repository-and-accepted-runtime-sha",
-    "stable-recovery-branch",
-    "accepted-apk-and-sha256",
-    "recovery-manifest-and-certificate-report",
-    "android-keystore-in-two-encrypted-owner-locations",
-    "password-manager-record-separate-from-keystore",
-    "github-actions-signing-secrets",
-    "firebase-owner-and-recovery-access",
-    "rules-indexes-functions-source-and-deployment-records",
-    "play-console-and-play-app-signing-records-when-enabled",
-    "per-batch-commit-artifact-hash-device-scenarios-and-owner-decision"
-  ],
-  "activeIssue": 41,
+  "scopeLock": {
+    "allowOnlyLaunchChecklistOrLaunchBlockingFixes": true,
+    "unrelatedFeatureWorkBeforeV1Launch": false,
+    "postLaunchWorkPhase": "V2_AFTER_V1_LAUNCH",
+    "detailedV2RoadmapDefined": false
+  },
   "documentation": {
+    "launchChecklist": "docs/V1_LAUNCH_CHECKLIST.md",
     "masterAudit": "docs/MASTER_PROJECT_AUDIT.md",
-    "officialRecovery": "docs/OFFICIAL_RECOVERABLE_BASE.md",
+    "executionPlan": "docs/EXECUTION_BATCH_PLAN.md",
+    "verificationRegister": "docs/TEST_BATCH_REGISTER.md",
     "productDecisions": "docs/PRODUCT_DECISIONS.md",
-    "executionBatchPlan": "docs/EXECUTION_BATCH_PLAN.md",
-    "testBatchRegister": "docs/TEST_BATCH_REGISTER.md",
-    "index": "docs/INDEX.md",
-    "productionRunbook": "docs/PRODUCTION_RELEASE_RUNBOOK.md"
+    "v2Boundary": "docs/V2_AFTER_LAUNCH.md",
+    "index": "docs/INDEX.md"
   },
-  "changeControl": {
-    "oneActiveRuntimeBatchAtATime": true,
-    "shortLivedBranchRequired": true,
-    "scopeFreezeBeforeCoding": true,
-    "pullRequestRequired": true,
-    "requiredCiBeforeMerge": true,
-    "signedArtifactForRuntimeChanges": true,
-    "physicalDeviceTestForRuntimeChanges": true,
-    "twoDeviceTestWhereBehaviorCrossesUsers": true,
-    "ownerApprovalBeforeMerge": true,
-    "mergedMainVerificationBeforeRecoveryMove": true,
-    "recoveryBranchMovesOnlyAfterRuntimeAcceptance": true,
-    "documentationOnlyBatchMovesRecoveryBranch": false,
-    "productionActionsRequireExplicitOwnerApproval": true,
-    "temporaryBranchesDeletedAfterAcceptance": true
+  "acceptanceRules": {
+    "automatedTestsRequired": true,
+    "firebaseTestsRequired": true,
+    "signedReleaseCandidateRequired": true,
+    "physicalAndroidTestingRequired": true,
+    "twoAccountTestingForCrossUserBehavior": true,
+    "firebaseStateMustMatchAcceptedSource": true,
+    "ownerAcceptanceRequired": true,
+    "freezeCommitAndArtifactHashOnlyAfterAcceptance": true
   },
   "externalSecretsNotStoredInGit": [
     "android-keystore",
     "keystore-passwords",
     "app-check-debug-token",
+    "service-account-private-key",
     "firebase-console-state",
     "test-account-credentials",
     "play-console-secrets",
-    "live-user-data",
-    "agora-app-certificate"
+    "live-user-data"
   ]
 }
