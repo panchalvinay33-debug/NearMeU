@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
-import '../services/account_deletion_service.dart';
+import '../services/account_deactivation_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../theme/app_colors.dart';
@@ -30,13 +30,13 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
-  final AccountDeletionService _accountDeletionService =
-      AccountDeletionService();
+  final AccountDeactivationService _accountDeactivationService =
+      AccountDeactivationService();
   final User? currentUser = FirebaseAuth.instance.currentUser;
 
   AppUser? userData;
   bool isLoading = true;
-  bool isDeletingAccount = false;
+  bool isDeactivatingAccount = false;
 
   @override
   void initState() {
@@ -76,15 +76,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _goToLogin();
   }
 
-  Future<void> _deleteAccount() async {
-    if (isDeletingAccount) return;
+  Future<void> _deactivateAccount() async {
+    if (isDeactivatingAccount) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
+        title: const Text('Deactivate Account'),
         content: const Text(
-          'You will be asked to verify your Google account first. After verification, NearMeU will permanently delete your profile, private account data, and your copy of shared conversations. This cannot be undone.',
+          'Your NearMeU account will be hidden while deactivated. Your profile, chats and account identity will stay saved. Signing in again with the same Google account will reactivate this same profile.',
         ),
         actions: [
           TextButton(
@@ -94,8 +94,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text(
-              'Verify & Delete',
-              style: TextStyle(color: Colors.redAccent),
+              'Verify & Deactivate',
+              style: TextStyle(color: Colors.orangeAccent),
             ),
           ),
         ],
@@ -103,28 +103,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => isDeletingAccount = true);
+    setState(() => isDeactivatingAccount = true);
     try {
-      await _accountDeletionService.deleteCurrentAccount();
+      await _accountDeactivationService.deactivateCurrentAccount();
       if (!mounted) return;
       _goToLogin();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
-      setState(() => isDeletingAccount = false);
+      setState(() => isDeactivatingAccount = false);
       final message = error.code == 'reauthentication-cancelled'
-          ? 'Account deletion was cancelled. No account data was removed.'
-          : 'Could not verify and delete the account. Please retry.';
+          ? 'Account deactivation was cancelled. Nothing was changed.'
+          : 'Could not verify and deactivate the account. Please retry.';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
-      setState(() => isDeletingAccount = false);
+      setState(() => isDeactivatingAccount = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Could not finish account deletion. Please retry or contact support.',
-          ),
+          content: Text('Could not deactivate the account. Please retry.'),
         ),
       );
     }
@@ -266,17 +264,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Sign Out',
                       subtitle: 'Sign out from this device',
                       titleColor: Colors.orangeAccent,
-                      onTap: isDeletingAccount ? null : _logout,
+                      onTap: isDeactivatingAccount ? null : _logout,
                     ),
                     _SettingsTile(
-                      icon: Icons.delete_forever_rounded,
+                      icon: Icons.pause_circle_outline_rounded,
                       iconColor: Colors.redAccent,
-                      title: isDeletingAccount
-                          ? 'Verifying & deleting…'
-                          : 'Delete Account',
-                      subtitle: 'Verify first, then permanently delete',
+                      title: isDeactivatingAccount
+                          ? 'Verifying & deactivating…'
+                          : 'Deactivate Account',
+                      subtitle:
+                          'Hide your account; sign in again to restore the same profile and chats',
                       titleColor: Colors.redAccent,
-                      onTap: isDeletingAccount ? null : _deleteAccount,
+                      onTap: isDeactivatingAccount ? null : _deactivateAccount,
                     ),
                   ],
                 ),
@@ -287,7 +286,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
         currentIndex: 2,
-        onTap: isDeletingAccount
+        onTap: isDeactivatingAccount
             ? null
             : (index) {
                 if (index == 0) {
@@ -356,8 +355,8 @@ class _ProfileCard extends StatelessWidget {
           CircleAvatar(
             radius: 34,
             backgroundColor: AppColors.primary,
-            foregroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
-            onForegroundImageError: hasPhoto ? (_, __) {} : null,
+            foregroundImage: hasPhoto ? NetworkImage(photoUrl) : null,
+            onForegroundImageError: hasPhoto ? (_, _) {} : null,
             child: Text(
               nickname.substring(0, 1).toUpperCase(),
               style: const TextStyle(
