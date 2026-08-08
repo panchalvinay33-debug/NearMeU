@@ -4,7 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'screens/login_screen.dart';
+import 'screens/auth_gate_screen.dart';
 import 'security/suspension_guard.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/notification_service.dart';
@@ -97,7 +97,7 @@ class NearMeUApp extends StatelessWidget {
       home: const AppVersionGate(
         child: PresenceLifecycle(
           child: MessageDeliveryLifecycle(
-            child: SuspensionGuard(child: LoginScreen()),
+            child: SuspensionGuard(child: AuthGateScreen()),
           ),
         ),
       ),
