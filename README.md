@@ -2,72 +2,63 @@
 
 NearMeU is an Android-first Flutter application for privacy-aware nearby discovery and private one-to-one messaging.
 
-## Current accepted state
+## Current project state
+
+NearMeU is now on one direct path: **stabilize the current V1 and launch it**.
 
 | Item | Value |
 |---|---|
-| Source of truth | `main` |
-| Recovery branch | `stable/official-recoverable-base` |
-| Accepted commit | `f9bc38572c715a017c8b261a5d805aa125ffe7a5` |
+| Active launch branch | `v1/testing-baseline` |
+| Launch phase | `V1 LAUNCH STABILIZATION` |
 | Android package | `com.nearmeu.nearmeu` |
 | Firebase project | `nearmeu-e82c7` |
-| Tested APK SHA-256 | `587CD1B328A1CAEB659A0C5D0604609C5E6A381B61EFC6D0ACD9D3C2B1BDE00C` |
-| Long-lived branches | `main`, `stable/official-recoverable-base` |
-| Production release | Not yet complete |
+| Final launch commit | Freeze after launch checklist passes |
+| Final launch APK/AAB hash | Freeze after release-candidate acceptance |
+| Work after V1 launch | `V2 AFTER V1 LAUNCH` |
 
-The accepted base was installed on the owner's Android phone with update mode and verified for the restored login, App Check registration, Nearby access and chat access. `main` and the recovery branch are identical at the accepted state.
+The current launch branch and the live Firebase backend are being kept aligned as one V1 system. Old batch-labelled roadmaps and later experimental feature lines are not the current source of truth.
 
 ## Start here
 
-| Need | Document |
-|---|---|
-| Complete audit, PC details, backup, roadmap and current truth | [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) |
-| Exact recovery process and acceptance rules | [`docs/OFFICIAL_RECOVERABLE_BASE.md`](docs/OFFICIAL_RECOVERABLE_BASE.md) |
-| Documentation map | [`docs/INDEX.md`](docs/INDEX.md) |
-| Machine-readable state | [`config/project_state_manifest.json`](config/project_state_manifest.json) |
-| Production release work | [`docs/PRODUCTION_RELEASE_RUNBOOK.md`](docs/PRODUCTION_RELEASE_RUNBOOK.md) |
-| Physical Android testing | [`docs/ANDROID_PHONE_SMOKE_TEST.md`](docs/ANDROID_PHONE_SMOKE_TEST.md) |
-| Security and secret handling | [`SECURITY.md`](SECURITY.md) |
+1. [`docs/V1_LAUNCH_CHECKLIST.md`](docs/V1_LAUNCH_CHECKLIST.md) — active launch gates and current verified state.
+2. [`docs/MASTER_PROJECT_AUDIT.md`](docs/MASTER_PROJECT_AUDIT.md) — current V1 audit and recovery/verification rules.
+3. [`docs/INDEX.md`](docs/INDEX.md) — documentation map.
+4. [`config/project_state_manifest.json`](config/project_state_manifest.json) — machine-readable V1 launch state.
+5. [`docs/V2_AFTER_LAUNCH.md`](docs/V2_AFTER_LAUNCH.md) — scope boundary for all non-launch work.
 
-## Included in the current base
+## Current V1 scope
 
-- Firebase Authentication and adult-only onboarding
-- Nearby discovery and distance filtering
-- presence, last-seen, unread, block, report and account controls
-- private text, emoji, reply, photo, video and voice-message flows
-- encrypted local-first chat storage
-- Firestore and Storage security rules and emulator tests
-- Cloud Functions source and tests
-- permanent Android signing through protected GitHub Actions secrets
-- Google Sign-In-compatible signing identity
-- App Check debug testing and Play Integrity release configuration
-- quality-gate and recoverable-APK workflows
+The current base includes:
 
-## Known remaining work
+- Firebase Authentication and adult-only onboarding;
+- Nearby discovery and distance filtering;
+- online/offline presence and last-seen;
+- one-to-one private chat;
+- text, emoji, reply, photo, video and voice-message flows;
+- message delivery/read infrastructure;
+- encrypted local-first chat storage;
+- block, report and owner-admin controls;
+- Firestore and Storage rules/indexes;
+- Firebase Cloud Functions;
+- App Check debug testing and Play Integrity release configuration;
+- Android signing/build workflows.
 
-- analyzer warning and technical-debt cleanup
-- full two-device regression testing
-- reliability validation for weak network, restart, logout and account switching
-- premium voice/video calling and one-plan entitlement design
-- production Firebase verification
-- Play Integrity production acceptance
-- legal URLs and Play Console declarations
-- internal/closed testing and controlled production rollout
+## Launch-stability work still open
 
-The active release checklist is tracked in issue #41 and the master audit roadmap.
+Only four behavior groups are currently allowed to drive V1 runtime changes:
 
-## Repository structure
+1. delivery/read/unread tick truth;
+2. one-account identity with deactivation/reactivation continuity;
+3. `users` / `privateProfiles` consistency and safe legacy migration;
+4. one consistent online/offline/last-seen/green-dot truth across Nearby, Chats and Chat screen.
 
-```text
-android/                 Android configuration
-config/                  Machine-readable project state
-functions/               Firebase Cloud Functions and tests
-lib/                     Flutter application code
-rules_tests/             Firebase emulator security tests
-test/                    Flutter tests
-docs/                    Audit, architecture, release and recovery docs
-.github/workflows/       CI and signed-build workflows
-```
+See [`docs/V1_LAUNCH_CHECKLIST.md`](docs/V1_LAUNCH_CHECKLIST.md) for exact acceptance requirements.
+
+## Scope rule
+
+Until V1 launches, do not add unrelated features or revive old future roadmaps. Fix only launch blockers and the accepted stability checklist.
+
+After V1 launch, new product work will be planned fresh as **V2**. The current repository deliberately does not prescribe a detailed V2 feature sequence.
 
 ## Local validation
 
@@ -77,19 +68,8 @@ flutter analyze
 flutter test
 ```
 
-The accepted source currently has existing analyzer warnings/informational lints. These are tracked technical debt; tests and required CI gates pass.
-
-## Safe future workflow
-
-1. Start from current `main`.
-2. Create one focused short-lived branch.
-3. Make the smallest necessary change.
-4. Open a pull request and pass all required checks.
-5. Test runtime/config changes on a physical Android phone.
-6. Obtain owner approval.
-7. Merge, update recovery/audit records and delete the temporary branch.
-8. Move the recovery branch only after accepted device testing.
+Cloud Functions and Firebase rules must also pass their repository tests before a launch candidate is accepted.
 
 ## Important external-state limitation
 
-GitHub is the source of truth for code, architecture, roadmap and recovery instructions. It intentionally does not store secret values, the permanent keystore file, Firebase Console state, App Check debug tokens, Play Console configuration, test-account credentials or live production data. Those remain in protected secrets, encrypted owner backups and the relevant consoles.
+GitHub stores source, rules, functions, workflows and project documentation. It does not store secret values, the permanent keystore, Firebase Console state, App Check debug tokens, Play Console configuration, test-account credentials or live production data. Those remain in protected owner-controlled systems.
